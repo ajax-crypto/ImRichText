@@ -94,7 +94,6 @@ namespace ImRichText
     static thread_local int CurrentStackPos = -1;
 
     static std::unordered_map<std::string_view, std::map<float, FontCollection>> FontStore;
-    static std::unordered_map<std::string_view, std::map<float, FontCollectionFile>> PendingFonts;
     static std::unordered_map<ImGuiContext*, std::deque<RenderConfig>> RenderConfigs;
 
     struct EscapeCodeInfo
@@ -420,48 +419,6 @@ namespace ImRichText
         return true;
     }
 
-    bool LoadPendingFonts(const ImFontConfig& config)
-    {
-        ImGuiIO& io = ImGui::GetIO();
-
-        for (const auto& [family, szcoll] : PendingFonts)
-        {
-            for (const auto& [size, files] : szcoll)
-            {
-                auto& collection = FontStore[family][size];
-
-                if (!files.Bold.empty())
-                {
-                    collection.Bold = io.Fonts->AddFontFromFileTTF(files.Bold.data(), size, &config);
-                    collection.Files.Bold = files.Bold;
-                }
-
-                if (!files.Normal.empty())
-                {
-                    collection.Normal = io.Fonts->AddFontFromFileTTF(files.Normal.data(), size, &config);
-                    collection.Files.Normal = files.Normal;
-                }
-
-                if (!files.Italics.empty())
-                {
-                    collection.Italics = io.Fonts->AddFontFromFileTTF(files.Italics.data(), size, &config);
-                    collection.Files.Italics = files.Italics;
-                }
-
-                /*if (!files.Bold.empty())
-                {
-                    collection.Bold = io.Fonts->AddFontFromFileTTF(files.Bold.data(), size, &config);
-                    collection.Files.Bold = files.Bold;
-                }*/
-
-            }
-        }
-
-        io.Fonts->Build();
-        PendingFonts.clear();
-        return true;
-    }
-
     [[nodiscard]] auto LookupFontFamily(std::string_view family)
     {
         auto famit = FontStore.find(family);
@@ -496,7 +453,9 @@ namespace ImRichText
 
             if (szit == famit->second.end() && !famit->second.empty())
             {
-                ImFontConfig fconfig;
+                szit = famit->second.lower_bound(size);
+
+                /*ImFontConfig fconfig;
                 fconfig.OversampleH = 3.0;
                 fconfig.OversampleV = 1.0;
 
@@ -523,7 +482,7 @@ namespace ImRichText
                 else
                 {
                     PendingFonts[family][size].Normal = existing.Files.Normal;
-                }
+                }*/
             }
 
             if (bold && italics) return szit->second.BoldItalics;
@@ -534,9 +493,20 @@ namespace ImRichText
         }
     }
 
+    struct CaseInsensitieHasher
+    {
+        std::size_t operator()(std::string_view key) const
+        {
+            thread_local static char buffer[32] = { 0 };
+            std::memset(buffer, 0, 32);
+            strncpy_s(buffer, key.data(), std::min(31, (int)key.size()));
+            return std::hash<std::string_view>()(buffer);
+        }
+    };
+
     ImColor GetColor(const char* name, void*)
     {
-        const static std::unordered_map<std::string_view, ImColor> Colors{
+        const static std::unordered_map<std::string_view, ImColor, CaseInsensitieHasher> Colors{
             { "black", ImColor(0, 0, 0, 255) },
             { "silver", ImColor(192, 192, 192, 255) },
             { "gray", ImColor(128, 128, 128, 255) },
@@ -620,12 +590,23 @@ namespace ImRichText
         return result;
     }
 
-    [[nodiscard]] float GetLineHeight(const SegmentStyle& styleprops, const RenderConfig& config, const SegmentDetails& segments)
+    [[nodiscard]] float GetLineHeight(const SegmentStyle& styleprops, const RenderConfig& config, SegmentDetails& segment)
     {
-        auto ignoreFont = !segments.HasText;
-        auto fonth = ignoreFont ? 0 : styleprops.font.font->ConfigData->SizePixels;
         auto border = styleprops.border[TopSide].thickness + styleprops.border[BottomSide].thickness;
-        return std::max(fonth, styleprops.height) + border + ignoreFont ? 0 : config.LineGap;
+
+        if (!segment.HasText) return styleprops.height + border;
+        else
+        {
+            float height = 0.f;
+
+            for (auto& token : segment.Tokens)
+            {
+                token.Size = ImGui::CalcTextSize(token.Content.data(), token.Content.data() + token.Content.size());
+                height = std::max(height, token.Size.y);
+            }
+
+            return height + border + config.LineGap;
+        }
     }
 
     void AddToken(DrawableLine& line, const Token& token, const RenderConfig& config)
@@ -664,13 +645,15 @@ namespace ImRichText
         return CreateNewLine(styleprops, config);
     }
 
-    float GetLineHeight(const DrawableLine& line, const RenderConfig& config)
+    float GetLineHeight(DrawableLine& line, const RenderConfig& config)
     {
         auto height = 0.f;
 
-        for (const auto& segment : line.Segments)
+        for (auto& segment : line.Segments)
         {
+            ImGui::PushFont(segment.Style.font.font);
             height = std::max(height, GetLineHeight(segment.Style, config, segment));
+            ImGui::PopFont();
         }
 
         return height;
@@ -1190,15 +1173,8 @@ namespace ImRichText
         if (config.DrawDebugRects) drawList->AddRect(startpos, startpos + ImVec2{ config.Bounds.x, height }, IM_COL32(255, 0, 0, 255));
     }
 
-    void Draw(const char* text, int start, int end, RenderConfig* config)
+    [[nodiscard]] RenderConfig* GetRenderConfig(RenderConfig* config)
     {
-        assert(config != nullptr);
-        assert(!FontStore.empty());
-
-        if (text == nullptr || config->Bounds.x == 0 || config->Bounds.y == 0) return;
-        end = end == -1 ? (int)std::strlen(text + start) : end;
-        if ((end - start) == 0) return;
-
         if (config == nullptr)
         {
             auto ctx = ImGui::GetCurrentContext();
@@ -1215,16 +1191,71 @@ namespace ImRichText
             else config = &(it->second.back());
         }
 
-        auto drawables = GetDrawableLines(text, start, end, *config);
-        PrintAllTokens(drawables);
+        return config;
+    }
+
+    struct RichTextHasher
+    {
+        std::size_t operator()(const std::pair<std::string_view, RenderConfig*>& key) const
+        {
+            auto hash1 = std::hash<RenderConfig*>()(key.second);
+            std::vector<char> buf; buf.resize(key.first.size() + sizeof(hash1));
+            std::memcpy(buf.data(), key.first.data(), key.first.size());
+            std::memcpy(buf.data() + key.first.size(), &hash1, sizeof(hash1));
+            std::string_view total{ buf.data(), buf.size() };
+            return std::hash<std::string_view>()(total);
+        }
+    };
+
+    static std::unordered_map<std::pair<std::string_view, RenderConfig*>, std::deque<DrawableLine>, RichTextHasher> RichTextMap;
+
+    void Draw(const char* text, int start, int end, RenderConfig* config)
+    {
+        assert(config != nullptr);
+        assert(!FontStore.empty());
+
+        if (text == nullptr || config->Bounds.x == 0 || config->Bounds.y == 0) return;
+        end = end == -1 ? (int)std::strlen(text + start) : end;
+        if ((end - start) == 0) return;
+
+        config = GetRenderConfig(config);
+        
+        if ((end - start) > 128)
+        {
+            auto key = std::make_pair(std::string_view{ text + start, std::size_t(end - start) }, config);
+            auto it = RichTextMap.find(key);
+
+            if (it == RichTextMap.end())
+            {
+                auto drawables = GetDrawableLines(text, start, end, *config);
+                it = RichTextMap.emplace(key, std::deque<DrawableLine>{}).first;
+                it->second = GetDrawableLines(text, start, end, *config);
+            }
+
+            Draw(it->second, config);
+        }
+        else 
+        {
+            auto drawables = GetDrawableLines(text, start, end, *config);
+            Draw(drawables, config);
+        }
+    }
+
+    void Draw(std::deque<DrawableLine>& lines, RenderConfig* config)
+    {
+        config = GetRenderConfig(config);
+
+        //PrintAllTokens(lines);
         auto currpos = ImGui::GetCursorScreenPos(), startpos = currpos;
         auto drawList = ImGui::GetWindowDrawList();
         drawList->AddRectFilled(currpos, currpos + config->Bounds, config->DefaultBgColor);
         int listDepth = 0;
         ImGui::PushClipRect(currpos, currpos + config->Bounds, true);
 
-        for (const auto& line : drawables)
+        for (auto& line : lines)
         {
+            if (line.Segments.empty()) continue;
+
             auto offsetx = (config->ListItemIndent * (float)listDepth);
             auto height = GetLineHeight(line, *config);
 
@@ -1251,16 +1282,19 @@ namespace ImRichText
                     {
                         if (token.ParagraphBeginning)
                         {
-                            auto sz = ImGui::CalcTextSize(" ");
+                            static char buffer[32] = { 0 };
+                            std::memset(buffer, 0, 32);
+                            std::memset(buffer, ' ', std::min(31, config->ParagraphStop));
+                            auto sz = ImGui::CalcTextSize(buffer);
                             offsetx += sz.x;
                         }
 
                         auto textend = token.Content.data() + token.Content.size();
-                        auto sz = ImGui::CalcTextSize(token.Content.data(), textend);
+                        auto sz = token.Size;
                         auto width = style.border[RightSide].thickness + style.border[LeftSide].thickness + offsetx + sz.x;
-                        
-                        ImVec2 textpos{ currpos.x + offsetx + style.border[LeftSide].thickness, 
-                            currpos.y + (height / 2.f) + style.offset.y };
+
+                        ImVec2 textpos{ currpos.x + offsetx + style.border[LeftSide].thickness,
+                            currpos.y + (height / 2.f) };
 
                         if (style.bgcolor.Value != config->DefaultBgColor.Value)
                         {
@@ -1288,9 +1322,5 @@ namespace ImRichText
         }
 
         ImGui::PopClipRect();
-    }
-
-    void Draw(const std::deque<DrawableLine>& lines, RenderConfig* config)
-    {
     }
 }

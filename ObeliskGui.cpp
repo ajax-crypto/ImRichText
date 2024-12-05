@@ -48,7 +48,7 @@ static void glfw_error_callback(int error, const char* description)
 
 #pragma warning(disable: 2398)
 #pragma warning(disable: 4244)
-
+#include <string>
 #include "ImRichText.h"
 
 class Application
@@ -117,6 +117,16 @@ public:
         bool show_demo_window = true;
         bool show_another_window = false;
         ImVec4 clear_color = ImVec4(1.f, 1.f, 1.f, 1.00f);
+        std::string rtf = "Unstyled   <p style=\"color: rgb(150, 0, 0); border: 2px solid gray;\">"
+            "Paragraph <b>bold <i>italics</i></b> bold2 <h1>Heading&Tab;</h1> </p><span style='background: teal;'>Colored</span>";
+        ImRichText::RenderConfig config;
+        config.Bounds = ImVec2{ 500.f, 500.f };
+        config.GetFont = &ImRichText::GetFont;
+        config.NamedColor = &ImRichText::GetColor;
+        config.DefaultFontFamily = "monospace";
+        config.DefaultFontSize = 24;
+        config.UserData = this;
+        auto drawables = ImRichText::GetDrawableLines(rtf.data(), 0, rtf.size(), config);
 
         // Main loop
 #ifdef __EMSCRIPTEN__
@@ -143,11 +153,6 @@ public:
             int width, height;
             glfwGetWindowSize(m_window, &width, &height);
 
-            ImFontConfig fconfig;
-            fconfig.OversampleH = 3.0;
-            fconfig.OversampleV = 1.0;
-            ImRichText::LoadPendingFonts(fconfig);
-
             // Start the Dear ImGui frame
             ImGui_ImplOpenGL3_NewFrame();
             ImGui_ImplGlfw_NewFrame();
@@ -160,17 +165,7 @@ public:
                 ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoSavedSettings))
             {
                 ImGui::Button("Test");
-                auto pos = ImGui::GetCursorScreenPos();
-                ImRichText::RenderConfig config;
-                config.Bounds = ImVec2{ 500.f, 500.f };
-                config.GetFont = &ImRichText::GetFont;
-                config.NamedColor = &ImRichText::GetColor;
-                config.DefaultFontFamily = "monospace";
-                config.DefaultFontSize = 24;
-                config.UserData = this;
-                ImRichText::Draw("Unstyled   <p style=\"color: rgb(150, 0, 0); border: 2px solid gray;\">"
-                    "Paragraph <b>bold <i>italics</i></b> bold2 <h1>Heading&Tab;</h1> </p><span style='background: teal;'>Colored</span>", 
-                    0, -1, &config);
+                ImRichText::Draw(drawables);
             }
 
             ImGui::End();

@@ -69,7 +69,7 @@ namespace ImRichText
     {
         std::string_view Content;
         std::pair<int, int> Extent;
-        ImVec2 Bounds;
+        ImVec2 Size;
         bool ListItemStart = false;
         bool ListItemEnd = false;
         bool IsHorizontalRule = false;
@@ -142,7 +142,6 @@ namespace ImRichText
         bool HasText = false;
     };
 
-    bool LoadPendingFonts(const ImFontConfig& config);
     bool LoadFonts(std::string_view family, const FontCollectionFile& files, float size, const ImFontConfig& config);
     bool LoadDefaultFonts(float sz, FontFileNames* names = nullptr);
     [[nodiscard]] ImFont* GetFont(std::string_view family, float size, bool bold, bool italics, bool light, void*);
@@ -152,5 +151,5 @@ namespace ImRichText
     void PushConfig(const RenderConfig& config);
     void PopConfig();
     void Draw(const char* text, int start = 0, int end = -1, RenderConfig* config = nullptr);
-    void Draw(const std::deque<DrawableLine>& lines, RenderConfig* config = nullptr);
+    void Draw(std::deque<DrawableLine>& lines, RenderConfig* config = nullptr);
 }

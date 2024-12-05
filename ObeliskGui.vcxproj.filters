@@ -38,9 +38,6 @@
     <ClCompile Include="src\imgui_demo.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\tinyxml2.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="src\ImRichText.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -80,15 +77,6 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="inc\IComponent.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="inc\inja.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="inc\nlohmann\json.hpp">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="inc\tinyxml2.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="inc\imrichtext.h">

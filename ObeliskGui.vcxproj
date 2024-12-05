@@ -71,11 +71,12 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <IncludePath>C:\dev\obelisk\ObeliskGui\inc;$(IncludePath)</IncludePath>
-    <LibraryPath>C:\dev\obelisk\glfw-3.4.bin.WIN64\lib-vc2022;$(LibraryPath)</LibraryPath>
+    <IncludePath>inc;..\glfw-3.4.bin.WIN64\include;$(IncludePath)</IncludePath>
+    <LibraryPath>..\glfw-3.4.bin.WIN64\lib-vc2022\;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <IncludePath>C:\dev\obelisk\ObeliskGui\inc;$(IncludePath)</IncludePath>
+    <IncludePath>inc;..\glfw-3.4.bin.WIN64\include;$(IncludePath)</IncludePath>
+    <LibraryPath>..\glfw-3.4.bin.WIN64\lib-vc2022\</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -112,7 +113,7 @@
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <DisableLanguageExtensions>true</DisableLanguageExtensions>
+      <DisableLanguageExtensions>false</DisableLanguageExtensions>
       <RemoveUnreferencedCodeData>false</RemoveUnreferencedCodeData>
       <DisableSpecificWarnings>2398;4244</DisableSpecificWarnings>
     </ClCompile>
@@ -131,7 +132,7 @@
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <DisableLanguageExtensions>true</DisableLanguageExtensions>
+      <DisableLanguageExtensions>false</DisableLanguageExtensions>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -150,7 +151,6 @@
     <ClCompile Include="src\imgui_tables.cpp" />
     <ClCompile Include="src\imgui_widgets.cpp" />
     <ClCompile Include="src\ImRichText.cpp" />
-    <ClCompile Include="src\tinyxml2.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="inc\GLFW\glfw3.h" />
@@ -166,9 +166,6 @@
     <ClInclude Include="inc\imstb_rectpack.h" />
     <ClInclude Include="inc\imstb_textedit.h" />
     <ClInclude Include="inc\imstb_truetype.h" />
-    <ClInclude Include="inc\inja.h" />
-    <ClInclude Include="inc\nlohmann\json.hpp" />
-    <ClInclude Include="inc\tinyxml2.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
