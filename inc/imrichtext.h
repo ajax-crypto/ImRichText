@@ -9,6 +9,10 @@
 #define IM_RICHTEXT_DEFAULT_FONTFAMILY "default-font-family"
 #define IM_RICH_TEXT_MONOSPACE_FONTFAMILY "monospace"
 
+#ifndef IM_RICHTEXT_MIN_RTF_CACHESZ
+#define IM_RICHTEXT_MIN_RTF_CACHESZ 128
+#endif
+
 namespace ImRichText
 {
     struct FontCollectionFile
@@ -65,17 +69,27 @@ namespace ImRichText
         void* UserData = nullptr;
     };
 
+    enum class TokenType
+    {
+        Text,
+        ListStart,
+        ListEnd,
+        ListItem,
+        HorizontalRule,
+        Superscript,
+        Subscript,
+        ParagraphStart,
+        TableHeaderCell,
+        TableDataCell
+    };
+
     struct Token
     {
         std::string_view Content;
-        std::pair<int, int> Extent;
         ImVec2 Size;
-        bool ListItemStart = false;
-        bool ListItemEnd = false;
-        bool IsHorizontalRule = false;
-        bool IsSuperScript = false;
-        bool IsSubScript = false;
-        bool ParagraphBeginning = false;
+        TokenType Type = TokenType::Text;
+        ImVec2 Span; // only applicable for table cells
+        std::pair<int, int> Extent;
     };
 
     struct FontStyle
