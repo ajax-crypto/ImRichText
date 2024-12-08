@@ -66,6 +66,7 @@ namespace ImRichText
         ImColor(*NamedColor)(const char*, void*);
         float ScaleSuperscript = 0.62f;
         float ScaleSubscript = 0.62f;
+        float DefaultHrVerticalMargins = 8.f;
         void* UserData = nullptr;
     };
 
@@ -139,6 +140,7 @@ namespace ImRichText
         FontStyle font;
         ListStyle list;
         BorderStyle border[4];
+        ImVec2 offsetv;
         float borderRoundedness[4];
         bool renderAllWhitespace = false;
     };

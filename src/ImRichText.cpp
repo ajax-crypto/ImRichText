@@ -236,6 +236,26 @@ namespace ImRichText
         }
     }
 
+    std::pair<ImColor, int> GetBorderColorAndThickness(std::string_view stylePropVal, const RenderConfig& config)
+    {
+        std::pair<ImColor, int> result;
+        auto idx = SkipDigits(stylePropVal);
+        result.second = ExtractInt(stylePropVal.substr(0u, idx), 0);
+
+        idx = WholeWord(stylePropVal, idx);
+        idx = SkipSpace(stylePropVal, idx);
+        idx = WholeWord(stylePropVal, idx);
+        idx = SkipSpace(stylePropVal, idx);
+        // TODO: Obey line Type in border
+
+        auto colstart = idx;
+        idx = WholeWord(stylePropVal, idx);
+        result.first = ExtractColor(stylePropVal.substr(colstart, idx),
+            config.NamedColor, config.UserData);
+
+        return result;
+    }
+
     void PopulateSegmentStyle(SegmentStyle& el,
         std::string_view stylePropName,
         std::string_view stylePropVal,
@@ -284,25 +304,33 @@ namespace ImRichText
         }
         else if (AreSame(stylePropName, "border"))
         {
-            auto idx = SkipDigits(stylePropVal);
-            auto thickness = ExtractInt(stylePropVal.substr(0u, idx), 0);
-
-            idx = WholeWord(stylePropVal, idx);
-            idx = SkipSpace(stylePropVal, idx);
-            idx = WholeWord(stylePropVal, idx);
-            idx = SkipSpace(stylePropVal, idx);
-            // TODO: Obey line Type in border
-
-            auto colstart = idx;
-            idx = WholeWord(stylePropVal, idx);
-            auto color = ExtractColor(stylePropVal.substr(colstart, idx),
-                config.NamedColor, config.UserData);
+            auto [color, thickness] = GetBorderColorAndThickness(stylePropVal, config);
 
             for (auto corner = 0; corner < 4; ++corner)
             {
                 el.border[corner].thickness = thickness;
                 el.border[corner].color = color;
             }
+        }
+        else if (AreSame(stylePropName, "border-top"))
+        {
+            std::tie(el.border[TopSide].color, el.border[TopSide].thickness) = 
+                GetBorderColorAndThickness(stylePropVal, config);
+        }
+        else if (AreSame(stylePropName, "border-right"))
+        {
+            std::tie(el.border[RightSide].color, el.border[RightSide].thickness) =
+                GetBorderColorAndThickness(stylePropVal, config);
+        }
+        else if (AreSame(stylePropName, "border-bottom"))
+        {
+            std::tie(el.border[BottomSide].color, el.border[BottomSide].thickness) =
+                GetBorderColorAndThickness(stylePropVal, config);
+        }
+        else if (AreSame(stylePropName, "border-left"))
+        {
+            std::tie(el.border[LeftSide].color, el.border[LeftSide].thickness) =
+                GetBorderColorAndThickness(stylePropVal, config);
         }
         else if (AreSame(stylePropName, "font-family"))
         {
@@ -1051,6 +1079,20 @@ namespace ImRichText
                         paragraphBegin = isParagraph;
                         listItemBegin = isListItem;
                         line = MoveToNextLine(styleprops, line, result, config);
+
+                        if (isHeader)
+                        {
+                            auto& style = line.Segments.back().Style;
+                            style.height = 1.f;
+                            style.fgcolor = ImColor(128, 128, 128);
+                            style.offsetv.x = style.offsetv.y = config.DefaultHrVerticalMargins;
+
+                            Token token;
+                            token.Type = TokenType::HorizontalRule;
+                            AddToken(line, token, config);
+
+                            line = MoveToNextLine(styleprops, line, result, config);
+                        }
                     }
                     else if (isListStart)
                     {
@@ -1067,6 +1109,8 @@ namespace ImRichText
                     else if (AreSame(currTag, "hr"))
                     {
                         line = MoveToNextLine(styleprops, line, result, config);
+                        auto& style = line.Segments.back().Style;
+                        style.offsetv.x = style.offsetv.y = config.DefaultHrVerticalMargins;
 
                         Token token;
                         token.Type = TokenType::HorizontalRule;
@@ -1438,39 +1482,56 @@ namespace ImRichText
                 for (const auto& token : segment.Tokens)
                 {
                     const auto& style = segment.Style;
+                    auto top = style.border[TopSide].thickness + style.offsetv.x;
+                    auto bottom = style.border[BottomSide].thickness + style.offsetv.y;
+                    auto left = style.border[LeftSide].thickness + offsetx;
+                    auto right = style.border[RightSide].thickness;
 
                     if (token.Type == TokenType::ListStart) listDepth++;
                     else if (token.Type == TokenType::ListEnd) listDepth--;
                     else if (token.Type == TokenType::HorizontalRule)
                     {
-                        drawList->AddRectFilled(startpos + ImVec2{ style.border[LeftSide].thickness,
-                            style.border[TopSide].thickness },
-                            startpos + ImVec2{ config->Bounds.x - style.border[RightSide].thickness,
-                            height - style.border[BottomSide].thickness }, style.fgcolor);
+                        
+                        drawList->AddRectFilled(startpos + ImVec2{ top, left },
+                            startpos + ImVec2{ config->Bounds.x - left, style.height }, style.fgcolor);
                         DrawBorder(style, startpos, config->Bounds.x, height, drawList);
                         DrawDebugRect(drawList, startpos, config->Bounds.x, height, *config);
+                        currpos.y += style.offsetv.x + style.offsetv.y;
+                        height = style.height;
                     }
                     else if (token.Type == TokenType::ParagraphStart)
                     {
-                        static char buffer[32] = { 0 };
-                        std::memset(buffer, 0, 32);
-                        std::memset(buffer, ' ', std::min(31, config->ParagraphStop));
-                        auto sz = ImGui::CalcTextSize(buffer);
-                        offsetx += sz.x;
+                        if (config->ParagraphStop > 0)
+                        {
+                            static char buffer[32] = { 0 };
+                            std::memset(buffer, 0, 32);
+                            std::memset(buffer, ' ', std::min(31, config->ParagraphStop));
+                            auto sz = ImGui::CalcTextSize(buffer);
+                            offsetx += sz.x;
+                        }
+                    }
+                    else if (token.Type == TokenType::ListItem)
+                    {
+                        switch (style.list.itemStyle)
+                        {
+                        case BulletType::Circle: 
+                        default:
+                            break;
+                        }
+
+                        offsetx = 0;
                     }
                     else
                     {
                         auto textend = token.Content.data() + token.Content.size();
                         auto sz = token.Size;
-                        auto width = style.border[RightSide].thickness + style.border[LeftSide].thickness + offsetx + sz.x;
-
-                        ImVec2 textpos{ currpos.x + offsetx + style.border[LeftSide].thickness,
-                            currpos.y + (height / 2.f) };
+                        auto width = left + right + sz.x;
+                        ImVec2 textpos{ currpos.x + left, currpos.y + (height / 2.f) };
 
                         if (style.bgcolor.Value != config->DefaultBgColor.Value)
                         {
-                            drawList->AddRectFilled(currpos + ImVec2{ style.border[LeftSide].thickness,  style.border[TopSide].thickness },
-                                currpos + ImVec2{ width, height }, style.bgcolor);
+                            drawList->AddRectFilled(currpos + ImVec2{ left, right }, 
+                                currpos + ImVec2{ width - right, height - bottom }, style.bgcolor);
                         }
 
                         drawList->AddText(textpos, style.fgcolor, token.Content.data(), textend);
