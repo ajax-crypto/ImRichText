@@ -5,6 +5,7 @@
 #include <string_view>
 #include <vector>
 #include <deque>
+#include <initializer_list>
 
 #define IM_RICHTEXT_DEFAULT_FONTFAMILY "default-font-family"
 #define IM_RICH_TEXT_MONOSPACE_FONTFAMILY "monospace"
@@ -64,6 +65,8 @@ namespace ImRichText
         ImFont* (*GetFont)(std::string_view, float, bool, bool, bool, void*);
         float HFontSizes[6] = { 36, 32, 24, 20, 16, 12 };
         ImColor(*NamedColor)(const char*, void*);
+
+        float BulletSizeScale = 3.f;
         float ScaleSuperscript = 0.62f;
         float ScaleSubscript = 0.62f;
         float DefaultHrVerticalMargins = 8.f;
@@ -160,6 +163,7 @@ namespace ImRichText
 
     bool LoadFonts(std::string_view family, const FontCollectionFile& files, float size, const ImFontConfig& config);
     bool LoadDefaultFonts(float sz, FontFileNames* names = nullptr);
+    bool LoadDefaultFonts(const std::initializer_list<float>& szs, FontFileNames* names = nullptr);
     [[nodiscard]] ImFont* GetFont(std::string_view family, float size, bool bold, bool italics, bool light, void*);
     [[nodiscard]] ImColor GetColor(const char* name, void*);
     [[nodiscard]] std::deque<DrawableLine> GetDrawableLines(const char* text, int start, int end, RenderConfig& config);

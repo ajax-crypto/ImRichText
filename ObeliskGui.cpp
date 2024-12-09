@@ -109,7 +109,13 @@ public:
 #endif
         ImGui_ImplOpenGL3_Init(glsl_version);
 
-        ImRichText::LoadDefaultFonts(24.f);
+        ImRichText::FontFileNames names;
+        names.Proportional.Normal = "Helvetica.ttf";
+        names.Proportional.Light = "";
+        names.Proportional.Bold = "Helvetica-Bold.ttf";
+        names.Proportional.Italics = "Helvetica-Oblique.ttf";
+        names.Proportional.BoldItalics = "Helvetica-BoldOblique.ttf";
+        ImRichText::LoadDefaultFonts({ 24.f, 36.f }, &names);
     }
 
     int run()
@@ -123,9 +129,10 @@ public:
         config.Bounds = ImVec2{ 500.f, 500.f };
         config.GetFont = &ImRichText::GetFont;
         config.NamedColor = &ImRichText::GetColor;
-        config.DefaultFontFamily = "monospace";
-        config.DefaultFontSize = 24;
+        config.DefaultFontFamily = IM_RICHTEXT_DEFAULT_FONTFAMILY;
+        config.DefaultFontSize = 24.f;
         config.UserData = this;
+
         auto drawables = ImRichText::GetDrawableLines(rtf.data(), 0, rtf.size(), config);
 
         // Main loop

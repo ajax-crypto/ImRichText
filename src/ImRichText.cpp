@@ -397,6 +397,7 @@ namespace ImRichText
         ImFontConfig fconfig;
         fconfig.OversampleH = 3.0;
         fconfig.OversampleV = 1.0;
+        fconfig.RasterizerMultiply = sz < 32.f ? 1.5f : 1.0f;
 
         auto copyFileName = [](const std::string_view fontname, char* fontpath, int startidx) {
             auto sz = std::min((int)fontname.size(), _MAX_PATH - startidx);
@@ -448,18 +449,58 @@ namespace ImRichText
             const int startidx = (int)std::strlen(fontpath);
             FontCollectionFile files;
 
-            files.Normal = copyFileName(names->Proportional.Normal, fontpath, startidx);
-            files.Light = copyFileName(names->Proportional.Light, fontpath, startidx);
-            files.Bold = copyFileName(names->Proportional.Bold, fontpath, startidx);
-            files.Italics = copyFileName(names->Proportional.Italics, fontpath, startidx);
-            files.BoldItalics = copyFileName(names->Proportional.BoldItalics, fontpath, startidx);
-            LoadFonts(IM_RICHTEXT_DEFAULT_FONTFAMILY, files, sz, fconfig);
+            if (!names->Proportional.Normal.empty())
+            {
+                files.Normal = copyFileName(names->Proportional.Normal, fontpath, startidx);
+                files.Light = copyFileName(names->Proportional.Light, fontpath, startidx);
+                files.Bold = copyFileName(names->Proportional.Bold, fontpath, startidx);
+                files.Italics = copyFileName(names->Proportional.Italics, fontpath, startidx);
+                files.BoldItalics = copyFileName(names->Proportional.BoldItalics, fontpath, startidx);
+                LoadFonts(IM_RICHTEXT_DEFAULT_FONTFAMILY, files, sz, fconfig);
+            }
+            else
+            {
+#ifdef _WIN32
+                LoadFonts(IM_RICHTEXT_DEFAULT_FONTFAMILY, {
+                    "c:\\Windows\\Fonts\\segoeui.ttf",
+                    "c:\\Windows\\Fonts\\segoeuil.ttf",
+                    "c:\\Windows\\Fonts\\segoeuib.ttf",
+                    "c:\\Windows\\Fonts\\segoeuii.ttf",
+                    "c:\\Windows\\Fonts\\segoeuiz.ttf"
+                }, sz, fconfig);
+#endif
+            }
 
-            files.Normal = copyFileName(names->Monospace.Normal, fontpath, startidx);
-            files.Bold = copyFileName(names->Monospace.Bold, fontpath, startidx);
-            files.Italics = copyFileName(names->Monospace.Italics, fontpath, startidx);
-            files.BoldItalics = copyFileName(names->Monospace.BoldItalics, fontpath, startidx);
-            LoadFonts(IM_RICH_TEXT_MONOSPACE_FONTFAMILY, files, sz, fconfig);
+            if (!names->Monospace.Normal.empty())
+            {
+                files.Normal = copyFileName(names->Monospace.Normal, fontpath, startidx);
+                files.Bold = copyFileName(names->Monospace.Bold, fontpath, startidx);
+                files.Italics = copyFileName(names->Monospace.Italics, fontpath, startidx);
+                files.BoldItalics = copyFileName(names->Monospace.BoldItalics, fontpath, startidx);
+                LoadFonts(IM_RICH_TEXT_MONOSPACE_FONTFAMILY, files, sz, fconfig);
+            }
+            else
+            {
+#ifdef _WIN32
+                LoadFonts(IM_RICH_TEXT_MONOSPACE_FONTFAMILY, {
+                    "c:\\Windows\\Fonts\\consola.ttf",
+                    "",
+                    "c:\\Windows\\Fonts\\consolab.ttf",
+                    "c:\\Windows\\Fonts\\consolai.ttf",
+                    "c:\\Windows\\Fonts\\consolaz.ttf"
+                }, sz, fconfig);
+#endif
+            }
+        }
+
+        return true;
+    }
+
+    bool LoadDefaultFonts(const std::initializer_list<float>& szs, FontFileNames* names)
+    {
+        for (auto sz : szs)
+        {
+            LoadDefaultFonts(sz, names);
         }
 
         return true;
@@ -501,35 +542,6 @@ namespace ImRichText
             {
                 szit = famit->second.lower_bound(size);
                 szit = szit == famit->second.begin() ? szit : std::prev(szit);
-
-                /*ImFontConfig fconfig;
-                fconfig.OversampleH = 3.0;
-                fconfig.OversampleV = 1.0;
-
-                ImGuiIO& io = ImGui::GetIO();
-                szit = famit->second.emplace(size, FontCollection{}).first;
-                const auto& existing = famit->second.begin()->second;
-
-                if (bold && italics)
-                {
-                    PendingFonts[family][size].BoldItalics = existing.Files.BoldItalics;
-                }
-                else if (bold)
-                {
-                    PendingFonts[family][size].Bold = existing.Files.Bold;
-                }
-                else if (italics)
-                {
-                    PendingFonts[family][size].Italics = existing.Files.Italics;
-                }
-                else if (light)
-                {
-                    PendingFonts[family][size].Light = existing.Files.Light;
-                }
-                else
-                {
-                    PendingFonts[family][size].Normal = existing.Files.Normal;
-                }*/
             }
 
             if (bold && italics) return szit->second.BoldItalics;
@@ -1512,13 +1524,46 @@ namespace ImRichText
                     }
                     else if (token.Type == TokenType::ListItem)
                     {
+                        config->BulletSizeScale = clamp(config->BulletSizeScale, 1.f, 4.f);
+                        auto bulletsz = segment.Style.font.size / config->BulletSizeScale;
+
                         switch (style.list.itemStyle)
                         {
-                        case BulletType::Circle: 
+                        case BulletType::Circle: drawList->AddCircle(ImVec2{ startpos.x + offsetx, 
+                            currpos.y + height / 2.f - bulletsz / 2.f },
+                            bulletsz / 2.f, segment.Style.fgcolor);
+                            break;
+
+                        case BulletType::Disk: drawList->AddCircleFilled(ImVec2{ startpos.x + offsetx,  
+                            currpos.y + height / 2.f - bulletsz / 2.f },
+                            bulletsz / 2.f, segment.Style.fgcolor);
+                            break;
+
+                        case BulletType::Square: drawList->AddRect(ImVec2{ offsetx + startpos.x, 
+                            currpos.y + (height / 2.f) - (bulletsz / 2.f) }, 
+                            ImVec2{ offsetx + startpos.x + bulletsz,
+                            currpos.y + (height / 2.f) + (bulletsz / 2.f) }, segment.Style.fgcolor);
+                            break;
+
+                        case BulletType::FilledSquare: drawList->AddRectFilled(ImVec2{ offsetx + startpos.x,
+                        currpos.y + (height / 2.f) - (bulletsz / 2.f) },
+                            ImVec2{ offsetx + startpos.x + bulletsz,
+                            currpos.y + (height / 2.f) + (bulletsz / 2.f) }, segment.Style.fgcolor);
+                            break;
+
+                        case BulletType::Concentric: drawList->AddCircle(ImVec2{ startpos.x + offsetx,
+                            currpos.y + height / 2.f - bulletsz / 2.f },
+                            bulletsz / 2.f, segment.Style.fgcolor);
+                            drawList->AddCircleFilled(ImVec2{ startpos.x + offsetx,
+                            currpos.y + height / 2.f - bulletsz / 2.f },
+                                bulletsz / 3.f, segment.Style.fgcolor);
+                            break;
+
                         default:
                             break;
                         }
 
+                        currpos.x += offsetx + config->ListItemOffset + bulletsz;
                         offsetx = 0;
                     }
                     else
@@ -1526,7 +1571,7 @@ namespace ImRichText
                         auto textend = token.Content.data() + token.Content.size();
                         auto sz = token.Size;
                         auto width = left + right + sz.x;
-                        ImVec2 textpos{ currpos.x + left, currpos.y + (height / 2.f) };
+                        ImVec2 textpos{ currpos.x + left, currpos.y + (height / 2.f) - (sz.y / 2.f) };
 
                         if (style.bgcolor.Value != config->DefaultBgColor.Value)
                         {
