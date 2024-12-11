@@ -95,19 +95,14 @@ namespace ImRichText
 
     static std::unordered_map<std::string_view, std::map<float, FontCollection>> FontStore;
     static std::unordered_map<ImGuiContext*, std::deque<RenderConfig>> RenderConfigs;
+    static RenderConfig DefaultRenderConfig;
+    static bool DefaultRenderConfigInit = false;
 
-    struct EscapeCodeInfo
-    {
-        const char* code;
-        const char* replacement;
-        int codesz;
-    };
-
-    static EscapeCodeInfo EscapeCodes[10] = {
-        { "Tab", "\t", 3 }, { "NewLine", "\n", 7 }, { "nbsp", " ", 4 }, 
-        { "gt", ">", 2 }, { "lt", "<", 2 }, 
-        { "amp", "&", 3 }, { "copy", "©", 4 }, { "reg", "®", 3 }, 
-        { "deg", "°", 3 }, { "micro", "μ", 5 }
+    static const std::pair<std::string_view, std::string_view> EscapeCodes[10] = {
+        { "Tab", "\t" }, { "NewLine", "\n" }, { "nbsp", " " }, 
+        { "gt", ">" }, { "lt", "<" }, 
+        { "amp", "&" }, { "copy", "©" }, { "reg", "®" }, 
+        { "deg", "°" }, { "micro", "μ" }
     };
 
     template <typename T>
@@ -130,6 +125,21 @@ namespace ImRichText
         return true;
     }
 
+    [[nodiscard]] bool AreSame(const std::string_view lhs, const std::string_view rhs)
+    {
+        auto rlimit = (int)rhs.size();
+        auto llimit = (int)lhs.size();
+        if (rlimit != llimit)
+            return false;
+
+        for (auto idx = 0; idx < rlimit; ++idx)
+            if (std::tolower(lhs[idx]) != std::tolower(rhs[idx]))
+                return false;
+
+        return true;
+    }
+
+#ifdef _DEBUG
     [[nodiscard]] const char* GetTokenTypeString(const Token& token)
     {
         switch (token.Type)
@@ -147,6 +157,7 @@ namespace ImRichText
         default: return "InvalidToken";
         }
     }
+#endif
 
     [[nodiscard]] int ExtractInt(const char* text, int end, int defaultVal)
     {
@@ -552,14 +563,16 @@ namespace ImRichText
         }
     }
 
+    template <int maxsz>
     struct CaseInsensitieHasher
     {
         std::size_t operator()(std::string_view key) const
         {
-            thread_local static char buffer[32] = { 0 };
-            std::memset(buffer, 0, 32);
+            thread_local static char buffer[maxsz] = { 0 };
+            std::memset(buffer, 0, maxsz);
+            auto limit = std::min((int)key.size(), maxsz - 1);
             
-            for (auto idx = 0; idx < std::min((int)key.size(), 31); ++idx)
+            for (auto idx = 0; idx < limit; ++idx)
                 buffer[idx] = std::tolower(key[idx]);
 
             return std::hash<std::string_view>()(buffer);
@@ -568,7 +581,7 @@ namespace ImRichText
 
     ImColor GetColor(const char* name, void*)
     {
-        const static std::unordered_map<std::string_view, ImColor, CaseInsensitieHasher> Colors{
+        const static std::unordered_map<std::string_view, ImColor, CaseInsensitieHasher<32>> Colors{
             { "black", ImColor(0, 0, 0) },
             { "silver", ImColor(192, 192, 192) },
             { "gray", ImColor(128, 128, 128) },
@@ -715,6 +728,21 @@ namespace ImRichText
         }; 
 
         return Colors.at(name);
+    }
+
+    RenderConfig* GetDefaultConfig()
+    {
+        auto config = &DefaultRenderConfig;
+        config->Bounds = ImGui::GetWindowSize();
+        config->GetFont = &GetFont;
+        config->NamedColor = &GetColor;
+
+        config->EscapeCodes.insert(config->EscapeCodes.end(), std::begin(EscapeCodes),
+            std::end(EscapeCodes));
+        config->EscapeSeqStart = '&';
+        config->EscapeSeqEnd = ';';
+        DefaultRenderConfigInit = true;
+        return config;
     }
 
     [[nodiscard]] std::optional<std::string_view> GetQuotedString(const char* text, int& idx, int end)
@@ -876,29 +904,29 @@ namespace ImRichText
     }
 
     [[nodiscard]] std::pair<bool, bool> AddEscapeSequences(const std::string_view content, 
-        int curridx, DrawableLine& line, int& start)
+        int curridx, const std::vector<std::pair<std::string_view, std::string_view>>& escapeCodes, 
+        char escapeStart, char escapeEnd, DrawableLine& line, int& start)
     {
         Token token;
         auto hasEscape = false;
         auto isNewLine = false;
 
-        for (const auto& code : EscapeCodes)
+        for (const auto& pair : escapeCodes)
         {
-            if ((curridx + code.codesz) < (int)content.size() &&
-                AreSame(content.substr(curridx, code.codesz), code.code) &&
-                content[curridx + code.codesz] == ';')
+            auto sz = (int)pair.first.size();
+            if ((curridx + sz) < (int)content.size() &&
+                AreSame(content.substr(curridx, sz), pair.first) &&
+                content[curridx + sz] == escapeEnd)
             {
-                if (code.replacement == "\n") isNewLine = true;
+                if (pair.second == "\n") isNewLine = true;
                 else
                 {
                     token.Extent = std::make_pair(-1, -1);
-                    token.Content = code.replacement;
+                    token.Content = pair.second;
                     line.Segments.back().Tokens.emplace_back(token);
-                    LOG("Added token: (replacement of) %s [type: %s]\n",
-                        code.code, GetTokenTypeString(token));
                 }
                 
-                curridx += code.codesz + 1;
+                curridx += sz + 1;
                 start = curridx;
                 hasEscape = true;
                 break;
@@ -920,11 +948,11 @@ namespace ImRichText
         TabSpaces[config.TabStop] = 0;
 
         DrawableLine line = CreateNewLine(initialStyle, config);
-        auto paragraphBegin = false, listItemBegin = false;;
+        auto paragraphBegin = false, listItemBegin = false;
 
         for (auto idx = start; idx < end;)
         {
-            if (text[idx] == '<')
+            if (text[idx] == config.TagStart)
             {
                 idx++;
                 auto tagStart = true;
@@ -941,7 +969,7 @@ namespace ImRichText
                 }
 
                 auto begin = idx;
-                while ((idx < end) && !std::isspace(text[idx]) && (text[idx] != '>')) idx++;
+                while ((idx < end) && !std::isspace(text[idx]) && (text[idx] != config.TagEnd)) idx++;
 
                 if (idx - begin == 0)
                 {
@@ -953,7 +981,7 @@ namespace ImRichText
 
                 if (!tagStart)
                 {
-                    if (text[idx] == '>') idx++;
+                    if (text[idx] == config.TagEnd) idx++;
 
                     if (currTag.empty())
                     {
@@ -978,9 +1006,9 @@ namespace ImRichText
                 auto isListItem = tagStart && AreSame(currTag, "li");
                 auto isParagraph = AreSame(currTag, "p");
                 auto isHeader = currTag.size() == 2u && (currTag[0] == 'h' || currTag[0] == 'H') && std::isdigit(currTag[1]);
-                auto isRawText = AreSame(currTag, "pre");
+                auto isRawText = AreSame(currTag, "pre") || AreSame(currTag, "code");
 
-                if (text[idx] == '/' && ((idx + 1) < end) && text[idx + 1] == '>')
+                if (text[idx] == '/' && ((idx + 1) < end) && text[idx + 1] == config.TagEnd)
                 {
                     if (tagStart)
                     {
@@ -1005,7 +1033,7 @@ namespace ImRichText
                     begin = idx;
 
                     // Extract all attributes
-                    while ((idx < end) && (text[idx] != '>'))
+                    while ((idx < end) && (text[idx] != config.TagEnd))
                     {
                         while ((idx < end) && (text[idx] != '=') && !std::isspace(text[idx])) idx++;
                         auto attribName = std::string_view{ text + begin, (std::size_t)(idx - begin) };
@@ -1060,7 +1088,7 @@ namespace ImRichText
                         }
                     }
                     
-                    if (text[idx] == '>') idx++;
+                    if (text[idx] == config.TagEnd) idx++;
 
                     auto& styleprops = TagStack[CurrentStackPos].second;
                     auto isLineBreak = AreSame(currTag, "br");
@@ -1075,14 +1103,19 @@ namespace ImRichText
                         styleprops.font.family = IM_RICH_TEXT_MONOSPACE_FONTFAMILY;
                         line = MoveToNextLine(styleprops, line, result, config);
                     }
-                    else if (AreSame(currTag, "i"))
+                    else if (AreSame(currTag, "i") || AreSame(currTag, "em"))
                     {
                         styleprops.font.italics = true;
                         AddSegment(line, styleprops, config);
                     }
-                    else if (AreSame(currTag, "b"))
+                    else if (AreSame(currTag, "b") || AreSame(currTag, "strong"))
                     {
                         styleprops.font.bold = true;
+                        AddSegment(line, styleprops, config);
+                    }
+                    else if (AreSame(currTag, "mark"))
+                    {
+                        styleprops.bgcolor = config.NamedColor("yellow", config.UserData);
                         AddSegment(line, styleprops, config);
                     }
 
@@ -1191,7 +1224,7 @@ namespace ImRichText
                 }
                 else
                 {
-                    while ((idx < end) && (text[idx] != '<')) idx++;
+                    while ((idx < end) && (text[idx] != config.TagStart)) idx++;
                     std::string_view content{ text + begin, (std::size_t)(idx - begin) };
                     LOG("Processing content [%.*s] for tag <%.*s>\n", (int)content.size(), 
                         content.data(), (int)currTag.size(), currTag.data());
@@ -1221,12 +1254,13 @@ namespace ImRichText
                                 AddToken(line, token, config);
                                 start = curridx;
                             }
-                            else if (content[curridx] == '&')
+                            else if (content[curridx] == config.EscapeSeqStart)
                             {
                                 GenerateToken(line, content, begin, curridx, start, config, paragraphBegin, listItemBegin);
 
                                 curridx++;
-                                auto [hasEscape, isNewLine] = AddEscapeSequences(content, curridx, line, start);
+                                auto [hasEscape, isNewLine] = AddEscapeSequences(content, curridx, config.EscapeCodes, 
+                                    config.EscapeSeqStart, config.EscapeSeqEnd, line, start);
                                 curridx = start;
 
                                 if (isNewLine) line = MoveToNextLine(styleprops, line, result, config);
@@ -1260,12 +1294,13 @@ namespace ImRichText
                                 while (curridx < (int)content.size() && content[curridx] == '\t') curridx++;
                                 start = curridx;
                             }
-                            else if (content[curridx] == '&')
+                            else if (content[curridx] == config.EscapeSeqStart)
                             {
                                 GenerateToken(line, content, begin, curridx, start, config, paragraphBegin, listItemBegin);
 
                                 curridx++;
-                                auto [hasEscape, isNewLine] = AddEscapeSequences(content, curridx, line, start);
+                                auto [hasEscape, isNewLine] = AddEscapeSequences(content, curridx, config.EscapeCodes,
+                                    config.EscapeSeqStart, config.EscapeSeqEnd, line, start);
                                 curridx = start;
 
                                 if (isNewLine) line = MoveToNextLine(styleprops, line, result, config);
@@ -1411,11 +1446,10 @@ namespace ImRichText
 
             if (it == RenderConfigs.end())
             {
-                it = RenderConfigs.emplace(ctx, std::deque<RenderConfig>{}).first;
-                config = &(it->second.emplace_back());
-                config->Bounds = ImGui::GetWindowSize();
-                config->GetFont = &GetFont;
-                config->NamedColor = &GetColor;
+                if (!DefaultRenderConfigInit)
+                    GetDefaultConfig();
+
+                config = &DefaultRenderConfig;
             }
             else config = &(it->second.back());
         }

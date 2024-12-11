@@ -125,15 +125,8 @@ public:
         ImVec4 clear_color = ImVec4(1.f, 1.f, 1.f, 1.00f);
         std::string rtf = "Unstyled   <p style=\"color: rgb(150, 0, 0); border: 2px solid gray;\">"
             "Paragraph <b>bold <i>italics</i> bold2 </b><h1>Heading&Tab;</h1> </p><span style='background: teal;'>Colored</span>";
-        ImRichText::RenderConfig config;
-        config.Bounds = ImVec2{ 500.f, 500.f };
-        config.GetFont = &ImRichText::GetFont;
-        config.NamedColor = &ImRichText::GetColor;
-        config.DefaultFontFamily = IM_RICHTEXT_DEFAULT_FONTFAMILY;
-        config.DefaultFontSize = 24.f;
-        config.UserData = this;
 
-        auto drawables = ImRichText::GetDrawableLines(rtf.data(), 0, rtf.size(), config);
+        auto drawables = ImRichText::GetDrawableLines(rtf.data(), 0, rtf.size());
 
         // Main loop
 #ifdef __EMSCRIPTEN__

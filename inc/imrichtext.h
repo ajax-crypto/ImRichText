@@ -47,9 +47,16 @@ namespace ImRichText
 
     struct RenderConfig
     {
+        char TagStart = '<';
+        char TagEnd = '>';
+        char EscapeSeqStart = '&';
+        char EscapeSeqEnd = ';';
+        std::vector<std::pair<std::string_view, std::string_view>> EscapeCodes;
+
         float LineGap = 5;
         ImVec2 Bounds;
         bool DrawDebugRects = false;
+        bool WordWrap = false;
 
         int ParagraphStop = 4;
         int TabStop = 4;
@@ -61,10 +68,16 @@ namespace ImRichText
         float DefaultFontSize = 20;
         ImColor DefaultFgColor = IM_COL32_BLACK;
         ImColor DefaultBgColor = IM_COL32_WHITE;
+        ImColor MarkHighlight = ImColor{};
         
         ImFont* (*GetFont)(std::string_view, float, bool, bool, bool, void*);
+        ImVec2  (*GetTextSize)(std::string_view, float, ImFont*, float, void*);
         float HFontSizes[6] = { 36, 32, 24, 20, 16, 12 };
         ImColor(*NamedColor)(const char*, void*);
+
+        ImColor BlockquoteBar = { 0.25f, 0.25f, 0.25f, 1.0f };
+        float BlockquotePadding = 5.f;
+        float BlockquoteOffset = 15.f;
 
         float BulletSizeScale = 3.f;
         float ScaleSuperscript = 0.62f;
@@ -82,6 +95,7 @@ namespace ImRichText
         HorizontalRule,
         Superscript,
         Subscript,
+        Blockquote,
         ParagraphStart,
         TableHeaderCell,
         TableDataCell
@@ -166,6 +180,7 @@ namespace ImRichText
     bool LoadDefaultFonts(const std::initializer_list<float>& szs, FontFileNames* names = nullptr);
     [[nodiscard]] ImFont* GetFont(std::string_view family, float size, bool bold, bool italics, bool light, void*);
     [[nodiscard]] ImColor GetColor(const char* name, void*);
+    [[nodiscard]] RenderConfig* GetDefaultConfig();
     [[nodiscard]] std::deque<DrawableLine> GetDrawableLines(const char* text, int start, int end, RenderConfig& config);
 
     void PushConfig(const RenderConfig& config);
