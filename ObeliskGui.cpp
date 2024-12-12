@@ -109,13 +109,13 @@ public:
 #endif
         ImGui_ImplOpenGL3_Init(glsl_version);
 
-        ImRichText::FontFileNames names;
+        /*ImRichText::FontFileNames names;
         names.Proportional.Normal = "Helvetica.ttf";
         names.Proportional.Light = "";
         names.Proportional.Bold = "Helvetica-Bold.ttf";
         names.Proportional.Italics = "Helvetica-Oblique.ttf";
-        names.Proportional.BoldItalics = "Helvetica-BoldOblique.ttf";
-        ImRichText::LoadDefaultFonts({ 24.f, 36.f }, &names);
+        names.Proportional.BoldItalics = "Helvetica-BoldOblique.ttf";*/
+        ImRichText::LoadDefaultFonts({ 24.f, 36.f });
     }
 
     int run()
@@ -124,9 +124,12 @@ public:
         bool show_another_window = false;
         ImVec4 clear_color = ImVec4(1.f, 1.f, 1.f, 1.00f);
         std::string rtf = "Unstyled   <p style=\"color: rgb(150, 0, 0); border: 2px solid gray;\">"
-            "Paragraph <b>bold <i>italics</i> bold2 </b><h1>Heading&Tab;</h1> </p><span style='background: teal;'>Colored</span>";
+            "Paragraph <b>bold <i>italics</i> bold2 </b><h1>Heading&Tab;</h1> </p>"
+            "<ul><li> item#1 </li><li> item#2 </li></ul>"
+            "<span style='background: teal;'>Colored</span>";
 
-        auto drawables = ImRichText::GetDrawableLines(rtf.data(), 0, rtf.size());
+        auto config = ImRichText::GetDefaultConfig({ 200.f, 200.f });
+        auto drawables = ImRichText::GetDrawableLines(rtf.data(), 0, rtf.size(), *config);
 
         // Main loop
 #ifdef __EMSCRIPTEN__

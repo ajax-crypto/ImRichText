@@ -105,6 +105,8 @@ namespace ImRichText
         { "deg", "°" }, { "micro", "μ" }
     };
 
+    static const char* LineSpaces = "                                ";
+
     template <typename T>
     [[nodiscard]] T clamp(T val, T min, T max)
     {
@@ -152,8 +154,8 @@ namespace ImRichText
         case TokenType::ParagraphStart: return "ParagraphStart";
         case TokenType::Subscript: return "Subscript";
         case TokenType::Superscript: return "Superscript";
-        case TokenType::TableDataCell: return "TableDataCell";
-        case TokenType::TableHeaderCell: return "TableHeaderCell";
+        case TokenType::BlockquoteStart: return "BlockquoteStart";
+        case TokenType::BlockquoteEnd: return "BlockquoteEnd";
         default: return "InvalidToken";
         }
     }
@@ -342,6 +344,19 @@ namespace ImRichText
         {
             std::tie(el.border[LeftSide].color, el.border[LeftSide].thickness) =
                 GetBorderColorAndThickness(stylePropVal, config);
+        }
+        else if (AreSame(stylePropName, "alignment") || AreSame(stylePropName, "text-align"))
+        {
+            el.alignmentH = AreSame(stylePropVal, "justify") ? HorizontalAlignment::Justify :
+                AreSame(stylePropVal, "right") ? HorizontalAlignment::Right :
+                AreSame(stylePropVal, "center") ? HorizontalAlignment::Center :
+                HorizontalAlignment::Left;
+        }
+        else if (AreSame(stylePropName, "vertical-align"))
+        {
+            el.alignmentV = AreSame(stylePropVal, "top") ? VerticalAlignment::Top :
+                AreSame(stylePropVal, "bottom") ? VerticalAlignment::Bottom :
+                VerticalAlignment::Center;
         }
         else if (AreSame(stylePropName, "font-family"))
         {
@@ -563,6 +578,15 @@ namespace ImRichText
         }
     }
 
+
+    ImVec2 GetTextSize(std::string_view content, ImFont* font)
+    {
+        ImGui::PushFont(font);
+        auto sz = ImGui::CalcTextSize(content.data(), content.data() + content.size());
+        ImGui::PopFont();
+        return sz;
+    }
+
     template <int maxsz>
     struct CaseInsensitieHasher
     {
@@ -730,12 +754,13 @@ namespace ImRichText
         return Colors.at(name);
     }
 
-    RenderConfig* GetDefaultConfig()
+    RenderConfig* GetDefaultConfig(ImVec2 Bounds)
     {
         auto config = &DefaultRenderConfig;
-        config->Bounds = ImGui::GetWindowSize();
+        config->Bounds = Bounds;
         config->GetFont = &GetFont;
         config->NamedColor = &GetColor;
+        config->GetTextSize = &GetTextSize;
 
         config->EscapeCodes.insert(config->EscapeCodes.end(), std::begin(EscapeCodes),
             std::end(EscapeCodes));
@@ -806,22 +831,24 @@ namespace ImRichText
         return result;
     }
 
-    [[nodiscard]] float GetLineHeight(const SegmentStyle& styleprops, const RenderConfig& config, SegmentDetails& segment)
+    [[nodiscard]] std::pair<float, float> GetLineSize(const SegmentStyle& styleprops, const RenderConfig& config, SegmentDetails& segment)
     {
-        auto border = styleprops.border[TopSide].thickness + styleprops.border[BottomSide].thickness;
+        auto borderv = styleprops.border[TopSide].thickness + styleprops.border[BottomSide].thickness;
+        auto borderh = styleprops.border[LeftSide].thickness + styleprops.border[RightSide].thickness;
 
-        if (!segment.HasText) return styleprops.height + border;
+        if (!segment.HasText) return { styleprops.width + borderh, styleprops.height + borderv };
         else
         {
-            float height = 0.f;
+            float height = 0.f, width = 0.f;
 
             for (auto& token : segment.Tokens)
             {
                 token.Size = ImGui::CalcTextSize(token.Content.data(), token.Content.data() + token.Content.size());
                 height = std::max(height, token.Size.y);
+                width = std::max(width, token.Size.x);
             }
 
-            return height + border + config.LineGap;
+            return { width + borderh, height + borderv };
         }
     }
 
@@ -852,17 +879,53 @@ namespace ImRichText
         return line;
     }
 
-    [[nodiscard]] DrawableLine MoveToNextLine(const SegmentStyle& styleprops, const DrawableLine& line, 
-        std::deque<DrawableLine>& result, const RenderConfig& config)
+    [[nodiscard]] DrawableLine MoveToNextLine(const SegmentStyle& styleprops, const DrawableLine& line,
+        std::deque<DrawableLine>& result, const RenderConfig& config, bool wordwrap = false);
+
+    void PerformWordWrap(std::deque<DrawableLine>& lines, int index, const RenderConfig& config)
+    {
+        if (!lines[index].HasText || !config.WordWrap || !config.GetTextSize) return;
+
+        std::deque<DrawableLine> newlines;
+        auto currline = CreateNewLine(lines.front().Segments.front().Style, config);
+        auto currentx = 0.f;
+
+        for (const auto& segment : lines[index].Segments)
+        {
+            for (const auto& token : segment.Tokens)
+            {
+                if (token.Type == TokenType::Text)
+                {
+                    auto sz = config.GetTextSize(token.Content, segment.Style.font.font);
+
+                    if (currentx + sz.x > config.Bounds.x)
+                    {
+                        currline = MoveToNextLine(segment.Style, currline, newlines, config);
+                        currentx = 0.f;
+                    }
+
+                    currline.Segments.back().Style = segment.Style;
+                    currline.Segments.back().Tokens.emplace_back(token);
+                    currentx += sz.x;
+                }
+            }
+        }
+
+        auto it = lines.erase(lines.begin() + index);
+        lines.insert(it, newlines.begin(), newlines.end());
+    }
+
+    DrawableLine MoveToNextLine(const SegmentStyle& styleprops, const DrawableLine& line, 
+        std::deque<DrawableLine>& result, const RenderConfig& config, bool wordwrap)
     {
         result.push_back(line);
-        LOG("Created new line...\n");
+        if (wordwrap) PerformWordWrap(result, (int)result.size() - 1, config);
         return CreateNewLine(styleprops, config);
     }
 
-    float GetLineHeight(DrawableLine& line, const RenderConfig& config)
+    std::pair<float, float> GetLineSize(DrawableLine& line, const RenderConfig& config)
     {
-        auto height = 0.f;
+        auto height = 0.f, width = 0.f;
 
         for (auto& segment : line.Segments)
         {
@@ -870,11 +933,13 @@ namespace ImRichText
                 segment.Style.font.size, segment.Style.font.bold, segment.Style.font.italics,
                 segment.Style.font.light, config.UserData);
             ImGui::PushFont(segment.Style.font.font);
-            height = std::max(height, GetLineHeight(segment.Style, config, segment));
+            auto sz = GetLineSize(segment.Style, config, segment);
+            height = std::max(height, sz.second);
+            width = std::max(width, sz.first);
             ImGui::PopFont();
         }
 
-        return height;
+        return { width, height };
     }
 
     void GenerateToken(DrawableLine& line, std::string_view content, 
@@ -889,7 +954,7 @@ namespace ImRichText
             AddToken(line, token, config);
         }
 
-        if (paragraphBeginning)
+        if (paragraphBeginning && config.ParagraphStop > 0)
         {
             paragraphBeginning = false;
             Token token;
@@ -1007,6 +1072,7 @@ namespace ImRichText
                 auto isParagraph = AreSame(currTag, "p");
                 auto isHeader = currTag.size() == 2u && (currTag[0] == 'h' || currTag[0] == 'H') && std::isdigit(currTag[1]);
                 auto isRawText = AreSame(currTag, "pre") || AreSame(currTag, "code");
+                auto isBlockquote = AreSame(currTag, "blockquote");
 
                 if (text[idx] == '/' && ((idx + 1) < end) && text[idx + 1] == config.TagEnd)
                 {
@@ -1163,6 +1229,18 @@ namespace ImRichText
 
                         line = MoveToNextLine(styleprops, line, result, config);
                     }
+                    else if (isBlockquote)
+                    {
+                        line = MoveToNextLine(styleprops, line, result, config);
+                        auto& style = line.Segments.back().Style;
+                        style.offseth.x = style.offseth.y = config.BlockquoteOffset;
+
+                        Token token;
+                        token.Type = tagStart ? TokenType::BlockquoteStart : TokenType::BlockquoteEnd;
+                        AddToken(line, token, config);
+
+                        line = MoveToNextLine(styleprops, line, result, config);
+                    }
                     else
                     {
                         if (AreSame(currTag, "sup") || AreSame(currTag, "sub")) AddSegment(line, styleprops, config);
@@ -1176,7 +1254,7 @@ namespace ImRichText
                     --CurrentStackPos;
                     LOG("Exiting Tag: <%.*s>\n", (int)currTag.size(), currTag.data());
 
-                    if (isListItem || isParagraph || isHeader || isRawText)
+                    if (isListEnd || isParagraph || isHeader || isRawText || isBlockquote)
                     {
                         line = MoveToNextLine(CurrentStackPos >= 0 ?
                             TagStack[CurrentStackPos].second : initialStyle, 
@@ -1241,7 +1319,7 @@ namespace ImRichText
                             if (content[curridx] == '\n')
                             {
                                 GenerateToken(line, content, begin, curridx, start, config, paragraphBegin, listItemBegin);
-                                line = MoveToNextLine(styleprops, line, result, config);
+                                line = MoveToNextLine(styleprops, line, result, config, true);
                                 start = curridx;
                             }
                             else if (content[curridx] == '\t')
@@ -1263,8 +1341,18 @@ namespace ImRichText
                                     config.EscapeSeqStart, config.EscapeSeqEnd, line, start);
                                 curridx = start;
 
-                                if (isNewLine) line = MoveToNextLine(styleprops, line, result, config);
+                                if (isNewLine) line = MoveToNextLine(styleprops, line, result, config, true);
                                 if (hasEscape) continue;
+                            }
+                            else if (content[curridx] == ' ')
+                            {
+                                GenerateToken(line, content, begin, curridx, start, config, paragraphBegin, listItemBegin);
+
+                                auto totalspaces = curridx;
+                                curridx = SkipSpace(content, curridx);
+                                totalspaces = curridx - totalspaces;
+                                GenerateToken(line, LineSpaces, 0, totalspaces, 0, config, paragraphBegin, listItemBegin);
+                                continue;
                             }
 
                             curridx++;
@@ -1303,13 +1391,17 @@ namespace ImRichText
                                     config.EscapeSeqStart, config.EscapeSeqEnd, line, start);
                                 curridx = start;
 
-                                if (isNewLine) line = MoveToNextLine(styleprops, line, result, config);
+                                if (isNewLine) line = MoveToNextLine(styleprops, line, result, config, true);
                                 if (hasEscape) continue;
                             }
                             else if (content[curridx] == ' ')
                             {
                                 curridx++;
-                                GenerateToken(line, content, begin, curridx, start, config, paragraphBegin, listItemBegin);
+
+                                if (curridx - start > 1)
+                                {
+                                    GenerateToken(line, content, begin, curridx, start, config, paragraphBegin, listItemBegin);
+                                }
 
                                 curridx = SkipSpace(content, curridx);
                                 start = curridx;
@@ -1447,7 +1539,7 @@ namespace ImRichText
             if (it == RenderConfigs.end())
             {
                 if (!DefaultRenderConfigInit)
-                    GetDefaultConfig();
+                    GetDefaultConfig({ 200.f, 200.f });
 
                 config = &DefaultRenderConfig;
             }
@@ -1503,6 +1595,126 @@ namespace ImRichText
         }
     }
 
+    bool DrawToken(ImDrawList* drawList, ImVec2& currpos, const Token& token, ImVec2 startpos,
+        std::pair<float, float> availsz, float top, float bottom, float left, float right, 
+        float& offsetx, const SegmentStyle& style, RenderConfig* config)
+    {
+        if (token.Type == TokenType::HorizontalRule)
+        {
+            auto linestart = ImVec2{ left + startpos.x, top + currpos.y };
+            auto lineend = linestart + ImVec2{ config->Bounds.x - right, style.height };
+
+            drawList->AddRectFilled(linestart, lineend, style.fgcolor);
+            DrawBorder(style, startpos, config->Bounds.x, availsz.second, drawList);
+            DrawDebugRect(drawList, startpos, config->Bounds.x, availsz.second, *config);
+
+            currpos.y += style.height + style.offsetv.x + style.offsetv.y;
+            availsz.second = style.height;
+        }
+        else if (token.Type == TokenType::ParagraphStart)
+        {
+            if (config->ParagraphStop > 0)
+            {
+                static char buffer[32] = { 0 };
+                std::memset(buffer, 0, 32);
+                std::memset(buffer, ' ', std::min(31, config->ParagraphStop));
+                auto sz = ImGui::CalcTextSize(buffer);
+                offsetx += sz.x;
+            }
+        }
+        else if (token.Type == TokenType::ListItem)
+        {
+            config->BulletSizeScale = clamp(config->BulletSizeScale, 1.f, 4.f);
+            auto bulletsz = style.font.size / config->BulletSizeScale;
+
+            switch (style.list.itemStyle)
+            {
+            case BulletType::Circle: drawList->AddCircle(ImVec2{ startpos.x + offsetx,
+                currpos.y + availsz.second / 2.f - bulletsz / 2.f },
+                bulletsz / 2.f, style.fgcolor);
+                break;
+
+            case BulletType::Disk: drawList->AddCircleFilled(ImVec2{ startpos.x + offsetx,
+                currpos.y + availsz.second / 2.f - bulletsz / 2.f },
+                bulletsz / 2.f, style.fgcolor);
+                break;
+
+            case BulletType::Square: drawList->AddRect(ImVec2{ offsetx + startpos.x,
+                currpos.y + (availsz.second / 2.f) - (bulletsz / 2.f) },
+                ImVec2{ offsetx + startpos.x + bulletsz,
+                currpos.y + (availsz.second / 2.f) + (bulletsz / 2.f) }, style.fgcolor);
+                break;
+
+            case BulletType::FilledSquare: drawList->AddRectFilled(ImVec2{ offsetx + startpos.x,
+            currpos.y + (availsz.second / 2.f) - (bulletsz / 2.f) },
+                ImVec2{ offsetx + startpos.x + bulletsz,
+                currpos.y + (availsz.second / 2.f) + (bulletsz / 2.f) }, style.fgcolor);
+                break;
+
+            case BulletType::Concentric: drawList->AddCircle(ImVec2{ startpos.x + offsetx,
+                currpos.y + availsz.second / 2.f - bulletsz / 2.f },
+                bulletsz / 2.f, style.fgcolor);
+                drawList->AddCircleFilled(ImVec2{ startpos.x + offsetx,
+                currpos.y + availsz.second / 2.f - bulletsz / 2.f },
+                    bulletsz / 3.f, style.fgcolor);
+                break;
+
+            default:
+                break;
+            }
+
+            currpos.x += offsetx + config->ListItemOffset + bulletsz;
+            offsetx = 0;
+        }
+        else
+        {
+            auto textend = token.Content.data() + token.Content.size();
+            auto sz = token.Size;
+            auto width = left + right + sz.x;
+            ImVec2 textpos{ currpos.x + left, currpos.y + (availsz.second / 2.f) - (sz.y / 2.f) };
+
+            if (style.bgcolor.Value != config->DefaultBgColor.Value)
+            {
+                drawList->AddRectFilled(currpos + ImVec2{ left, right },
+                    currpos + ImVec2{ width - right, availsz.second - bottom }, style.bgcolor);
+            }
+
+            drawList->AddText(textpos, style.fgcolor, token.Content.data(), textend);
+            DrawBorder(style, currpos, width, availsz.second, drawList);
+            currpos.x += width;
+            offsetx = 0;
+            DrawDebugRect(drawList, startpos, width, availsz.second, *config);
+
+            if (currpos.x > (config->Bounds.x + startpos.x)) return false;
+        }
+
+        return true;
+    }
+
+    void DrawSegment(ImDrawList* drawList, ImVec2& currpos, const SegmentDetails& segment,
+        std::pair<float, float> linesz, ImVec2 startpos, float& offsetx, int& listDepth,
+        int& blockquoteDepth, RenderConfig* config)
+    {
+        ImGui::PushFont(segment.Style.font.font);
+
+        for (const auto& token : segment.Tokens)
+        {
+            const auto& style = segment.Style;
+            auto top = style.border[TopSide].thickness + style.offsetv.x;
+            auto bottom = style.border[BottomSide].thickness + style.offsetv.y;
+            auto left = style.border[LeftSide].thickness + offsetx;
+            auto right = style.border[RightSide].thickness;
+
+            if (token.Type == TokenType::ListStart) listDepth++;
+            else if (token.Type == TokenType::ListEnd) listDepth--;
+            else if (token.Type == TokenType::BlockquoteStart) blockquoteDepth++;
+            else if (token.Type == TokenType::BlockquoteEnd) blockquoteDepth--;
+            else if (!DrawToken(drawList, currpos, token, startpos, linesz, top, bottom, left, right, offsetx, style, config)) break;
+        }
+
+        ImGui::PopFont();
+    }
+
     void Draw(std::deque<DrawableLine>& lines, RenderConfig* config)
     {
         config = GetRenderConfig(config);
@@ -1511,122 +1723,24 @@ namespace ImRichText
         auto currpos = ImGui::GetCursorScreenPos(), startpos = currpos;
         auto drawList = ImGui::GetWindowDrawList();
         drawList->AddRectFilled(currpos, currpos + config->Bounds, config->DefaultBgColor);
-        int listDepth = 0;
+        int listDepth = 0, blockquoteDepth = 0;
         ImGui::PushClipRect(currpos, currpos + config->Bounds, true);
 
         for (auto& line : lines)
         {
             if (line.Segments.empty()) continue;
 
-            auto offsetx = (config->ListItemIndent * (float)listDepth);
-            auto height = GetLineHeight(line, *config);
+            auto offsetx = (config->ListItemIndent * (float)listDepth) + (config->BlockquoteOffset + (float)blockquoteDepth);
+            auto linesz = GetLineSize(line, *config);
+            auto isRightAligned = line.Segments.size() == 1u &&
+                line.Segments.front().Style.alignmentH == HorizontalAlignment::Right;
 
             for (const auto& segment : line.Segments)
             {
-                ImGui::PushFont(segment.Style.font.font);
-
-                for (const auto& token : segment.Tokens)
-                {
-                    const auto& style = segment.Style;
-                    auto top = style.border[TopSide].thickness + style.offsetv.x;
-                    auto bottom = style.border[BottomSide].thickness + style.offsetv.y;
-                    auto left = style.border[LeftSide].thickness + offsetx;
-                    auto right = style.border[RightSide].thickness;
-
-                    if (token.Type == TokenType::ListStart) listDepth++;
-                    else if (token.Type == TokenType::ListEnd) listDepth--;
-                    else if (token.Type == TokenType::HorizontalRule)
-                    {
-                        
-                        drawList->AddRectFilled(startpos + ImVec2{ top, left },
-                            startpos + ImVec2{ config->Bounds.x - left, style.height }, style.fgcolor);
-                        DrawBorder(style, startpos, config->Bounds.x, height, drawList);
-                        DrawDebugRect(drawList, startpos, config->Bounds.x, height, *config);
-                        currpos.y += style.offsetv.x + style.offsetv.y;
-                        height = style.height;
-                    }
-                    else if (token.Type == TokenType::ParagraphStart)
-                    {
-                        if (config->ParagraphStop > 0)
-                        {
-                            static char buffer[32] = { 0 };
-                            std::memset(buffer, 0, 32);
-                            std::memset(buffer, ' ', std::min(31, config->ParagraphStop));
-                            auto sz = ImGui::CalcTextSize(buffer);
-                            offsetx += sz.x;
-                        }
-                    }
-                    else if (token.Type == TokenType::ListItem)
-                    {
-                        config->BulletSizeScale = clamp(config->BulletSizeScale, 1.f, 4.f);
-                        auto bulletsz = segment.Style.font.size / config->BulletSizeScale;
-
-                        switch (style.list.itemStyle)
-                        {
-                        case BulletType::Circle: drawList->AddCircle(ImVec2{ startpos.x + offsetx, 
-                            currpos.y + height / 2.f - bulletsz / 2.f },
-                            bulletsz / 2.f, segment.Style.fgcolor);
-                            break;
-
-                        case BulletType::Disk: drawList->AddCircleFilled(ImVec2{ startpos.x + offsetx,  
-                            currpos.y + height / 2.f - bulletsz / 2.f },
-                            bulletsz / 2.f, segment.Style.fgcolor);
-                            break;
-
-                        case BulletType::Square: drawList->AddRect(ImVec2{ offsetx + startpos.x, 
-                            currpos.y + (height / 2.f) - (bulletsz / 2.f) }, 
-                            ImVec2{ offsetx + startpos.x + bulletsz,
-                            currpos.y + (height / 2.f) + (bulletsz / 2.f) }, segment.Style.fgcolor);
-                            break;
-
-                        case BulletType::FilledSquare: drawList->AddRectFilled(ImVec2{ offsetx + startpos.x,
-                        currpos.y + (height / 2.f) - (bulletsz / 2.f) },
-                            ImVec2{ offsetx + startpos.x + bulletsz,
-                            currpos.y + (height / 2.f) + (bulletsz / 2.f) }, segment.Style.fgcolor);
-                            break;
-
-                        case BulletType::Concentric: drawList->AddCircle(ImVec2{ startpos.x + offsetx,
-                            currpos.y + height / 2.f - bulletsz / 2.f },
-                            bulletsz / 2.f, segment.Style.fgcolor);
-                            drawList->AddCircleFilled(ImVec2{ startpos.x + offsetx,
-                            currpos.y + height / 2.f - bulletsz / 2.f },
-                                bulletsz / 3.f, segment.Style.fgcolor);
-                            break;
-
-                        default:
-                            break;
-                        }
-
-                        currpos.x += offsetx + config->ListItemOffset + bulletsz;
-                        offsetx = 0;
-                    }
-                    else
-                    {
-                        auto textend = token.Content.data() + token.Content.size();
-                        auto sz = token.Size;
-                        auto width = left + right + sz.x;
-                        ImVec2 textpos{ currpos.x + left, currpos.y + (height / 2.f) - (sz.y / 2.f) };
-
-                        if (style.bgcolor.Value != config->DefaultBgColor.Value)
-                        {
-                            drawList->AddRectFilled(currpos + ImVec2{ left, right }, 
-                                currpos + ImVec2{ width - right, height - bottom }, style.bgcolor);
-                        }
-
-                        drawList->AddText(textpos, style.fgcolor, token.Content.data(), textend);
-                        DrawBorder(style, currpos, width, height, drawList);
-                        currpos.x += width;
-                        offsetx = 0;
-                        DrawDebugRect(drawList, startpos, width, height, *config);
-
-                        if (currpos.x > (config->Bounds.x + startpos.x)) break;
-                    }
-                }
-
-                ImGui::PopFont();
+                DrawSegment(drawList, currpos, segment, linesz, startpos, offsetx, listDepth, blockquoteDepth, config);
             }
 
-            currpos.y += height + config->LineGap;
+            currpos.y += linesz.second + config->LineGap;
             currpos.x = startpos.x;
 
             if (currpos.y > (config->Bounds.y + startpos.y)) break;

@@ -45,6 +45,16 @@ namespace ImRichText
         TickedSquare
     };
 
+    enum class HorizontalAlignment
+    {
+        Left, Right, Center, Justify
+    };
+
+    enum class VerticalAlignment
+    {
+        Top, Bottom, Center
+    };
+
     struct RenderConfig
     {
         char TagStart = '<';
@@ -71,9 +81,9 @@ namespace ImRichText
         ImColor MarkHighlight = ImColor{};
         
         ImFont* (*GetFont)(std::string_view, float, bool, bool, bool, void*);
-        ImVec2  (*GetTextSize)(std::string_view, float, ImFont*, float, void*);
+        ImVec2  (*GetTextSize)(std::string_view, ImFont*);
+        ImColor (*NamedColor)(const char*, void*);
         float HFontSizes[6] = { 36, 32, 24, 20, 16, 12 };
-        ImColor(*NamedColor)(const char*, void*);
 
         ImColor BlockquoteBar = { 0.25f, 0.25f, 0.25f, 1.0f };
         float BlockquotePadding = 5.f;
@@ -95,15 +105,15 @@ namespace ImRichText
         HorizontalRule,
         Superscript,
         Subscript,
-        Blockquote,
+        BlockquoteStart,
+        BlockquoteEnd,
         ParagraphStart,
-        TableHeaderCell,
-        TableDataCell
+        LineSpace
     };
 
     struct Token
     {
-        std::string_view Content;
+        std::string_view Content = "";
         ImVec2 Size;
         TokenType Type = TokenType::Text;
         ImVec2 Span; // only applicable for table cells
@@ -154,10 +164,12 @@ namespace ImRichText
         ImColor bgcolor = IM_COL32_WHITE;
         float height = 0;
         float width = 0;
+        HorizontalAlignment alignmentH = HorizontalAlignment::Left;
+        VerticalAlignment alignmentV = VerticalAlignment::Center;
         FontStyle font;
         ListStyle list;
         BorderStyle border[4];
-        ImVec2 offsetv;
+        ImVec2 offsetv, offseth;
         float borderRoundedness[4];
         bool renderAllWhitespace = false;
     };
@@ -178,9 +190,10 @@ namespace ImRichText
     bool LoadFonts(std::string_view family, const FontCollectionFile& files, float size, const ImFontConfig& config);
     bool LoadDefaultFonts(float sz, FontFileNames* names = nullptr);
     bool LoadDefaultFonts(const std::initializer_list<float>& szs, FontFileNames* names = nullptr);
+
     [[nodiscard]] ImFont* GetFont(std::string_view family, float size, bool bold, bool italics, bool light, void*);
     [[nodiscard]] ImColor GetColor(const char* name, void*);
-    [[nodiscard]] RenderConfig* GetDefaultConfig();
+    [[nodiscard]] RenderConfig* GetDefaultConfig(ImVec2 Bounds);
     [[nodiscard]] std::deque<DrawableLine> GetDrawableLines(const char* text, int start, int end, RenderConfig& config);
 
     void PushConfig(const RenderConfig& config);
