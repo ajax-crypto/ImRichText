@@ -116,6 +116,7 @@ public:
         names.Proportional.Italics = "Helvetica-Oblique.ttf";
         names.Proportional.BoldItalics = "Helvetica-BoldOblique.ttf";*/
         ImRichText::LoadDefaultFonts({ 24.f, 36.f });
+        ImGui::GetIO().DisplayFramebufferScale = ImVec2{ 2.f, 2.f };
     }
 
     int run()
@@ -126,10 +127,10 @@ public:
         std::string rtf = "Unstyled   <p style=\"color: rgb(150, 0, 0); border: 2px solid gray;\">"
             "Paragraph <b>bold <i>italics</i> bold2 </b><h1>Heading&Tab;</h1> </p>"
             "<ul><li> item#1 </li><li> item#2 </li></ul>"
+            "<hr style=\"height: 2px; color: sienna;\"/>"
             "<span style='background: teal;'>Colored</span>";
 
         auto config = ImRichText::GetDefaultConfig({ 200.f, 200.f });
-        auto drawables = ImRichText::GetDrawableLines(rtf.data(), 0, rtf.size(), *config);
 
         // Main loop
 #ifdef __EMSCRIPTEN__
@@ -167,6 +168,7 @@ public:
             if (ImGui::Begin("main-window", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
                 ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoSavedSettings))
             {
+                auto drawables = ImRichText::GetDrawableLines(rtf.data(), 0, rtf.size(), *config);
                 ImGui::Button("Test");
                 ImRichText::Draw(drawables);
             }

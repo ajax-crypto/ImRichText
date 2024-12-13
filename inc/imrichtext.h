@@ -8,7 +8,7 @@
 #include <initializer_list>
 
 #define IM_RICHTEXT_DEFAULT_FONTFAMILY "default-font-family"
-#define IM_RICH_TEXT_MONOSPACE_FONTFAMILY "monospace"
+#define IM_RICHTEXT_MONOSPACE_FONTFAMILY "monospace"
 
 #ifndef IM_RICHTEXT_MIN_RTF_CACHESZ
 #define IM_RICHTEXT_MIN_RTF_CACHESZ 128
@@ -88,8 +88,9 @@ namespace ImRichText
         ImColor BlockquoteBar = { 0.25f, 0.25f, 0.25f, 1.0f };
         float BlockquotePadding = 5.f;
         float BlockquoteOffset = 15.f;
+        float BlockquoteMargins = 10.f;
 
-        float BulletSizeScale = 3.f;
+        float BulletSizeScale = 2.5f;
         float ScaleSuperscript = 0.62f;
         float ScaleSubscript = 0.62f;
         float DefaultHrVerticalMargins = 8.f;
@@ -99,16 +100,12 @@ namespace ImRichText
     enum class TokenType
     {
         Text,
-        ListStart,
-        ListEnd,
-        ListItem,
+        ListItemBullet,
         HorizontalRule,
-        Superscript,
-        Subscript,
-        BlockquoteStart,
-        BlockquoteEnd,
-        ParagraphStart,
-        LineSpace
+        SuperscriptStart,
+        SuperscriptEnd,
+        SubscriptStart,
+        SubscriptEnd
     };
 
     struct Token
@@ -116,7 +113,8 @@ namespace ImRichText
         std::string_view Content = "";
         ImVec2 Size;
         TokenType Type = TokenType::Text;
-        ImVec2 Span; // only applicable for table cells
+        int blockquoteDepth = 0;
+        int listDepth = 0;
         std::pair<int, int> Extent;
     };
 
@@ -169,7 +167,7 @@ namespace ImRichText
         FontStyle font;
         ListStyle list;
         BorderStyle border[4];
-        ImVec2 offsetv, offseth;
+        ImVec2 offsetv{ 0.f, 0.f }; // superscript & subscript offsets
         float borderRoundedness[4];
         bool renderAllWhitespace = false;
     };
@@ -184,6 +182,8 @@ namespace ImRichText
     struct DrawableLine
     {
         std::vector<SegmentDetails> Segments;
+        ImVec2 offseth = { 0.f, 0.f };
+        ImVec2 offsetv = { 0.f, 0.f };
         bool HasText = false;
     };
 
