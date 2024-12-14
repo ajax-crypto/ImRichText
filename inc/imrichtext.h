@@ -70,8 +70,8 @@ namespace ImRichText
 
         int ParagraphStop = 4;
         int TabStop = 4;
-        float ListItemIndent = 15;
-        float ListItemOffset = 10;
+        float ListItemIndent = 15.f;
+        float ListItemOffset = 15.f;
         BulletType ListItemBullet = BulletType::FilledCircle;
 
         std::string_view DefaultFontFamily = IM_RICHTEXT_DEFAULT_FONTFAMILY;
@@ -90,7 +90,7 @@ namespace ImRichText
         float BlockquoteOffset = 15.f;
         float BlockquoteMargins = 10.f;
 
-        float BulletSizeScale = 2.5f;
+        float BulletSizeScale = 2.f;
         float ScaleSuperscript = 0.62f;
         float ScaleSubscript = 0.62f;
         float DefaultHrVerticalMargins = 8.f;
@@ -115,14 +115,13 @@ namespace ImRichText
         TokenType Type = TokenType::Text;
         int blockquoteDepth = 0;
         int listDepth = 0;
-        std::pair<int, int> Extent;
     };
 
     struct FontStyle
     {
         ImFont* font = nullptr;
         std::string_view family = IM_RICHTEXT_DEFAULT_FONTFAMILY;
-        float size = 12.f;
+        float size = 24.f;
         bool bold = false;
         bool italics = false;
         bool light = false;
@@ -132,14 +131,6 @@ namespace ImRichText
     {
         ImColor itemColor = IM_COL32_BLACK;
         BulletType itemStyle = BulletType::FilledCircle;
-    };
-
-    enum BoxCorner
-    {
-        TopLeftCorner,
-        TopRightCorner,
-        BottomLeftCorner,
-        BottomRightCorner
     };
 
     enum BoxSide
@@ -166,16 +157,16 @@ namespace ImRichText
         VerticalAlignment alignmentV = VerticalAlignment::Center;
         FontStyle font;
         ListStyle list;
-        BorderStyle border[4];
-        ImVec2 offsetv{ 0.f, 0.f }; // superscript & subscript offsets
-        float borderRoundedness[4];
-        bool renderAllWhitespace = false;
+        float superscriptOffset = 0.f;
+        float subscriptOffset = 0.f;
     };
 
     struct SegmentDetails
     {
         std::vector<Token> Tokens;
         SegmentStyle Style;
+        int subscriptDepth = 0;
+        int superscriptDepth = 0;
         bool HasText = false;
     };
 
@@ -185,17 +176,23 @@ namespace ImRichText
         ImVec2 offseth = { 0.f, 0.f };
         ImVec2 offsetv = { 0.f, 0.f };
         bool HasText = false;
+        bool HasSuperscript = false;
+        bool HasSubscript = false;
     };
 
     bool LoadFonts(std::string_view family, const FontCollectionFile& files, float size, const ImFontConfig& config);
     bool LoadDefaultFonts(float sz, FontFileNames* names = nullptr);
     bool LoadDefaultFonts(const std::initializer_list<float>& szs, FontFileNames* names = nullptr);
+    bool LoadDefaultFonts(const RenderConfig& config);
 
     [[nodiscard]] ImFont* GetFont(std::string_view family, float size, bool bold, bool italics, bool light, void*);
     [[nodiscard]] ImColor GetColor(const char* name, void*);
     [[nodiscard]] RenderConfig* GetDefaultConfig(ImVec2 Bounds);
     [[nodiscard]] std::deque<DrawableLine> GetDrawableLines(const char* text, int start, int end, RenderConfig& config);
 
+#ifdef _DEBUG
+    void PrintAllTokens(const std::deque<DrawableLine>& lines);
+#endif
     void PushConfig(const RenderConfig& config);
     void PopConfig();
     void Draw(const char* text, int start = 0, int end = -1, RenderConfig* config = nullptr);
