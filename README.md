@@ -5,7 +5,7 @@
 *NOTE* : *This is not a general purpose HTML renderer, only the specified tags/properties below are targeted*
 ---
 
-Implementation of Rich Text Rendering in ImGui for **ASCII text** akin to Qt support for it. Use it as follows:
+Implementation of Rich Text Rendering for ImGui (**ASCII text only**) akin to Qt support for it. Use it as follows:
 ```c++
 std::string rtf = "2<sup>2</sup> equals 4  <hr style=\"height: 4px; color: sienna;\"/>"
             "<blockquote><p style=\"color: rgb(150, 0, 0);\">Paragraph <b>bold <i>italics</i> bold2 </b></p></blockquote>"
@@ -59,13 +59,14 @@ However, user can provide their own font provider through `RenderConfig::GetFont
 
 ## Future Goals
 * Add cmake support (**Contributions welcome!**) (_I dislike cmake personally_)
-* Add support for `underline` and `strikethrough`
+* Add support for `a`, `underline` and `strikethrough`
+* Add support for `margin`, `padding` and possibly `border` (_although the utility of border is debatable_)
 * Add support for HSL/ARGB/etc. color specifiers (_Under progress_)
 * Implement support for vertical/horizontal text alignment support (_Under progress_)
 * Internationalization support by integrating [Harfbuzz](https://github.com/harfbuzz/harfbuzz) (Unicode Bidir algo)
 * Support alternate syntax i.e. Markdown, Restructured Text, MathML, etc.
 
-## Macros 
+## Build Macros 
 In order to customize certain behavior at build-time, the following macros can be used
 | Macro name | Functionality | Default Value |
 |------------|:--------------|:--------------|
@@ -74,3 +75,20 @@ In order to customize certain behavior at build-time, the following macros can b
 | `IM_RICHTEXT_MAX_LISTDEPTH` | Maximum depth of nested lists | 256 |
 | `IM_RICHTEXT_MAX_LISTITEM` | Maxmimum number of list items at a specific depth | 128 |
 | `IM_RICHTEXT_MAXTABSTOP` | Maxmimum number of nested `<p>`/paragraphs | 32 |
+
+## Error Reporting
+In debug builds or when `_DEBUG` macro is defined, if a console is present, error messages will be printed along
+with the parsing state i.e. entering/exiting tags. Custom properties or unknonw tags are ignored, but reported.
+
+## Contributions
+All contributors are welcome, feel free to create PRs.
+
+## About the Implementation
+The current implementation intentionally forgoes the creation of any form of AST (Abstract Syntax Tree) or
+a well-defined phase of tokenization for lexical analysis. In order to keep the codebase simple and not 
+ending up creating a HTML/CSS engine, the scope the arbitrarily cutdown. 
+The algorithm simply breaks down the rich text specified into lines, and each line into segments. Each segment 
+is defined as multiple blocks of text containing the same style i.e. background/foreground/font properties, etc.
+A "block of text" is simply a run of glyphs without any "space"/"blank" characters in between. Once rich text is 
+broken down to lines, it is rendered in two phases i.e. first the background is drawn i.e. blockquote background 
+can span multiple lines. After that, the foreground i.e. text is drawn (with background/foreground colors).
