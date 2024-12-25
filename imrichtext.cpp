@@ -365,6 +365,7 @@ namespace ImRichText
             else if (AreSame(stylePropVal, "disk")) el.list.itemStyle = BulletType::Disk;
             else if (AreSame(stylePropVal, "square")) el.list.itemStyle = BulletType::Square;
             else if (AreSame(stylePropVal, "solidsquare")) el.list.itemStyle = BulletType::FilledSquare;
+            else if (AreSame(stylePropVal, "custom")) el.list.itemStyle = BulletType::Custom;
             // TODO: Others...
         }
         else ERROR("Invalid style property... [%.*s]\n", (int)stylePropName.size(), stylePropName.data());
