@@ -30,3 +30,19 @@
 *.exe
 *.out
 *.app
+
+# Editor Files
+*.db*
+*.ipch
+*.vsidx
+*.json
+*.suo
+*.tlog
+*.ilk
+*.log
+*.ini
+*.pdb
+*.idb
+*.recipe
+*.enc
+*.opendb

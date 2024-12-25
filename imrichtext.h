@@ -14,24 +14,24 @@
 #define IM_RICHTEXT_MIN_RTF_CACHESZ 128
 #endif
 
+#ifndef IM_RICHTEXT_MAXDEPTH
+#define IM_RICHTEXT_MAXDEPTH 256
+#endif
+
+#ifndef IM_RICHTEXT_MAX_LISTDEPTH
+#define IM_RICHTEXT_MAX_LISTDEPTH 256
+#endif
+
+#ifndef IM_RICHTEXT_MAX_LISTITEM
+#define IM_RICHTEXT_MAX_LISTITEM 128
+#endif
+
+#ifndef IM_RICHTEXT_MAXTABSTOP
+#define IM_RICHTEXT_MAXTABSTOP 32
+#endif
+
 namespace ImRichText
 {
-    struct FontCollectionFile
-    {
-        std::string_view Normal;
-        std::string_view Light;
-        std::string_view Bold;
-        std::string_view Italics;
-        std::string_view BoldItalics;
-    };
-
-    struct FontFileNames
-    {
-        FontCollectionFile Proportional;
-        FontCollectionFile Monospace;
-        std::string_view BasePath;
-    };
-
     enum class BulletType
     {
         Circle,
@@ -41,8 +41,7 @@ namespace ImRichText
         FilledSquare,
         Concentric,
         Cross,
-        Tick,
-        TickedSquare
+        Custom
     };
 
     enum class HorizontalAlignment
@@ -55,57 +54,18 @@ namespace ImRichText
         Top, Bottom, Center
     };
 
-    struct RenderConfig
-    {
-        char TagStart = '<';
-        char TagEnd = '>';
-        char EscapeSeqStart = '&';
-        char EscapeSeqEnd = ';';
-        std::vector<std::pair<std::string_view, std::string_view>> EscapeCodes;
-
-        float LineGap = 5;
-        ImVec2 Bounds;
-        bool DrawDebugRects = false;
-        bool WordWrap = false;
-
-        int ParagraphStop = 4;
-        int TabStop = 4;
-        float ListItemIndent = 15.f;
-        float ListItemOffset = 15.f;
-        BulletType ListItemBullet = BulletType::FilledCircle;
-
-        std::string_view DefaultFontFamily = IM_RICHTEXT_DEFAULT_FONTFAMILY;
-        float DefaultFontSize = 20;
-        ImColor DefaultFgColor = IM_COL32_BLACK;
-        ImColor DefaultBgColor = IM_COL32_WHITE;
-        ImColor MarkHighlight = ImColor{};
-        
-        ImFont* (*GetFont)(std::string_view, float, bool, bool, bool, void*);
-        ImVec2  (*GetTextSize)(std::string_view, ImFont*);
-        ImColor (*NamedColor)(const char*, void*);
-        float HFontSizes[6] = { 36, 32, 24, 20, 16, 12 };
-
-        ImColor BlockquoteBar = { 0.25f, 0.25f, 0.25f, 1.0f };
-        float BlockquotePadding = 5.f;
-        float BlockquoteOffset = 15.f;
-        float BlockquoteMargins = 10.f;
-
-        float BulletSizeScale = 2.f;
-        float ScaleSuperscript = 0.62f;
-        float ScaleSubscript = 0.62f;
-        float DefaultHrVerticalMargins = 8.f;
-        void* UserData = nullptr;
-    };
-
     enum class TokenType
     {
         Text,
+        ListStart,
         ListItemBullet,
+        ListItemNumbered,
+        ListEnd,
         HorizontalRule,
-        SuperscriptStart,
-        SuperscriptEnd,
-        SubscriptStart,
-        SubscriptEnd
+        BlockquoteStart,
+        BlockquoteEnd,
+        CodeBlockStart,
+        CodeBlockEnd
     };
 
     struct Token
@@ -113,8 +73,6 @@ namespace ImRichText
         std::string_view Content = "";
         ImVec2 Size;
         TokenType Type = TokenType::Text;
-        int blockquoteDepth = 0;
-        int listDepth = 0;
     };
 
     struct FontStyle
@@ -139,12 +97,6 @@ namespace ImRichText
         RightSide,
         BottomSide,
         LeftSide
-    };
-
-    struct BorderStyle
-    {
-        float thickness = 0;
-        ImColor color = IM_COL32_BLACK;
     };
 
     struct SegmentStyle
@@ -175,19 +127,64 @@ namespace ImRichText
         std::vector<SegmentDetails> Segments;
         ImVec2 offseth = { 0.f, 0.f };
         ImVec2 offsetv = { 0.f, 0.f };
+        int  BlockquoteDepth = 0;
         bool HasText = false;
         bool HasSuperscript = false;
         bool HasSubscript = false;
+        bool InsideCodeBlock = false;
     };
 
-    bool LoadFonts(std::string_view family, const FontCollectionFile& files, float size, const ImFontConfig& config);
-    bool LoadDefaultFonts(float sz, FontFileNames* names = nullptr);
-    bool LoadDefaultFonts(const std::initializer_list<float>& szs, FontFileNames* names = nullptr);
-    bool LoadDefaultFonts(const RenderConfig& config);
+    struct RenderConfig
+    {
+        float Scale = 1.0f;
 
-    [[nodiscard]] ImFont* GetFont(std::string_view family, float size, bool bold, bool italics, bool light, void*);
+        char TagStart = '<';
+        char TagEnd = '>';
+        char EscapeSeqStart = '&';
+        char EscapeSeqEnd = ';';
+        std::vector<std::pair<std::string_view, std::string_view>> EscapeCodes;
+
+        float LineGap = 5;
+        ImVec2 Bounds;
+        bool DrawDebugRects = false;
+        bool WordWrap = false;
+
+        int ParagraphStop = 4;
+        int TabStop = 4;
+        float ListItemIndent = 15.f;
+        float ListItemOffset = 15.f;
+        BulletType ListItemBullet = BulletType::FilledCircle;
+
+        std::string_view DefaultFontFamily = IM_RICHTEXT_DEFAULT_FONTFAMILY;
+        float DefaultFontSize = 20;
+        ImColor DefaultFgColor = IM_COL32_BLACK;
+        ImColor DefaultBgColor = IM_COL32_WHITE;
+        ImColor MarkHighlight = ImColor{};
+
+        ImFont* (*GetFont)(std::string_view, float, bool, bool, bool, void*);
+        ImVec2(*GetTextSize)(std::string_view, ImFont*);
+        ImColor(*NamedColor)(const char*, void*);
+        void (*DrawBullet)(ImVec2, ImVec2, const SegmentStyle&, int*, int);
+
+        float HFontSizes[6] = { 36, 32, 24, 20, 16, 12 };
+        ImColor HeaderLineColor = ImColor(128, 128, 128, 255);
+
+        ImColor BlockquoteBar = { 0.25f, 0.25f, 0.25f, 1.0f };
+        ImColor BlockquoteBg = { 0.5f, 0.5f, 0.5f, 1.0f };
+        float BlockquotePadding = 5.f;
+        float BlockquoteOffset = 15.f;
+        float BlockquoteMargins = 10.f;
+        float BlockquoteBarWidth = 5.f;
+
+        float BulletSizeScale = 2.f;
+        float ScaleSuperscript = 0.62f;
+        float ScaleSubscript = 0.62f;
+        float DefaultHrVerticalMargins = 8.f;
+        void* UserData = nullptr;
+    };
+
     [[nodiscard]] ImColor GetColor(const char* name, void*);
-    [[nodiscard]] RenderConfig* GetDefaultConfig(ImVec2 Bounds);
+    [[nodiscard]] RenderConfig* GetDefaultConfig(ImVec2 Bounds, bool skipDefaultFontLoading = false);
     [[nodiscard]] std::deque<DrawableLine> GetDrawableLines(const char* text, int start, int end, RenderConfig& config);
 
 #ifdef _DEBUG

@@ -24,6 +24,7 @@
     <ProjectGuid>{4aa4dee2-5c0b-49e9-b890-45261e45075c}</ProjectGuid>
     <RootNamespace>ObeliskGui</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <ProjectName>ImRichTextExample</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
@@ -71,12 +72,12 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <IncludePath>inc;..\glfw-3.4.bin.WIN64\include;$(IncludePath)</IncludePath>
-    <LibraryPath>..\glfw-3.4.bin.WIN64\lib-vc2022\;$(LibraryPath)</LibraryPath>
+    <IncludePath>inc;..\..\..\;..\..\..\glfw-3.4.bin.WIN64\include;$(IncludePath)</IncludePath>
+    <LibraryPath>..\..\..\glfw-3.4.bin.WIN64\lib-vc2022\;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <IncludePath>inc;..\glfw-3.4.bin.WIN64\include;$(IncludePath)</IncludePath>
-    <LibraryPath>..\glfw-3.4.bin.WIN64\lib-vc2022\</LibraryPath>
+    <IncludePath>inc;..\..\..\;..\..\..\glfw-3.4.bin.WIN64\include;$(IncludePath)</IncludePath>
+    <LibraryPath>..\..\..\glfw-3.4.bin.WIN64\lib-vc2022\;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -116,6 +117,8 @@
       <DisableLanguageExtensions>false</DisableLanguageExtensions>
       <RemoveUnreferencedCodeData>false</RemoveUnreferencedCodeData>
       <DisableSpecificWarnings>2398;4244</DisableSpecificWarnings>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <EnforceTypeConversionRules>false</EnforceTypeConversionRules>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -125,7 +128,7 @@
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
-      <WarningLevel>Level3</WarningLevel>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
@@ -133,6 +136,9 @@
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <DisableLanguageExtensions>false</DisableLanguageExtensions>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <EnforceTypeConversionRules>false</EnforceTypeConversionRules>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -142,6 +148,8 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="..\..\imrichtext.cpp" />
+    <ClCompile Include="..\..\imrichtextfont.cpp" />
     <ClCompile Include="ObeliskGui.cpp" />
     <ClCompile Include="src\imgui.cpp" />
     <ClCompile Include="src\imgui_demo.cpp" />
@@ -150,9 +158,10 @@
     <ClCompile Include="src\imgui_impl_opengl3.cpp" />
     <ClCompile Include="src\imgui_tables.cpp" />
     <ClCompile Include="src\imgui_widgets.cpp" />
-    <ClCompile Include="src\ImRichText.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\..\imrichtext.h" />
+    <ClInclude Include="..\..\imrichtextfont.h" />
     <ClInclude Include="inc\GLFW\glfw3.h" />
     <ClInclude Include="inc\GLFW\glfw3native.h" />
     <ClInclude Include="inc\IComponent.h" />
@@ -162,7 +171,6 @@
     <ClInclude Include="inc\imgui_impl_opengl3.h" />
     <ClInclude Include="inc\imgui_impl_opengl3_loader.h" />
     <ClInclude Include="inc\imgui_internal.h" />
-    <ClInclude Include="inc\imrichtext.h" />
     <ClInclude Include="inc\imstb_rectpack.h" />
     <ClInclude Include="inc\imstb_textedit.h" />
     <ClInclude Include="inc\imstb_truetype.h" />

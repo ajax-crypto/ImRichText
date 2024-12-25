@@ -49,7 +49,7 @@ static void glfw_error_callback(int error, const char* description)
 #pragma warning(disable: 2398)
 #pragma warning(disable: 4244)
 #include <string>
-#include "ImRichText.h"
+#include "../../../imrichtext.h"
 
 class Application
 {
@@ -108,15 +108,6 @@ public:
         ImGui_ImplGlfw_InstallEmscriptenCallbacks(m_window, "#canvas");
 #endif
         ImGui_ImplOpenGL3_Init(glsl_version);
-
-        /*ImRichText::FontFileNames names;
-        names.Proportional.Normal = "Helvetica.ttf";
-        names.Proportional.Light = "";
-        names.Proportional.Bold = "Helvetica-Bold.ttf";
-        names.Proportional.Italics = "Helvetica-Oblique.ttf";
-        names.Proportional.BoldItalics = "Helvetica-BoldOblique.ttf";*/
-        ImRichText::LoadDefaultFonts({ 14.f, 24.f, 36.f });
-        ImGui::GetIO().DisplayFramebufferScale = ImVec2{ 2.f, 2.f };
     }
 
     int run()
@@ -124,15 +115,17 @@ public:
         bool show_demo_window = true;
         bool show_another_window = false;
         ImVec4 clear_color = ImVec4(1.f, 1.f, 1.f, 1.00f);
-        std::string rtf = "2<sup>2</sup> equals 4  <hr style=\"height: 2px; color: sienna;\"/>"
-            "<p style=\"color: rgb(150, 0, 0); border: 2px solid gray;\">"
-            "Paragraph <b>bold <i>italics</i> bold2 </b><h1 style=\"border: none;\">Heading&Tab;</h1> </p>"
-            "<ul><li> item#1 </li><li> item#2 </li></ul>"
+        std::string rtf = "2<sup>2</sup> equals 4  <hr style=\"height: 4px; color: sienna;\"/>"
+            "<blockquote><p style=\"color: rgb(150, 0, 0);\">Paragraph <b>bold <i>italics</i> bold2 </b></p></blockquote>"
+            "<h1 style=\"border: none;\">Heading&Tab;</h1>"
+            "<ol><li> item#1 </li><li> item#2 </li></ol>"
             "<span style='background: teal; color: white;'>Colored</span>";
 
         auto config = ImRichText::GetDefaultConfig({ 400.f, 500.f });
-        //config->DrawDebugRects = true;
+        config->DrawDebugRects = true;
         config->DefaultFontSize = 24.f;
+        config->Scale = 2.f;
+        ImRichText::PushConfig(*config);
 
         // Main loop
 #ifdef __EMSCRIPTEN__
@@ -171,7 +164,7 @@ public:
                 ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoSavedSettings))
             {
                 ImGui::Button("Test");
-                ImRichText::Draw(rtf.data(), 0, rtf.size(), config);
+                ImRichText::Draw(rtf.data(), 0, rtf.size());
             }
 
             ImGui::End();

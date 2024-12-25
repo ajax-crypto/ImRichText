@@ -38,7 +38,10 @@
     <ClCompile Include="src\imgui_demo.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\ImRichText.cpp">
+    <ClCompile Include="..\..\imrichtext.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\imrichtextfont.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -79,7 +82,10 @@
     <ClInclude Include="inc\IComponent.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="inc\imrichtext.h">
+    <ClInclude Include="..\..\imrichtext.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\imrichtextfont.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
