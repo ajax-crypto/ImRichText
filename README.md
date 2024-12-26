@@ -13,8 +13,8 @@ std::string rtf = "2<sup>2</sup> equals 4  <hr style=\"height: 4px; color: sienn
             "<ol><li> item#1 </li><li> item#2 </li></ol>"
             "<span style='background: teal; color: white;'>White on Teal</span><br/>"
             "<mark>This is highlighted! <small>This is small...</small></mark>";
-auto config = ImRichText::GetDefaultConfig({ 400.f, 500.f });
-config->DefaultFontSize = 24.f;
+auto config = ImRichText::GetDefaultConfig({ 600.f, 800.f }, 24.f, 1.5f);
+config->DrawDebugRects = true;
 config->Scale = 2.f;
 ImRichText::PushConfig(*config);
 ImRichText::Draw(rtf.data(), 0, rtf.size());
@@ -66,7 +66,7 @@ However, user can provide their own font provider through `RenderConfig::GetFont
 * Integration example with [Clay layout library](https://github.com/nicbarker/clay?tab=readme-ov-file)
 * Add support for `a`, `underline` and `strikethrough`
 * Add support for `margin`, `padding` and possibly `border` (_although the utility of border is debatable_)
-* Implement support for vertical/horizontal text alignment support (_Under progress_)
+* Implement support for vertical/horizontal text alignment (_Under progress_)
 * Internationalization support by integrating [Harfbuzz](https://github.com/harfbuzz/harfbuzz) (Unicode Bidir algo)
 * Support alternate syntax i.e. Markdown, Restructured Text, MathML, etc.
 
@@ -85,8 +85,8 @@ When `_DEBUG` macro is defined, if a console is present, error messages will be 
 with the parsing state i.e. entering/exiting tags. Custom properties or unknonw tags are ignored, but reported.
 
 ## Contributions
-Since it is work in progress, no contributions are accepted. Once I stabilize and create a release, contributions
-will be accepted! In the meantime, feel free to browse the source! 
+Since it is work in progress, no contributions are accepted at the moment. Once I stabilize and create a release, contributions
+will be accepted! In the meantime, feel free to browse the source...
 
 ## About the Implementation
 The current implementation intentionally forgoes the creation of any form of AST (Abstract Syntax Tree) or
