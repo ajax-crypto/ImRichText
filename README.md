@@ -9,9 +9,10 @@ Implementation of Rich Text Rendering for ImGui (**ASCII text only**) akin to Qt
 ```c++
 std::string rtf = "2<sup>2</sup> equals 4  <hr style=\"height: 4px; color: sienna;\"/>"
             "<blockquote><p style=\"color: rgb(150, 0, 0);\">Paragraph <b>bold <i>italics</i> bold2 </b></p></blockquote>"
-            "<h1 style=\"border: none;\">Heading&Tab;</h1>"
+            "<h1 style=\"color: darkblue;\">Heading&Tab;</h1>"
             "<ol><li> item#1 </li><li> item#2 </li></ol>"
-            "<span style='background: teal; color: white;'>Colored</span>";
+            "<span style='background: teal; color: white;'>White on Teal</span><br/>"
+            "<mark>This is highlighted! <small>This is small...</small></mark>";
 auto config = ImRichText::GetDefaultConfig({ 400.f, 500.f });
 config->DefaultFontSize = 24.f;
 config->Scale = 2.f;
@@ -37,16 +38,19 @@ The following subset of HTML tags/CSS properties are supported:
 | ol | Numbered list (with nested numberings i.e. 1.2.3) | Yes |
 | li | List Item | Yes |
 | br | Line Break | Yes |
-| i/b | Italics/Bold block of text | Yes |
+| b/strong | Bold block of text | Yes |
+| i/em | Italics block of text | Yes |
+| mark | Highlight current block of text | Yes |
+| small | Reduce font size to 80% of current block | Yes |
 | blockquote | Blockquote as in HTML | Yes |
-| pre | Preformatted text with monospaced font | Yes |
+| pre | Preformatted text with monospaced font | _Under progress_ |
 | code | Use monospace font for this block of text | _Under progress_ |
 
 ### General Style Properties
 | Property Name(s) | Value/Example |
 |------------------|:---------------|
 | background/background-color/color | `rgb(r, g, b)`/`rgba(r, g, b, a)`/ [CSS color name](https://developer.mozilla.org/en-US/docs/Web/CSS/named-color) |
-| font-size | `pt`/`px`/`em` |
+| font-size | `pt`/`px`/`em` (_absolute_) / % (_of parent font size_) / `xx-small`, `x-small`, `medium`, `large`, etc. |
 | font-family | _name of font family_ |
 | font-weight | _value between 0-800_ or `light`/`normal`/`bold` |
 | font-style | italics/oblique |
@@ -59,9 +63,9 @@ However, user can provide their own font provider through `RenderConfig::GetFont
 
 ## Future Goals
 * Add cmake support (**Contributions welcome!**) (_I dislike cmake personally_)
+* Integration example with [Clay layout library](https://github.com/nicbarker/clay?tab=readme-ov-file)
 * Add support for `a`, `underline` and `strikethrough`
 * Add support for `margin`, `padding` and possibly `border` (_although the utility of border is debatable_)
-* Add support for HSL/ARGB/etc. color specifiers (_Under progress_)
 * Implement support for vertical/horizontal text alignment support (_Under progress_)
 * Internationalization support by integrating [Harfbuzz](https://github.com/harfbuzz/harfbuzz) (Unicode Bidir algo)
 * Support alternate syntax i.e. Markdown, Restructured Text, MathML, etc.
@@ -77,11 +81,12 @@ In order to customize certain behavior at build-time, the following macros can b
 | `IM_RICHTEXT_MAXTABSTOP` | Maxmimum number of nested `<p>`/paragraphs | 32 |
 
 ## Error Reporting
-In debug builds or when `_DEBUG` macro is defined, if a console is present, error messages will be printed along
+When `_DEBUG` macro is defined, if a console is present, error messages will be printed along
 with the parsing state i.e. entering/exiting tags. Custom properties or unknonw tags are ignored, but reported.
 
 ## Contributions
-All contributors are welcome, feel free to create PRs.
+Since it is work in progress, no contributions are accepted. Once I stabilize and create a release, contributions
+will be accepted! In the meantime, feel free to browse the source! 
 
 ## About the Implementation
 The current implementation intentionally forgoes the creation of any form of AST (Abstract Syntax Tree) or

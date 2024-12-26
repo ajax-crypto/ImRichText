@@ -117,13 +117,13 @@ public:
         ImVec4 clear_color = ImVec4(1.f, 1.f, 1.f, 1.00f);
         std::string rtf = "2<sup>2</sup> equals 4  <hr style=\"height: 4px; color: sienna;\"/>"
             "<blockquote><p style=\"color: rgb(150, 0, 0);\">Paragraph <b>bold <i>italics</i> bold2 </b></p></blockquote>"
-            "<h1 style=\"border: none;\">Heading&Tab;</h1>"
+            "<h1 style=\"color: darkblue;\">Heading&Tab;</h1>"
             "<ol><li> item#1 </li><li> item#2 </li></ol>"
-            "<span style='background: teal; color: white;'>Colored</span>";
+            "<span style='background: teal; color: white;'>White on Teal</span><br/>"
+            "<mark>This is highlighted! <small>This is small...</small></mark>";
 
-        auto config = ImRichText::GetDefaultConfig({ 400.f, 500.f });
+        auto config = ImRichText::GetDefaultConfig({ 600.f, 800.f }, 24.f, 1.5f);
         config->DrawDebugRects = true;
-        config->DefaultFontSize = 24.f;
         config->Scale = 2.f;
         ImRichText::PushConfig(*config);
 

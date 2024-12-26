@@ -137,6 +137,7 @@ namespace ImRichText
     struct RenderConfig
     {
         float Scale = 1.0f;
+        float FontScale = 1.f;
 
         char TagStart = '<';
         char TagEnd = '>';
@@ -159,7 +160,7 @@ namespace ImRichText
         float DefaultFontSize = 20;
         ImColor DefaultFgColor = IM_COL32_BLACK;
         ImColor DefaultBgColor = IM_COL32_WHITE;
-        ImColor MarkHighlight = ImColor{};
+        ImColor MarkHighlight = ImColor{ 255, 255, 0 };
 
         ImFont* (*GetFont)(std::string_view, float, bool, bool, bool, void*);
         ImVec2(*GetTextSize)(std::string_view, ImFont*);
@@ -183,8 +184,7 @@ namespace ImRichText
         void* UserData = nullptr;
     };
 
-    [[nodiscard]] ImColor GetColor(const char* name, void*);
-    [[nodiscard]] RenderConfig* GetDefaultConfig(ImVec2 Bounds, bool skipDefaultFontLoading = false);
+    [[nodiscard]] RenderConfig* GetDefaultConfig(ImVec2 Bounds, float defaultFontSize, float fontScale = 1.f, bool skipDefaultFontLoading = false);
     [[nodiscard]] std::deque<DrawableLine> GetDrawableLines(const char* text, int start, int end, RenderConfig& config);
 
 #ifdef _DEBUG
@@ -193,5 +193,5 @@ namespace ImRichText
     void PushConfig(const RenderConfig& config);
     void PopConfig();
     void Draw(const char* text, int start = 0, int end = -1, RenderConfig* config = nullptr);
-    void Draw(std::deque<DrawableLine>& lines, RenderConfig* config = nullptr);
+    void Draw(const std::deque<DrawableLine>& lines, RenderConfig* config = nullptr);
 }

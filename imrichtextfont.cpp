@@ -147,11 +147,14 @@ namespace ImRichText
 
     bool LoadDefaultFonts(const RenderConfig& config)
     {
+        // TODO: Handle absolute size font-size fonts (Look at imrichtext.cpp: PopulateSegmentStyle function)
+
         std::unordered_set<float> sizes;
-        sizes.insert(config.DefaultFontSize);
-        sizes.insert(config.DefaultFontSize * config.ScaleSubscript);
-        sizes.insert(config.DefaultFontSize * config.ScaleSuperscript);
-        for (auto sz : config.HFontSizes) sizes.insert(sz);
+        sizes.insert(config.DefaultFontSize * config.FontScale);
+        sizes.insert(config.DefaultFontSize * config.ScaleSubscript * config.FontScale);
+        sizes.insert(config.DefaultFontSize * config.ScaleSuperscript * config.FontScale);
+        sizes.insert(config.DefaultFontSize * 0.8f * config.FontScale); // for <small> content
+        for (auto sz : config.HFontSizes) sizes.insert(sz * config.FontScale);
 
         for (auto sz : sizes)
         {

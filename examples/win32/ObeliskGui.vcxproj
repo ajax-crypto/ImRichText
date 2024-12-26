@@ -149,6 +149,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="..\..\imrichtext.cpp" />
+    <ClCompile Include="..\..\imrichtextcolor.cpp" />
     <ClCompile Include="..\..\imrichtextfont.cpp" />
     <ClCompile Include="ObeliskGui.cpp" />
     <ClCompile Include="src\imgui.cpp" />
@@ -161,6 +162,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\imrichtext.h" />
+    <ClInclude Include="..\..\imrichtextcolor.h" />
     <ClInclude Include="..\..\imrichtextfont.h" />
     <ClInclude Include="inc\GLFW\glfw3.h" />
     <ClInclude Include="inc\GLFW\glfw3native.h" />

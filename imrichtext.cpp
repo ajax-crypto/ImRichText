@@ -1,5 +1,6 @@
 #include "ImRichText.h"
 #include "imrichtextfont.h"
+#include "imrichtextcolor.h"
 
 #include <unordered_map>
 #include <cstring>
@@ -7,6 +8,7 @@
 #include <optional>
 #include <cstdlib>
 #include <string>
+#include <tuple>
 
 #define IM_RICHTEXT_ENABLE_PARSER_LOGS 1
 
@@ -55,7 +57,6 @@ namespace ImRichText
     static thread_local std::pair<std::string_view, SegmentStyle> TagStack[IM_RICHTEXT_MAXDEPTH];
     static thread_local int CurrentStackPos = -1;
 
-
     static std::unordered_map<ImGuiContext*, std::deque<RenderConfig>> RenderConfigs;
     static RenderConfig DefaultRenderConfig;
     static bool DefaultRenderConfigInit = false;
@@ -84,18 +85,6 @@ namespace ImRichText
         return idx;
     }
 
-    [[nodiscard]] int SkipDigits(const char* text, int idx, int end)
-    {
-        while ((idx < end) && std::isdigit(text[idx])) idx++;
-        return idx;
-    }
-
-    [[nodiscard]] int WholeWord(const char* text, int idx, int end)
-    {
-        while ((idx < end) && !std::isspace(text[idx])) idx++;
-        return idx;
-    }
-
     [[nodiscard]] int SkipSpace(const std::string_view text, int from = 0)
     {
         auto end = (int)text.size();
@@ -114,6 +103,13 @@ namespace ImRichText
     {
         auto end = (int)text.size();
         while ((from < end) && (std::isdigit(text[from]))) from++;
+        return from;
+    }
+
+    [[nodiscard]] int SkipFDigits(const std::string_view text, int from = 0)
+    {
+        auto end = (int)text.size();
+        while ((from < end) && ((std::isdigit(text[from])) || (text[from] == '.'))) from++;
         return from;
     }
 #pragma optimize( "", off )
@@ -187,16 +183,35 @@ namespace ImRichText
         return result;
     }
 
-    [[nodiscard]] float ExtractFloat(std::string_view input, float defaultVal, float ems)
+    [[nodiscard]] int ExtractIntFromHex(std::string_view input, int defaultVal)
     {
         int result = defaultVal;
         int base = 1;
         auto idx = (int)input.size() - 1;
-        auto scale = 0.f;
-        while (!std::isdigit(input[idx]) && idx >= 0) idx--;
+        while (!std::isdigit(input[idx]) && !std::isalpha(input[idx]) && idx >= 0) idx--;
 
-        if (AreSame(input.substr(idx + 1), "pt")) scale = 1.f / 0.75f;
-        else if (AreSame(input.substr(idx + 1), "em")) scale = ems;
+        for (; idx >= 0; --idx)
+        {
+            result += std::isdigit(input[idx]) ? (input[idx] - '0') * base : 
+                std::islower(input[idx]) ? ((input[idx] - 'a') + 10) * base : 
+                ((input[idx] - 'A') + 10) * base;
+            base *= 16;
+        }
+
+        return result;
+    }
+
+    struct IntOrFloat
+    {
+        float value = 0.f;
+        bool isFloat = false;
+    };
+
+    [[nodiscard]] IntOrFloat ExtractNumber(std::string_view input, float defaultVal)
+    {
+        float result = defaultVal, base = 1.f;
+        bool isInt = false;
+        auto idx = (int)input.size() - 1;
 
         while (idx >= 0 && input[idx] != '.') idx--;
         auto decimal = idx;
@@ -210,7 +225,7 @@ namespace ImRichText
             }
 
             base = 10.f;
-            for (auto midx = decimal; midx <= idx; ++midx)
+            for (auto midx = decimal + 1; midx < (int)input.size(); ++midx)
             {
                 result += (input[midx] - '0') / base;
                 base *= 10.f;
@@ -218,62 +233,117 @@ namespace ImRichText
         }
         else
         {
-            for (auto midx = idx; midx >= 0; --midx)
+            for (auto midx = (int)input.size() - 1; midx >= 0; --midx)
             {
                 result += (input[midx] - '0') * base;
                 base *= 10.f;
             }
+
+            isInt = true;
         }
+
+        return { result, !isInt };
+    }
+
+    [[nodiscard]] float ExtractFloatWithUnit(std::string_view input, float defaultVal, float ems, float parent, float scale)
+    {
+        float result = defaultVal, base = 1.f;
+        auto idx = (int)input.size() - 1;
+        while (!std::isdigit(input[idx]) && idx >= 0) idx--;
+
+        if (AreSame(input.substr(idx + 1), "pt")) scale = 1.f / 0.75f;
+        else if (AreSame(input.substr(idx + 1), "em")) scale = ems;
+        else if (input[idx + 1] == '%') scale = parent / 100.f;
+
+        auto num = ExtractNumber(input.substr(0, idx + 1), defaultVal);
+        result = num.value;
 
         return result * scale;
     }
 
+    [[nodiscard]] std::tuple<IntOrFloat, IntOrFloat, IntOrFloat, IntOrFloat> GetCommaSeparatedNumbers(std::string_view stylePropVal, int& curr)
+    {
+        std::tuple<IntOrFloat, IntOrFloat, IntOrFloat, IntOrFloat> res;
+        auto hasFourth = curr == 4;
+        curr = SkipSpace(stylePropVal, curr);
+        assert(stylePropVal[curr] == '(');
+        curr++;
+
+        auto valstart = curr;
+        curr = SkipFDigits(stylePropVal, curr);
+        std::get<0>(res) = ExtractNumber(stylePropVal.substr(valstart, curr - valstart), 0);
+        curr = SkipSpace(stylePropVal, curr);
+        assert(stylePropVal[curr] == ',');
+        curr++;
+        curr = SkipSpace(stylePropVal, curr);
+
+        valstart = curr;
+        curr = SkipFDigits(stylePropVal, curr);
+        std::get<1>(res) = ExtractNumber(stylePropVal.substr(valstart, curr - valstart), 0);
+        curr = SkipSpace(stylePropVal, curr);
+        assert(stylePropVal[curr] == ',');
+        curr++;
+        curr = SkipSpace(stylePropVal, curr);
+
+        valstart = curr;
+        curr = SkipFDigits(stylePropVal, curr);
+        std::get<2>(res) = ExtractNumber(stylePropVal.substr(valstart, curr - valstart), 0);
+        curr = SkipSpace(stylePropVal, curr);
+
+        if (hasFourth)
+        {
+            assert(stylePropVal[curr] == ',');
+            curr++;
+            curr = SkipSpace(stylePropVal, curr);
+
+            valstart = curr;
+            curr = SkipFDigits(stylePropVal, curr);
+            std::get<3>(res) = ExtractNumber(stylePropVal.substr(valstart, curr - valstart), 0);
+        }
+
+        return res;
+    }
+
     [[nodiscard]] ImColor ExtractColor(std::string_view stylePropVal, ImColor(*NamedColor)(const char*, void*), void* userData)
     {
-        if (stylePropVal[0] == 'r' && stylePropVal[1] == 'g' && stylePropVal[2] == 'b')
+        if (stylePropVal.size() >= 3u && AreSame(stylePropVal.substr(0, 3), "rgb"))
         {
-            int r = 0, g = 0, b = 0, a = 255;
-            auto hasAlpha = stylePropVal[3] == 'a';
+            IntOrFloat r, g, b, a;
+            auto hasAlpha = stylePropVal[3] == 'a' || stylePropVal[3] == 'A';
             int curr = hasAlpha ? 4 : 3;
-            curr = SkipSpace(stylePropVal, curr);
-            assert(stylePropVal[curr] == '(');
-            curr++;
-
-            auto valstart = curr;
-            curr = SkipDigits(stylePropVal, curr);
-            r = ExtractInt(stylePropVal.substr(valstart, curr - valstart), 0);
-            curr = SkipSpace(stylePropVal, curr);
-            assert(stylePropVal[curr] == ',');
-            curr++;
-            curr = SkipSpace(stylePropVal, curr);
-
-            valstart = curr;
-            curr = SkipDigits(stylePropVal, curr);
-            g = ExtractInt(stylePropVal.substr(valstart, curr - valstart), 0);
-            curr = SkipSpace(stylePropVal, curr);
-            assert(stylePropVal[curr] == ',');
-            curr++;
-            curr = SkipSpace(stylePropVal, curr);
-
-            valstart = curr;
-            curr = SkipDigits(stylePropVal, curr);
-            b = ExtractInt(stylePropVal.substr(valstart, curr - valstart), 0);
-            curr = SkipSpace(stylePropVal, curr);
-
-            if (hasAlpha)
-            {
-                assert(stylePropVal[curr] == ',');
-                curr++;
-                curr = SkipSpace(stylePropVal, curr);
-
-                valstart = curr;
-                curr = SkipDigits(stylePropVal, curr);
-                a = ExtractInt(stylePropVal.substr(valstart, curr - valstart), 0);
-            }
+            std::tie(r, g, b, a) = GetCommaSeparatedNumbers(stylePropVal, curr);
+            auto isRelative = r.isFloat && g.isFloat && b.isFloat;
+            a.value = isRelative ? hasAlpha ? a.value : 1.f :
+                hasAlpha ? a.value : 255;
 
             assert(stylePropVal[curr] == ')');
+            return isRelative ? ImColor{ r.value, g.value, b.value, a.value } : 
+                ImColor{ (int)r.value, (int)g.value, (int)b.value, (int)a.value };
+        }
+        else if (stylePropVal.size() >= 3u && AreSame(stylePropVal.substr(0, 3), "hsv"))
+        {
+            IntOrFloat h, s, v;
+            auto curr = 3;
+            std::tie(h, s, v, std::ignore) = GetCommaSeparatedNumbers(stylePropVal, curr);
+            
+            assert(stylePropVal[curr] == ')');
+            return ImColor::HSV(h.value, s.value, v.value);
+        }
+        else if (stylePropVal.size() >= 3u && AreSame(stylePropVal.substr(0, 3), "hsl"))
+        {
+            IntOrFloat h, s, l;
+            auto curr = 3;
+            std::tie(h, s, l, std::ignore) = GetCommaSeparatedNumbers(stylePropVal, curr);
+            auto v = l.value + s.value * std::min(l.value, 1.f - l.value);
+            s.value = v == 0.f ? 0.f : 2.f * (1.f - (l.value / v));
 
-            return IM_COL32(r, g, b, a);
+            assert(stylePropVal[curr] == ')');
+            return ImColor::HSV(h.value, s.value, v);
+        }
+        else if (stylePropVal.size() >= 1u && stylePropVal[0] == '#')
+        {
+            ImU32 color32 = (ImU32)ExtractIntFromHex(stylePropVal.substr(1), 0);
+            return ImColor{ color32 };
         }
         else if (NamedColor != nullptr)
         {
@@ -288,16 +358,45 @@ namespace ImRichText
         }
     }
 
-    void PopulateSegmentStyle(SegmentStyle& el,
+    enum StyleProperty
+    {
+        StyleError = -1,
+        NoStyleChange = 0,
+        StyleBgColor = 1,
+        StyleFgColor = 2,
+        StyleFontSize = 4,
+        StyleFontFamily = 8,
+        StyleFontWeight = 16,
+        StyleFontStyle = 32,
+        StyleHeight = 64,
+        StyleWidth = 128,
+        StyleListBulletType = 256,
+        StyleHAlignment = 512,
+        StyleVAlignment = 1024
+    };
+
+    StyleProperty PopulateSegmentStyle(SegmentStyle& style,
+        const SegmentStyle& parentStyle,
         std::string_view stylePropName,
         std::string_view stylePropVal,
         const RenderConfig& config)
     {
+        StyleProperty prop = StyleProperty::NoStyleChange;
+
         if (AreSame(stylePropName, "font-size"))
         {
-            auto idx = SkipDigits(stylePropVal);
-            el.font.size = ExtractFloat(stylePropVal.substr(0u, idx), config.DefaultFontSize, config.DefaultFontSize) * config.Scale;
-            el.font.size = Clamp(el.font.size, 1.f, (float)(1 << 14));
+            if (AreSame(stylePropVal, "xx-small")) style.font.size = config.DefaultFontSize * 0.6f * config.FontScale;
+            else if (AreSame(stylePropVal, "x-small")) style.font.size = config.DefaultFontSize * 0.75f * config.FontScale;
+            else if (AreSame(stylePropVal, "small")) style.font.size = config.DefaultFontSize * 0.89f * config.FontScale;
+            else if (AreSame(stylePropVal, "medium")) style.font.size = config.DefaultFontSize * config.FontScale;
+            else if (AreSame(stylePropVal, "large")) style.font.size = config.DefaultFontSize * 1.2f * config.FontScale;
+            else if (AreSame(stylePropVal, "x-large")) style.font.size = config.DefaultFontSize * 1.5f * config.FontScale;
+            else if (AreSame(stylePropVal, "xx-large")) style.font.size = config.DefaultFontSize * 2.f * config.FontScale;
+            else if (AreSame(stylePropVal, "xxx-large")) style.font.size = config.DefaultFontSize * 3.f * config.FontScale;
+            else
+                style.font.size = ExtractFloatWithUnit(stylePropVal, config.DefaultFontSize * config.FontScale,
+                    config.DefaultFontSize * config.FontScale, parentStyle.font.size, config.FontScale);
+            prop = StyleProperty::StyleFontSize;
 
         }
         else if (AreSame(stylePropName, "font-weight"))
@@ -306,69 +405,85 @@ namespace ImRichText
 
             if (idx == 0)
             {
-                if (AreSame(stylePropVal, "bold")) el.font.bold = true;
-                else if (AreSame(stylePropVal, "light")) el.font.light = true;
+                if (AreSame(stylePropVal, "bold")) style.font.bold = true;
+                else if (AreSame(stylePropVal, "light")) style.font.light = true;
                 else ERROR("Invalid font-weight property value... [%.*s]\n",
                     (int)stylePropVal.size(), stylePropVal.data());
             }
             else
             {
                 int weight = ExtractInt(stylePropVal.substr(0u, idx), 400);
-                el.font.bold = weight >= 600;
-                el.font.light = weight < 400;
+                style.font.bold = weight >= 600;
+                style.font.light = weight < 400;
             }
+
+            prop = StyleProperty::StyleFontWeight;
         }
         else if (AreSame(stylePropName, "background-color") || AreSame(stylePropName, "background"))
         {
-            el.bgcolor = ExtractColor(stylePropVal, config.NamedColor, config.UserData);
+            style.bgcolor = ExtractColor(stylePropVal, config.NamedColor, config.UserData);
+            prop = StyleProperty::StyleBgColor;
         }
         else if (AreSame(stylePropName, "color"))
         {
-            el.fgcolor = ExtractColor(stylePropVal, config.NamedColor, config.UserData);
+            style.fgcolor = ExtractColor(stylePropVal, config.NamedColor, config.UserData);
+            prop = StyleProperty::StyleFgColor;
         }
         else if (AreSame(stylePropName, "width"))
         {
-            el.width = ExtractFloat(stylePropVal, 0, config.DefaultFontSize) * config.Scale;
+            style.width = ExtractFloatWithUnit(stylePropVal, 0, config.DefaultFontSize * config.FontScale, parentStyle.width, config.Scale);
+            prop = StyleProperty::StyleWidth;
         }
         else if (AreSame(stylePropName, "height"))
         {
-            el.height = ExtractFloat(stylePropVal, 0, config.DefaultFontSize) * config.Scale;
+            style.height = ExtractFloatWithUnit(stylePropVal, 0, config.DefaultFontSize * config.FontScale, parentStyle.height, config.Scale);
+            prop = StyleProperty::StyleHeight;
         }
         else if (AreSame(stylePropName, "alignment") || AreSame(stylePropName, "text-align"))
         {
-            el.alignmentH = AreSame(stylePropVal, "justify") ? HorizontalAlignment::Justify :
+            style.alignmentH = AreSame(stylePropVal, "justify") ? HorizontalAlignment::Justify :
                 AreSame(stylePropVal, "right") ? HorizontalAlignment::Right :
                 AreSame(stylePropVal, "center") ? HorizontalAlignment::Center :
                 HorizontalAlignment::Left;
+            prop = StyleProperty::StyleHAlignment;
         }
         else if (AreSame(stylePropName, "vertical-align"))
         {
-            el.alignmentV = AreSame(stylePropVal, "top") ? VerticalAlignment::Top :
+            style.alignmentV = AreSame(stylePropVal, "top") ? VerticalAlignment::Top :
                 AreSame(stylePropVal, "bottom") ? VerticalAlignment::Bottom :
                 VerticalAlignment::Center;
+            prop = StyleProperty::StyleVAlignment;
         }
         else if (AreSame(stylePropName, "font-family"))
         {
-            el.font.family = stylePropVal;
+            style.font.family = stylePropVal;
+            prop = StyleProperty::StyleFontFamily;
         }
         else if (AreSame(stylePropName, "font-style"))
         {
-            if (AreSame(stylePropVal, "normal")) el.font.italics = false;
+            if (AreSame(stylePropVal, "normal")) style.font.italics = false;
             else if (AreSame(stylePropVal, "italic") || AreSame(stylePropVal, "oblique"))
-                el.font.italics = true;
+                style.font.italics = true;
             else ERROR("Invalid font-style property value [%.*s]\n",
                 (int)stylePropVal.size(), stylePropVal.data());
+            prop = StyleProperty::StyleFontStyle;
         }
         else if (AreSame(stylePropName, "list-style-type"))
         {
-            if (AreSame(stylePropVal, "circle")) el.list.itemStyle = BulletType::Circle;
-            else if (AreSame(stylePropVal, "disk")) el.list.itemStyle = BulletType::Disk;
-            else if (AreSame(stylePropVal, "square")) el.list.itemStyle = BulletType::Square;
-            else if (AreSame(stylePropVal, "solidsquare")) el.list.itemStyle = BulletType::FilledSquare;
-            else if (AreSame(stylePropVal, "custom")) el.list.itemStyle = BulletType::Custom;
+            if (AreSame(stylePropVal, "circle")) style.list.itemStyle = BulletType::Circle;
+            else if (AreSame(stylePropVal, "disk")) style.list.itemStyle = BulletType::Disk;
+            else if (AreSame(stylePropVal, "square")) style.list.itemStyle = BulletType::Square;
+            else if (AreSame(stylePropVal, "solidsquare")) style.list.itemStyle = BulletType::FilledSquare;
+            else if (AreSame(stylePropVal, "custom")) style.list.itemStyle = BulletType::Custom;
             // TODO: Others...
+            prop = StyleProperty::StyleListBulletType;
         }
-        else ERROR("Invalid style property... [%.*s]\n", (int)stylePropName.size(), stylePropName.data());
+        else
+        {
+            ERROR("Invalid style property... [%.*s]\n", (int)stylePropName.size(), stylePropName.data());
+        }
+
+        return prop;
     }
 
     [[nodiscard]] RenderConfig* GetRenderConfig(RenderConfig* config = nullptr)
@@ -381,7 +496,10 @@ namespace ImRichText
             if (it == RenderConfigs.end())
             {
                 if (!DefaultRenderConfigInit)
-                    GetDefaultConfig({ 200.f, 200.f });
+                {
+                    LOG("Default config not available, forgot to push RenderConfig?");
+                    GetDefaultConfig({ 200.f, 200.f }, 24.f);
+                }
 
                 config = &DefaultRenderConfig;
             }
@@ -399,186 +517,19 @@ namespace ImRichText
         return sz;
     }
 
-    template <int maxsz>
-    struct CaseInsensitieHasher
-    {
-        std::size_t operator()(std::string_view key) const
-        {
-            thread_local static char buffer[maxsz] = { 0 };
-            std::memset(buffer, 0, maxsz);
-            auto limit = std::min((int)key.size(), maxsz - 1);
-
-            for (auto idx = 0; idx < limit; ++idx)
-                buffer[idx] = std::tolower(key[idx]);
-
-            return std::hash<std::string_view>()(buffer);
-        }
-    };
-
-    ImColor GetColor(const char* name, void*)
-    {
-        const static std::unordered_map<std::string_view, ImColor, CaseInsensitieHasher<32>> Colors{
-            { "black", ImColor(0, 0, 0) },
-            { "silver", ImColor(192, 192, 192) },
-            { "gray", ImColor(128, 128, 128) },
-            { "white", ImColor(255, 255, 255) },
-            { "maroon", ImColor(128, 0, 0) },
-            { "red", ImColor(255, 0, 0) },
-            { "purple", ImColor(128, 0, 128) },
-            { "fuchsia", ImColor(255, 0, 255) },
-            { "green", ImColor(0, 128, 0) },
-            { "lime", ImColor(0, 255, 0) },
-            { "olive", ImColor(128, 128, 0) },
-            { "yellow", ImColor(255, 255, 0) },
-            { "navy", ImColor(0, 0, 128) },
-            { "blue", ImColor(0, 0, 255) },
-            { "teal", ImColor(0, 128, 128) },
-            { "aqua", ImColor(0, 255, 255) },
-            { "aliceblue", ImColor(240, 248, 255) },
-            { "antiquewhite", ImColor(250, 235, 215) },
-            { "aquamarine", ImColor(127, 255, 212) },
-            { "azure", ImColor(240, 255, 255) },
-            { "beige", ImColor(245, 245, 220) },
-            { "bisque", ImColor(255, 228, 196) },
-            { "blanchedalmond", ImColor(255, 235, 205) },
-            { "blueviolet", ImColor(138, 43, 226) },
-            { "brown", ImColor(165, 42, 42) },
-            { "burlywood", ImColor(222, 184, 135) },
-            { "cadetblue", ImColor(95, 158, 160) },
-            { "chartreuse", ImColor(127, 255, 0) },
-            { "chocolate", ImColor(210, 105, 30) },
-            { "coral", ImColor(255, 127, 80) },
-            { "cornflowerblue", ImColor(100, 149, 237) },
-            { "cornsilk", ImColor(255, 248, 220) },
-            { "crimson", ImColor(220, 20, 60) },
-            { "darkblue", ImColor(0, 0, 139) },
-            { "darkcyan", ImColor(0, 139, 139) },
-            { "darkgoldenrod", ImColor(184, 134, 11) },
-            { "darkgray", ImColor(169, 169, 169) },
-            { "darkgreen", ImColor(0, 100, 0) },
-            { "darkgrey", ImColor(169, 169, 169) },
-            { "darkkhaki", ImColor(189, 183, 107) },
-            { "darkmagenta", ImColor(139, 0, 139) },
-            { "darkolivegreen", ImColor(85, 107, 47) },
-            { "darkorange", ImColor(255, 140, 0) },
-            { "darkorchid", ImColor(153, 50, 204) },
-            { "darkred", ImColor(139, 0, 0) },
-            { "darksalmon", ImColor(233, 150, 122) },
-            { "darkseagreen", ImColor(143, 188, 143) },
-            { "darkslateblue", ImColor(72, 61, 139) },
-            { "darkslategray", ImColor(47, 79, 79) },
-            { "darkslategray", ImColor(47, 79, 79) },
-            { "darkturquoise", ImColor(0, 206, 209) },
-            { "darkviolet", ImColor(148, 0, 211) },
-            { "deeppink", ImColor(255, 20, 147) },
-            { "deepskyblue", ImColor(0, 191, 255) },
-            { "dimgray", ImColor(105, 105, 105) },
-            { "dimgrey", ImColor(105, 105, 105) },
-            { "dodgerblue", ImColor(30, 144, 255) },
-            { "firebrick", ImColor(178, 34, 34) },
-            { "floralwhite", ImColor(255, 250, 240) },
-            { "forestgreen", ImColor(34, 139, 34) },
-            { "gainsboro", ImColor(220, 220, 220) },
-            { "ghoshtwhite", ImColor(248, 248, 255) },
-            { "gold", ImColor(255, 215, 0) },
-            { "goldenrod", ImColor(218, 165, 32) },
-            { "greenyellow", ImColor(173, 255, 47) },
-            { "honeydew", ImColor(240, 255, 240) },
-            { "hotpink", ImColor(255, 105, 180) },
-            { "indianred", ImColor(205, 92, 92) },
-            { "indigo", ImColor(75, 0, 130) },
-            { "ivory", ImColor(255, 255, 240) },
-            { "khaki", ImColor(240, 230, 140) },
-            { "lavender", ImColor(230, 230, 250) },
-            { "lavenderblush", ImColor(255, 240, 245) },
-            { "lawngreen", ImColor(124, 252, 0) },
-            { "lemonchiffon", ImColor(255, 250, 205) },
-            { "lightblue", ImColor(173, 216, 230) },
-            { "lightcoral", ImColor(240, 128, 128) },
-            { "lightcyan", ImColor(224, 255, 255) },
-            { "lightgoldenrodyellow", ImColor(250, 250, 210) },
-            { "lightgray", ImColor(211, 211, 211) },
-            { "lightgreen", ImColor(144, 238, 144) },
-            { "lightgrey", ImColor(211, 211, 211) },
-            { "lightpink", ImColor(255, 182, 193) },
-            { "lightsalmon", ImColor(255, 160, 122) },
-            { "lightseagreen", ImColor(32, 178, 170) },
-            { "lightskyblue", ImColor(135, 206, 250) },
-            { "lightslategray", ImColor(119, 136, 153) },
-            { "lightslategrey", ImColor(119, 136, 153) },
-            { "lightsteelblue", ImColor(176, 196, 222) },
-            { "lightyellow", ImColor(255, 255, 224) },
-            { "limegreen", ImColor(50, 255, 50) },
-            { "linen", ImColor(250, 240, 230) },
-            { "mediumaquamarine", ImColor(102, 205, 170) },
-            { "mediumblue", ImColor(0, 0, 205) },
-            { "mediumorchid", ImColor(186, 85, 211) },
-            { "mediumpurple", ImColor(147, 112, 219) },
-            { "mediumseagreen", ImColor(60, 179, 113) },
-            { "mediumslateblue", ImColor(123, 104, 238) },
-            { "mediumspringgreen", ImColor(0, 250, 154) },
-            { "mediumturquoise", ImColor(72, 209, 204) },
-            { "mediumvioletred", ImColor(199, 21, 133) },
-            { "midnightblue", ImColor(25, 25, 112) },
-            { "mintcream", ImColor(245, 255, 250) },
-            { "mistyrose", ImColor(255, 228, 225) },
-            { "moccasin", ImColor(255, 228, 181) },
-            { "navajowhite", ImColor(255, 222, 173) },
-            { "oldlace", ImColor(253, 245, 230) },
-            { "olivedrab", ImColor(107, 142, 35) },
-            { "orange", ImColor(255, 165, 0) },
-            { "orangered", ImColor(255, 69, 0) },
-            { "orchid", ImColor(218, 112, 214) },
-            { "palegoldenrod", ImColor(238, 232, 170) },
-            { "palegreen", ImColor(152, 251, 152) },
-            { "paleturquoise", ImColor(175, 238, 238) },
-            { "palevioletred", ImColor(219, 112, 147) },
-            { "papayawhip", ImColor(255, 239, 213) },
-            { "peachpuff", ImColor(255, 218, 185) },
-            { "peru", ImColor(205, 133, 63) },
-            { "pink", ImColor(255, 192, 203) },
-            { "plum", ImColor(221, 160, 221) },
-            { "powderblue", ImColor(176, 224, 230) },
-            { "rosybrown", ImColor(188, 143, 143) },
-            { "royalblue", ImColor(65, 105, 225) },
-            { "saddlebrown", ImColor(139, 69, 19) },
-            { "salmon", ImColor(250, 128, 114) },
-            { "sandybrown", ImColor(244, 164, 96) },
-            { "seagreen", ImColor(46, 139, 87) },
-            { "seashell", ImColor(255, 245, 238) },
-            { "sienna", ImColor(160, 82, 45) },
-            { "skyblue", ImColor(135, 206, 235) },
-            { "slateblue", ImColor(106, 90, 205) },
-            { "slategray", ImColor(112, 128, 144) },
-            { "slategrey", ImColor(112, 128, 144) },
-            { "snow", ImColor(255, 250, 250) },
-            { "springgreen", ImColor(0, 255, 127) },
-            { "steelblue", ImColor(70, 130, 180) },
-            { "tan", ImColor(210, 180, 140) },
-            { "thistle", ImColor(216, 191, 216) },
-            { "tomato", ImColor(255, 99, 71) },
-            { "violet", ImColor(238, 130, 238) },
-            { "wheat", ImColor(245, 222, 179) },
-            { "whitesmoke", ImColor(245, 245, 245) },
-            { "yellowgreen", ImColor(154, 205, 50) }
-        };
-
-        auto it = Colors.find(name);
-        return it != Colors.end() ? it->second : ImColor{ IM_COL32_BLACK };
-    }
-
-    RenderConfig* GetDefaultConfig(ImVec2 Bounds, bool skipDefaultFontLoading)
+    RenderConfig* GetDefaultConfig(ImVec2 Bounds, float defaultFontSize, float fontScale, bool skipDefaultFontLoading)
     {
         auto config = &DefaultRenderConfig;
         config->Bounds = Bounds;
         config->GetFont = &GetFont;
         config->NamedColor = &GetColor;
         config->GetTextSize = &GetTextSize;
-
         config->EscapeCodes.insert(config->EscapeCodes.end(), std::begin(EscapeCodes),
             std::end(EscapeCodes));
-        DefaultRenderConfigInit = true;
+        config->FontScale = fontScale;
+        config->DefaultFontSize = defaultFontSize;
 
+        DefaultRenderConfigInit = true;
         if (!skipDefaultFontLoading) LoadDefaultFonts(*config);
         return config;
     }
@@ -635,17 +586,19 @@ namespace ImRichText
 
     [[nodiscard]] SegmentStyle CreateDefaultStyle(const RenderConfig& config)
     {
+        assert(config.GetFont != nullptr);
+
         SegmentStyle result;
         result.font.family = config.DefaultFontFamily;
-        result.font.size = config.DefaultFontSize;
-        result.font.font = config.GetFont ? config.GetFont(result.font.family, result.font.size, false, false, false, config.UserData) : nullptr;
+        result.font.size = config.DefaultFontSize * config.FontScale;
+        result.font.font = config.GetFont(result.font.family, result.font.size, false, false, false, config.UserData);
         result.bgcolor = config.DefaultBgColor;
         result.fgcolor = config.DefaultFgColor;
         result.list.itemStyle = config.ListItemBullet;
         return result;
     }
 
-    [[nodiscard]] std::pair<float, float> GetLineSize(const SegmentStyle& styleprops, const RenderConfig& config, SegmentDetails& segment)
+    [[nodiscard]] std::pair<float, float> GetSegmentSize(const SegmentStyle& styleprops, const RenderConfig& config, const SegmentDetails& segment)
     {
         auto borderv = styleprops.subscriptOffset + styleprops.superscriptOffset;
         auto borderh = 0.f;
@@ -657,9 +610,8 @@ namespace ImRichText
 
             for (auto& token : segment.Tokens)
             {
-                token.Size = ImGui::CalcTextSize(token.Content.data(), token.Content.data() + token.Content.size());
                 height = std::max(height, token.Size.y);
-                width = std::max(width, token.Size.x);
+                width += token.Size.x;
             }
 
             return { width + borderh, height + borderv };
@@ -675,9 +627,9 @@ namespace ImRichText
         line.HasSubscript = line.HasSubscript || segment.subscriptDepth > 0;
         line.HasSuperscript = line.HasSuperscript || segment.superscriptDepth > 0;
 
-        LOG("Added token: %.*s [itemtype: %s]\n",
+        LOG("Added token: %.*s [itemtype: %s][font-size: %f]\n",
             (int)token.Content.size(), token.Content.data(),
-            GetTokenTypeString(token));
+            GetTokenTypeString(token), segment.Style.font.size);
     }
 
     SegmentDetails& AddSegment(DrawableLine& line, const SegmentStyle& styleprops, const RenderConfig& config)
@@ -808,7 +760,7 @@ namespace ImRichText
 
             auto maxTopOffset = GetMaxSuperscriptOffset(line, config.ScaleSuperscript);
             auto maxBottomOffset = GetMaxSubscriptOffset(line, config.ScaleSubscript);
-            auto lastFontSz = config.DefaultFontSize;
+            auto lastFontSz = config.DefaultFontSize * config.FontScale;
             auto lastSuperscriptDepth = 0, lastSubscriptDepth = 0;
 
             for (auto& segment : line.Segments)
@@ -870,22 +822,15 @@ namespace ImRichText
         return newline;
     }
 
-    std::pair<float, float> GetLineSize(DrawableLine& line, const RenderConfig& config)
+    std::pair<float, float> GetLineSize(const DrawableLine& line, const RenderConfig& config)
     {
         auto height = 0.f, width = 0.f;
 
-        for (auto& segment : line.Segments)
+        for (const auto& segment : line.Segments)
         {
-            if (segment.Style.font.font == nullptr) segment.Style.font.font =
-                config.GetFont(segment.Style.font.family, segment.Style.font.size,
-                    segment.Style.font.bold, segment.Style.font.italics, segment.Style.font.light,
-                    config.UserData);
-
-            ImGui::PushFont(segment.Style.font.font);
-            auto sz = GetLineSize(segment.Style, config, segment);
+            auto sz = GetSegmentSize(segment.Style, config, segment);
             height = std::max(height, sz.second);
-            width = std::max(width, sz.first);
-            ImGui::PopFont();
+            width += sz.first;
         }
 
         return { width + line.offseth.x + line.offseth.y,
@@ -897,6 +842,11 @@ namespace ImRichText
     {
         Token token;
         token.Content = content.substr(start, curridx - start);
+
+        ImGui::PushFont(line.Segments.back().Style.font.font);
+        token.Size = ImGui::CalcTextSize(token.Content.data(), token.Content.data() + token.Content.size());
+        ImGui::PopFont();
+    
         AddToken(line, token, config);
     }
 
@@ -932,8 +882,11 @@ namespace ImRichText
         return { hasEscape, isNewLine };
     }
 
-    bool ExtractStyleParams(const char* text, int end, const RenderConfig& config, SegmentStyle& style, int& idx)
+    int ExtractStyleParams(const char* text, int end, const RenderConfig& config, SegmentStyle& style, const SegmentStyle& initialStyle, int& idx)
     {
+        const auto& parentStyle = CurrentStackPos > 0 ? TagStack[CurrentStackPos - 1].second : initialStyle;
+        int result = StyleProperty::NoStyleChange;
+
         // Extract all attributes
         while ((idx < end) && (text[idx] != config.TagEnd) && (text[idx] != '/'))
         {
@@ -986,7 +939,8 @@ namespace ImRichText
 
                             if (stylePropVal.has_value())
                             {
-                                PopulateSegmentStyle(style, stylePropName, stylePropVal.value(), config);
+                                auto prop = PopulateSegmentStyle(style, parentStyle, stylePropName, stylePropVal.value(), config);
+                                result = result | prop;
                             }
                         }
                     }
@@ -996,7 +950,7 @@ namespace ImRichText
 
         if (text[idx] == config.TagEnd) idx++;
         if (text[idx] == '/' && ((idx + 1) < end) && text[idx + 1] == config.TagEnd) idx += 2;
-        return true;
+        return result;
     }
 
     std::pair<std::string_view, bool> ExtractTag(const char* text, int end, const RenderConfig& config,
@@ -1069,41 +1023,72 @@ namespace ImRichText
     }
 
     SegmentDetails& UpdateSegmentStyle(bool isHeader, bool isRawText, std::string_view currTag,
-        SegmentStyle& styleprops, DrawableLine& line, bool assignFont, const RenderConfig& config)
+        SegmentStyle& styleprops, const SegmentStyle& parentStyle, DrawableLine& line, 
+        int propsChanged, const RenderConfig& config)
     {
+        assert(config.GetFont != nullptr);
+
         if (isHeader)
         {
-            styleprops.font.size = config.HFontSizes[currTag[1] - '1'];
+            styleprops.font.size = config.HFontSizes[currTag[1] - '1'] * config.FontScale;
             styleprops.font.bold = true;
+            styleprops.font.font = config.GetFont(styleprops.font.family, styleprops.font.size,
+                styleprops.font.bold, styleprops.font.italics, styleprops.font.light, config.UserData);
         }
         else if (isRawText)
         {
             styleprops.font.family = IM_RICHTEXT_MONOSPACE_FONTFAMILY;
+            styleprops.font.font = config.GetFont(styleprops.font.family, styleprops.font.size,
+                styleprops.font.bold, styleprops.font.italics, styleprops.font.light, config.UserData);
             AddSegment(line, styleprops, config);
         }
         else if (AreSame(currTag, "i") || AreSame(currTag, "em"))
         {
             styleprops.font.italics = true;
+            styleprops.font.font = config.GetFont(styleprops.font.family, styleprops.font.size,
+                styleprops.font.bold, styleprops.font.italics, styleprops.font.light, config.UserData);
             AddSegment(line, styleprops, config);
         }
         else if (AreSame(currTag, "b") || AreSame(currTag, "strong"))
         {
             styleprops.font.bold = true;
+            styleprops.font.font = config.GetFont(styleprops.font.family, styleprops.font.size,
+                styleprops.font.bold, styleprops.font.italics, styleprops.font.light, config.UserData);
             AddSegment(line, styleprops, config);
         }
         else if (AreSame(currTag, "mark"))
         {
-            styleprops.bgcolor = config.NamedColor("yellow", config.UserData);
+            styleprops.bgcolor = config.MarkHighlight;
             AddSegment(line, styleprops, config);
         }
-        else if (AreSame(currTag, "sup") || AreSame(currTag, "sub"))
+        else if (AreSame(currTag, "small"))
         {
+            styleprops.font.size = parentStyle.font.size * 0.8f;
+            styleprops.font.font = config.GetFont(styleprops.font.family, styleprops.font.size,
+                styleprops.font.bold, styleprops.font.italics, styleprops.font.light, config.UserData);
+            AddSegment(line, styleprops, config);
+        }
+        else if (AreSame(currTag, "sup"))
+        {
+            styleprops.font.size *= config.ScaleSuperscript;
+            styleprops.font.font = config.GetFont(styleprops.font.family, styleprops.font.size,
+                styleprops.font.bold, styleprops.font.italics, styleprops.font.light, config.UserData);
+            AddSegment(line, styleprops, config);
+        }
+        else if (AreSame(currTag, "sub"))
+        {
+            styleprops.font.size *= config.ScaleSubscript;
+            styleprops.font.font = config.GetFont(styleprops.font.family, styleprops.font.size,
+                styleprops.font.bold, styleprops.font.italics, styleprops.font.light, config.UserData);
+            AddSegment(line, styleprops, config);
+        }
+        else if (propsChanged != StyleProperty::NoStyleChange)
+        {
+            styleprops.font.font = config.GetFont(styleprops.font.family, styleprops.font.size,
+                styleprops.font.bold, styleprops.font.italics, styleprops.font.light, config.UserData);
             AddSegment(line, styleprops, config);
         }
 
-        if (config.GetFont && assignFont) styleprops.font.font = config.GetFont(styleprops.font.family, styleprops.font.size,
-            styleprops.font.bold, styleprops.font.italics, styleprops.font.light,
-            config.UserData);
         return line.Segments.back();
     }
 
@@ -1112,7 +1097,7 @@ namespace ImRichText
         std::deque<DrawableLine> result;
         start = SkipSpace(text, start, end);
         auto initialStyle = CreateDefaultStyle(config);
-        CurrentStackPos = 0;
+        CurrentStackPos = -1;
         std::string_view currTag;
 
         thread_local char TabSpaces[IM_RICHTEXT_MAXTABSTOP] = { 0 };
@@ -1151,8 +1136,9 @@ namespace ImRichText
                     if (isSuperscript) superscriptLevel++;
                     else if (isSubscript) subscriptLevel++;
 
-                    if (!ExtractStyleParams(text, end, config, styleprops, idx)) return result;
-                    auto& segment = UpdateSegmentStyle(isHeader, isRawText, currTag, styleprops, line, !isHr, config);
+                    auto propsChanged = ExtractStyleParams(text, end, config, styleprops, initialStyle, idx);
+                    const auto& parentStyle = CurrentStackPos >= 0 ? TagStack[CurrentStackPos - 1].second : initialStyle;
+                    auto& segment = UpdateSegmentStyle(isHeader, isRawText, currTag, styleprops, parentStyle, line, propsChanged, config);
                     segment.subscriptDepth = subscriptLevel;
                     segment.superscriptDepth = superscriptLevel;
 
@@ -1297,9 +1283,6 @@ namespace ImRichText
                     std::string_view content{ text + begin, (std::size_t)(idx - begin) };
                     LOG("Processing content [%.*s] for tag <%.*s>\n", (int)content.size(),
                         content.data(), (int)currTag.size(), currTag.data());
-
-                    auto& segment = line.Segments.back();
-                    segment.Style = styleprops;
 
                     // Ignore newlines, tabs & consecutive spaces
                     auto curridx = 0, start = 0;
@@ -1612,7 +1595,7 @@ namespace ImRichText
         float linewidth = 0.f;
     };
 
-    void DrawBackgroundLayer(ImDrawList* drawList, ImVec2 initpos, std::deque<DrawableLine>& lines, const RenderConfig& config,
+    void DrawBackgroundLayer(ImDrawList* drawList, ImVec2 initpos, const std::deque<DrawableLine>& lines, const RenderConfig& config,
         std::vector<std::pair<float, float>>& lineszs)
     {
         auto lineidx = 0, lastBlockquoteDepth = 0;
@@ -1672,7 +1655,7 @@ namespace ImRichText
         }
     }
 
-    void DrawForegroundLayer(ImDrawList* drawList, ImVec2 initpos, std::deque<DrawableLine>& lines, const RenderConfig& config,
+    void DrawForegroundLayer(ImDrawList* drawList, ImVec2 initpos, const std::deque<DrawableLine>& lines, const RenderConfig& config,
         const std::vector<std::pair<float, float>>& lineszs)
     {
         auto currpos = initpos;
@@ -1700,7 +1683,7 @@ namespace ImRichText
         }
     }
 
-    void Draw(std::deque<DrawableLine>& lines, RenderConfig* config)
+    void Draw(const std::deque<DrawableLine>& lines, RenderConfig* config)
     {
         config = GetRenderConfig(config);
         auto currpos = ImGui::GetCursorScreenPos();
