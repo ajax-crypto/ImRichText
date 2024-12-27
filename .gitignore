@@ -46,3 +46,5 @@
 *.recipe
 *.enc
 *.opendb
+*.iobj
+*.ipdb

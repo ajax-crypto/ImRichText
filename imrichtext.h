@@ -167,6 +167,7 @@ namespace ImRichText
         float height() const { return Content.height + Offset.top + Offset.bottom; }
     };
 
+#ifdef _DEBUG
     enum DebugContentType
     {
         ContentTypeToken,
@@ -175,6 +176,7 @@ namespace ImRichText
         ContentTypeBg,
         ContentTypeTotal
     };
+#endif
 
     struct RenderConfig
     {
@@ -223,10 +225,12 @@ namespace ImRichText
         float HrVerticalMargins = 5.f;
         void* UserData = nullptr;
 
+#ifdef _DEBUG
         ImColor DebugContents[ContentTypeTotal] = {
             IM_COL32_BLACK_TRANS, IM_COL32_BLACK_TRANS, 
             IM_COL32_BLACK_TRANS, IM_COL32_BLACK_TRANS
         };
+#endif
     };
 
     struct BackgroundShape

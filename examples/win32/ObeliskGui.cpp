@@ -124,8 +124,10 @@ public:
             "<mark>This is highlighted! <small>This is small...</small></mark>";
 
         auto config = ImRichText::GetDefaultConfig({ 600.f, 800.f }, 24.f, 1.5f);
+#ifdef _DEBUG
         config->DebugContents[ImRichText::ContentTypeLine] = ImColor{ 255, 0, 0 };
         config->DebugContents[ImRichText::ContentTypeSegment] = ImColor{ 0, 255, 0 };
+#endif
         config->Scale = 2.f;
         ImRichText::PushConfig(*config);
 

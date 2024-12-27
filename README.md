@@ -15,14 +15,12 @@ std::string rtf = "2<sup>2</sup> equals 4  <hr style=\"height: 4px; color: sienn
             "<span style='background: teal; color: white;'>White on Teal</span><br/>"
             "<mark>This is highlighted! <small>This is small...</small></mark>";
 auto config = ImRichText::GetDefaultConfig({ 600.f, 800.f }, 24.f, 1.5f);
-config->DrawDebugRects = true;
-config->Scale = 2.f;
 ImRichText::PushConfig(*config);
 ImRichText::Draw(rtf.data(), 0, rtf.size());
 ```
 
 ## How to use it?
-Just include the .h and .cpp files in your project.
+Just include the .h and .cpp files in your project. (You will need a C++17 compiler)
 
 ## What is supported?
 The following subset of HTML tags/CSS properties are supported:
@@ -92,11 +90,12 @@ The library depends on ImGui and C++17 standard library. It can be compiled usin
 In order to customize certain behavior at build-time, the following macros can be used
 | Macro name | Functionality | Default Value |
 |------------|:--------------|:--------------|
-| `IM_RICHTEXT_MIN_RTF_CACHESZ` | Minimum RTF string size to cache the drawables from the RTF specified and reuse | 128 |
-| `IM_RICHTEXT_MAXDEPTH` | Maximum depth of nested blocks/tags in Rich Text | 256 |
-| `IM_RICHTEXT_MAX_LISTDEPTH` | Maximum depth of nested lists | 256 |
+| `IM_RICHTEXT_MIN_RTF_CACHESZ` | Minimum RTF string size to cache the drawables from the RTF specified and reuse | 64 |
+| `IM_RICHTEXT_MAXDEPTH` | Maximum depth of nested blocks/tags in Rich Text | 32 |
+| `IM_RICHTEXT_MAX_LISTDEPTH` | Maximum depth of nested lists | 16 |
 | `IM_RICHTEXT_MAX_LISTITEM` | Maxmimum number of list items at a specific depth | 128 |
 | `IM_RICHTEXT_MAXTABSTOP` | Maxmimum number of nested `<p>`/paragraphs | 32 |
+| `IM_RICHTEXT_ENABLE_PARSER_LOGS` | Enable printing parsing + layout logs in console in debug builds | Not defined |
 
 ## Error Reporting
 When `_DEBUG` macro is defined, if a console is present, error messages will be printed along

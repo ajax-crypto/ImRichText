@@ -38,6 +38,7 @@ const char* TabLine = "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t";
 #else
 #define ERROR(FMT, ...)
 #define LOG(FMT, ...)
+#define HIGHLIGHT(FMT, ...)
 #endif
 
 namespace ImRichText
@@ -1515,11 +1516,15 @@ namespace ImRichText
         if (it != RenderConfigs.end()) it->second.pop_back();
     }
 
+#ifdef _DEBUG
     inline void DrawDebugRect(DebugContentType type, ImDrawList* drawList, ImVec2 startpos, ImVec2 endpos, const RenderConfig& config)
     {
         if (config.DebugContents[type].Value != ImColor{ IM_COL32_BLACK_TRANS }.Value) 
             drawList->AddRect(startpos, endpos, config.DebugContents[type]);
     }
+#else
+#define DrawDebugRect(...)
+#endif
 
     bool DrawToken(ImDrawList* drawList, const Token& token, ImVec2 initpos,
         const SegmentStyle& style, const RenderConfig& config)
