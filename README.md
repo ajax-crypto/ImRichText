@@ -10,7 +10,6 @@ Implementation of Rich Text Rendering for ImGui (**ASCII text only**) akin to Qt
 std::string rtf = "2<sup>2</sup> equals 4  <hr style=\"height: 4px; color: sienna;\"/>"
             "<p style=\"color: rgb(150, 0, 0);\">Paragraph <b>bold <i>italics</i> bold2 </b></p>"
             "<h1 style=\"color: darkblue;\">Heading&Tab;</h1>"
-            "<ol><li> item#1 </li><li> item#2 </li></ol>"
             "<span style='background: teal; color: white;'>White on Teal</span><br/>"
             "<mark>This is highlighted! <small>This is small...</small></mark>";
 auto config = ImRichText::GetDefaultConfig({ 600.f, 800.f }, 24.f, 1.5f);
@@ -34,9 +33,9 @@ The following subset of HTML tags/CSS properties are supported:
 | sup/sub | Superscript/Subscript | Yes[^1] |
 | hr | Horizontal line | Yes |
 | h1...h6 | Header (bold) text with a line underneath | Yes |
-| ul | Un-numbered list (with bullets) | Yes |
-| ol | Numbered list (with nested numberings i.e. 1.2.3) | Yes |
-| li | List Item | Yes |
+| ul | Un-numbered list (with bullets) |  _Under progress_ |
+| ol | Numbered list (with nested numberings i.e. 1.2.3) |  _Under progress_ |
+| li | List Item |  _Under progress_ |
 | br | Line Break | Yes |
 | b/strong | Bold block of text | Yes |
 | i/em | Italics block of text | Yes |

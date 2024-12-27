@@ -118,7 +118,6 @@ public:
         std::string rtf = "2<sup>2</sup> equals 4  <hr style=\"height: 4px; color: sienna;\"/>"
             "<p style=\"color: rgb(150, 0, 0);\">Paragraph <b>bold <i>italics</i> bold2 </b></p>"
             "<h1 style=\"color: darkblue;\">Heading&Tab;</h1>"
-            "<ol><li> item#1 </li><li> item#2 </li></ol>"
             "<span style='background: teal; color: white;'>White on Teal</span><br/>"
             "<mark>This is highlighted! <small>This is small...</small></mark>";
 

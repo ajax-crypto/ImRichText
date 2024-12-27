@@ -63,13 +63,9 @@ namespace ImRichText
     enum class TokenType
     {
         Text,
-        ListStart,
         ListItemBullet,
         ListItemNumbered,
-        ListEnd,
-        HorizontalRule,
-        CodeBlockStart,
-        CodeBlockEnd
+        HorizontalRule
     };
 
     struct BoundedBox
@@ -218,6 +214,9 @@ namespace ImRichText
         float BlockquotePadding = 5.f;
         float BlockquoteOffset = 15.f;
         float BlockquoteBarWidth = 5.f;
+
+        ImColor CodeBlockBg = IM_COL32_BLACK_TRANS;
+        float CodeBlockPadding = 5.f;
 
         float BulletSizeScale = 2.f;
         float ScaleSuperscript = 0.62f;

@@ -182,9 +182,7 @@ namespace ImRichText
         }
 
         if (famit == FontStore.end())
-        {
-            auto famit = FontStore.find(IM_RICHTEXT_DEFAULT_FONTFAMILY);
-        }
+            famit = FontStore.find(IM_RICHTEXT_DEFAULT_FONTFAMILY);
 
         return famit;
     }

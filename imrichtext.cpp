@@ -164,12 +164,8 @@ namespace ImRichText
         {
         case TokenType::Text: return "Text";
         case TokenType::HorizontalRule: return "HorizontalRule";
-        case TokenType::CodeBlockStart: return "CodeBlockStart";
-        case TokenType::CodeBlockEnd: return "CodeBlockEnd";
         case TokenType::ListItemBullet: return "ListItemBullet";
         case TokenType::ListItemNumbered: return "ListItemNumbered";
-        case TokenType::ListStart: return "ListStart";
-        case TokenType::ListEnd: return "ListEnd";
         default: return "InvalidToken";
         }
     }
@@ -380,16 +376,20 @@ namespace ImRichText
         StyleWidth = 128,
         StyleListBulletType = 256,
         StyleHAlignment = 512,
-        StyleVAlignment = 1024
+        StyleVAlignment = 1024,
+        StylePaddingTop = 2048,
+        StylePaddingBottom = 4096,
+        StylePaddingLeft = 8192,
+        StylePaddingRight = 16384
     };
 
-    StyleProperty PopulateSegmentStyle(SegmentStyle& style,
+    int PopulateSegmentStyle(SegmentStyle& style,
         const SegmentStyle& parentStyle,
         std::string_view stylePropName,
         std::string_view stylePropVal,
         const RenderConfig& config)
     {
-        StyleProperty prop = StyleProperty::NoStyleChange;
+        int prop = NoStyleChange;
 
         if (AreSame(stylePropName, "font-size"))
         {
@@ -404,7 +404,7 @@ namespace ImRichText
             else
                 style.font.size = ExtractFloatWithUnit(stylePropVal, config.DefaultFontSize * config.FontScale,
                     config.DefaultFontSize * config.FontScale, parentStyle.font.size, config.FontScale);
-            prop = StyleProperty::StyleFontSize;
+            prop = StyleFontSize;
 
         }
         else if (AreSame(stylePropName, "font-weight"))
@@ -425,27 +425,27 @@ namespace ImRichText
                 style.font.light = weight < 400;
             }
 
-            prop = StyleProperty::StyleFontWeight;
+            prop = StyleFontWeight;
         }
         else if (AreSame(stylePropName, "background-color") || AreSame(stylePropName, "background"))
         {
             style.bgcolor = ExtractColor(stylePropVal, config.NamedColor, config.UserData);
-            prop = StyleProperty::StyleBgColor;
+            prop = StyleBgColor;
         }
         else if (AreSame(stylePropName, "color"))
         {
             style.fgcolor = ExtractColor(stylePropVal, config.NamedColor, config.UserData);
-            prop = StyleProperty::StyleFgColor;
+            prop = StyleFgColor;
         }
         else if (AreSame(stylePropName, "width"))
         {
             style.width = ExtractFloatWithUnit(stylePropVal, 0, config.DefaultFontSize * config.FontScale, parentStyle.width, config.Scale);
-            prop = StyleProperty::StyleWidth;
+            prop = StyleWidth;
         }
         else if (AreSame(stylePropName, "height"))
         {
             style.height = ExtractFloatWithUnit(stylePropVal, 0, config.DefaultFontSize * config.FontScale, parentStyle.height, config.Scale);
-            prop = StyleProperty::StyleHeight;
+            prop = StyleHeight;
         }
         else if (AreSame(stylePropName, "alignment") || AreSame(stylePropName, "text-align"))
         {
@@ -453,44 +453,50 @@ namespace ImRichText
                 AreSame(stylePropVal, "right") ? HorizontalAlignment::Right :
                 AreSame(stylePropVal, "center") ? HorizontalAlignment::Center :
                 HorizontalAlignment::Left;
-            prop = StyleProperty::StyleHAlignment;
+            prop = StyleHAlignment;
         }
         else if (AreSame(stylePropName, "vertical-align"))
         {
             style.alignmentV = AreSame(stylePropVal, "top") ? VerticalAlignment::Top :
                 AreSame(stylePropVal, "bottom") ? VerticalAlignment::Bottom :
                 VerticalAlignment::Center;
-            prop = StyleProperty::StyleVAlignment;
+            prop = StyleVAlignment;
         }
         else if (AreSame(stylePropName, "font-family"))
         {
             style.font.family = stylePropVal;
-            prop = StyleProperty::StyleFontFamily;
+            prop = StyleFontFamily;
         }
         else if (AreSame(stylePropName, "padding"))
         {
             auto val = ExtractFloatWithUnit(stylePropVal, 0.f, config.DefaultFontSize * config.FontScale, parentStyle.height, config.Scale);
             style.padding.top = style.padding.right = style.padding.left = style.padding.bottom = val;
+            prop = StylePaddingBottom | StylePaddingLeft | StylePaddingRight |
+                StylePaddingTop;
         }
         else if (AreSame(stylePropName, "padding-top"))
         {
             auto val = ExtractFloatWithUnit(stylePropVal, 0.f, config.DefaultFontSize * config.FontScale, parentStyle.height, config.Scale);
             style.padding.top = val;
+            prop = StylePaddingTop;
         }
         else if (AreSame(stylePropName, "padding-bottom"))
         {
             auto val = ExtractFloatWithUnit(stylePropVal, 0.f, config.DefaultFontSize * config.FontScale, parentStyle.height, config.Scale);
             style.padding.bottom = val;
+            prop = StylePaddingBottom;
         }
         else if (AreSame(stylePropName, "padding-left"))
         {
             auto val = ExtractFloatWithUnit(stylePropVal, 0.f, config.DefaultFontSize * config.FontScale, parentStyle.height, config.Scale);
             style.padding.left = val;
+            prop = StylePaddingLeft;
         }
         else if (AreSame(stylePropName, "padding-right"))
         {
             auto val = ExtractFloatWithUnit(stylePropVal, 0.f, config.DefaultFontSize * config.FontScale, parentStyle.height, config.Scale);
             style.padding.right = val;
+            prop = StylePaddingRight;
         }
         else if (AreSame(stylePropName, "font-style"))
         {
@@ -499,7 +505,7 @@ namespace ImRichText
                 style.font.italics = true;
             else ERROR("Invalid font-style property value [%.*s]\n",
                 (int)stylePropVal.size(), stylePropVal.data());
-            prop = StyleProperty::StyleFontStyle;
+            prop = StyleFontStyle;
         }
         else if (AreSame(stylePropName, "list-style-type"))
         {
@@ -509,7 +515,7 @@ namespace ImRichText
             else if (AreSame(stylePropVal, "solidsquare")) style.list.itemStyle = BulletType::FilledSquare;
             else if (AreSame(stylePropVal, "custom")) style.list.itemStyle = BulletType::Custom;
             // TODO: Others...
-            prop = StyleProperty::StyleListBulletType;
+            prop = StyleListBulletType;
         }
         else
         {
@@ -1022,7 +1028,7 @@ namespace ImRichText
     int ExtractStyleParams(const char* text, int end, const RenderConfig& config, SegmentStyle& style, const SegmentStyle& initialStyle, int& idx)
     {
         const auto& parentStyle = CurrentStackPos > 0 ? TagStack[CurrentStackPos - 1].second : initialStyle;
-        int result = StyleProperty::NoStyleChange;
+        int result = NoStyleChange;
 
         // Extract all attributes
         while ((idx < end) && (text[idx] != config.TagEnd) && (text[idx] != '/'))
@@ -1160,56 +1166,107 @@ namespace ImRichText
         --CurrentStackPos;
     }
 
-    SegmentDetails& UpdateSegmentStyle(bool isHeader, bool isRawText, std::string_view currTag,
-        SegmentStyle& styleprops, const SegmentStyle& parentStyle, DrawableLine& line, 
-        int propsChanged, const RenderConfig& config)
+    enum TagType
+    {
+        Unknonwn,
+        Bold,
+        Italics,
+        Mark,
+        Small,
+        Span,
+        List,
+        ListItem,
+        Paragraph,
+        Header,
+        RawText,
+        Blockquote,
+        Subscript,
+        Superscript,
+        Hr,
+        LineBreak,
+        CodeBlock
+    };
+
+    TagType GetTagType(std::string_view currTag)
+    {
+        if (AreSame(currTag, "b") || AreSame(currTag, "strong")) return TagType::Bold;
+        else if (AreSame(currTag, "i") || AreSame(currTag, "em")) return TagType::Italics;
+        else if (AreSame(currTag, "hr")) return TagType::Hr;
+        else if (AreSame(currTag, "br")) return TagType::LineBreak;
+        else if (AreSame(currTag, "span")) return TagType::Span;
+        else if (AreSame(currTag, "sub")) return TagType::Subscript;
+        else if (AreSame(currTag, "sup")) return TagType::Superscript;
+        else if (AreSame(currTag, "mark")) return TagType::Mark;
+        else if (AreSame(currTag, "small")) return TagType::Small;
+        else if (AreSame(currTag, "ul") || AreSame(currTag, "ol")) return TagType::List;
+        else if (AreSame(currTag, "p")) return TagType::Paragraph;
+        else if (currTag.size() == 2u && (currTag[0] == 'h' || currTag[0] == 'H') && std::isdigit(currTag[1])) return TagType::Header;
+        else if (AreSame(currTag, "li")) return TagType::ListItem;
+        else if (AreSame(currTag, "pre")) return TagType::RawText;
+        else if (AreSame(currTag, "blockquote")) return TagType::Blockquote;
+        else if (AreSame(currTag, "code")) return TagType::CodeBlock;
+        return TagType::Unknonwn;
+    }
+
+    SegmentDetails& UpdateSegmentStyle(TagType tagType, std::string_view currTag, 
+        SegmentStyle& styleprops, const SegmentStyle& parentStyle,
+        DrawableLine& line, int propsChanged, const RenderConfig& config)
     {
         assert(config.GetFont != nullptr);
 
-        if (isHeader)
+        if (tagType == TagType::Header)
         {
             styleprops.font.size = config.HFontSizes[currTag[1] - '1'] * config.FontScale;
             styleprops.font.bold = true;
             styleprops.font.font = config.GetFont(styleprops.font.family, styleprops.font.size,
                 styleprops.font.bold, styleprops.font.italics, styleprops.font.light, config.UserData);
         }
-        else if (isRawText)
+        else if (tagType == TagType::RawText || tagType == TagType::CodeBlock)
         {
             styleprops.font.family = IM_RICHTEXT_MONOSPACE_FONTFAMILY;
-            propsChanged = propsChanged | StyleProperty::StyleFontFamily;
+            propsChanged = propsChanged | StyleFontFamily;
+
+            if (tagType == TagType::CodeBlock)
+            {
+                if ((propsChanged & StylePaddingTop) == 0) styleprops.padding.top = config.CodeBlockPadding;
+                if ((propsChanged & StylePaddingBottom) == 0) styleprops.padding.bottom = config.CodeBlockPadding;
+                if ((propsChanged & StylePaddingLeft) == 0) styleprops.padding.left = config.CodeBlockPadding;
+                if ((propsChanged & StylePaddingRight) == 0) styleprops.padding.right = config.CodeBlockPadding;
+                if ((propsChanged & StyleBgColor) == 0) styleprops.bgcolor = config.CodeBlockBg;
+            }
         }
-        else if (AreSame(currTag, "i") || AreSame(currTag, "em"))
+        else if (tagType == TagType::Italics)
         {
             styleprops.font.italics = true;
-            propsChanged = propsChanged | StyleProperty::StyleFontStyle;
+            propsChanged = propsChanged | StyleFontStyle;
         }
-        else if (AreSame(currTag, "b") || AreSame(currTag, "strong"))
+        else if (tagType == TagType::Bold)
         {
             styleprops.font.bold = true;
-            propsChanged = propsChanged | StyleProperty::StyleFontStyle;
+            propsChanged = propsChanged | StyleFontStyle;
         }
-        else if (AreSame(currTag, "mark"))
+        else if (tagType == TagType::Mark)
         {
-            styleprops.bgcolor = config.MarkHighlight;
-            propsChanged = propsChanged | StyleProperty::StyleBgColor;
+            if ((propsChanged & StyleBgColor) == 0) styleprops.bgcolor = config.MarkHighlight;
+            propsChanged = propsChanged | StyleBgColor;
         }
-        else if (AreSame(currTag, "small"))
+        else if (tagType == TagType::Small)
         {
             styleprops.font.size = parentStyle.font.size * 0.8f;
-            propsChanged = propsChanged | StyleProperty::StyleFontSize;
+            propsChanged = propsChanged | StyleFontSize;
         }
-        else if (AreSame(currTag, "sup"))
+        else if (tagType == TagType::Superscript)
         {
             styleprops.font.size *= config.ScaleSuperscript;
-            propsChanged = propsChanged | StyleProperty::StyleFontSize;
+            propsChanged = propsChanged | StyleFontSize;
         }
-        else if (AreSame(currTag, "sub"))
+        else if (tagType == TagType::Subscript)
         {
             styleprops.font.size *= config.ScaleSubscript;
-            propsChanged = propsChanged | StyleProperty::StyleFontSize;
+            propsChanged = propsChanged | StyleFontSize;
         }
         
-        if (propsChanged != StyleProperty::NoStyleChange)
+        if (propsChanged != NoStyleChange)
         {
             styleprops.font.font = config.GetFont(styleprops.font.family, styleprops.font.size,
                 styleprops.font.bold, styleprops.font.italics, styleprops.font.light, config.UserData);
@@ -1246,47 +1303,37 @@ namespace ImRichText
                 auto [currTag, status] = ExtractTag(text, end, config, idx, tagStart);
                 if (!status) return result;
 
-                auto isList = AreSame(currTag, "ul") || AreSame(currTag, "ol");
-                auto isListItem = AreSame(currTag, "li");
-                auto isParagraph = AreSame(currTag, "p");
-                auto isHeader = currTag.size() == 2u && (currTag[0] == 'h' || currTag[0] == 'H') && std::isdigit(currTag[1]);
-                auto isRawText = AreSame(currTag, "pre") || AreSame(currTag, "code");
-                auto isBlockquote = AreSame(currTag, "blockquote");
-                auto isSubscript = AreSame(currTag, "sub");
-                auto isSuperscript = AreSame(currTag, "sup");
-                auto isHr = AreSame(currTag, "hr");
-                auto isLineBreak = AreSame(currTag, "br");
+                auto tagType = GetTagType(currTag);
 
                 if (tagStart)
                 {
                     LOG("Entering Tag: <%.*s>\n", (int)currTag.size(), currTag.data());
                     auto& styleprops = PushTag(currTag, initialStyle);
-                    if (isSuperscript) superscriptLevel++;
-                    else if (isSubscript) subscriptLevel++;
+                    if (tagType == TagType::Superscript) superscriptLevel++;
+                    else if (tagType == TagType::Subscript) subscriptLevel++;
 
                     auto propsChanged = ExtractStyleParams(text, end, config, styleprops, initialStyle, idx);
                     const auto& parentStyle = CurrentStackPos >= 0 ? TagStack[CurrentStackPos - 1].second : initialStyle;
-                    auto& segment = UpdateSegmentStyle(isHeader, isRawText, currTag, styleprops, parentStyle, line, propsChanged, config);
+                    auto& segment = UpdateSegmentStyle(tagType, currTag, styleprops, parentStyle, 
+                        line, propsChanged, config);
                     segment.SubscriptDepth = subscriptLevel;
                     segment.SuperscriptDepth = superscriptLevel;
 
-                    if (isList)
+                    if (tagType == TagType::List)
                     {
                         listDepth++;
                         ListItemCountByDepths[listDepth]++;
-
-                        Token token;
-                        token.Type = TokenType::ListStart;
-                        AddToken(line, token, config);
                     }
-                    else if (isParagraph || isHeader || isRawText || isListItem)
+                    else if (tagType == TagType::Paragraph || tagType == TagType::Header || 
+                        tagType == TagType::RawText || tagType == TagType::ListItem || 
+                        tagType == TagType::CodeBlock)
                     {
                         line = MoveToNextLine(styleprops, listDepth, blockquoteDepth, line, result.Foreground, config);
 
-                        if (isParagraph && config.ParagraphStop > 0 && config.GetTextSize)
+                        if (tagType == TagType::Paragraph && config.ParagraphStop > 0 && config.GetTextSize)
                             line.Offset.left += config.GetTextSize(std::string_view{ LineSpaces,
                                 (std::size_t)std::min(config.ParagraphStop, 32) }, styleprops.font.font).x;
-                        else if (isListItem)
+                        else if (tagType == TagType::ListItem)
                         {
                             Token token;
                             token.Type = AreSame(currTag, "ul") ? TokenType::ListItemBullet :
@@ -1297,7 +1344,7 @@ namespace ImRichText
                             AddToken(line, token, config);
                         }
                     }
-                    else if (isBlockquote)
+                    else if (tagType == TagType::Blockquote)
                     {
                         blockquoteDepth++;
                         line = MoveToNextLine(styleprops, listDepth, blockquoteDepth, line, result.Foreground, config);
@@ -1306,7 +1353,8 @@ namespace ImRichText
                     }
                 }
 
-                selfTerminatingTag = (text[idx - 2] == '/' && text[idx - 1] == config.TagEnd) || isHr || isLineBreak;
+                selfTerminatingTag = (text[idx - 2] == '/' && text[idx - 1] == config.TagEnd) || (tagType == TagType::Hr) || 
+                    (tagType == TagType::LineBreak);
 
                 if (selfTerminatingTag || !tagStart)
                 {
@@ -1316,19 +1364,19 @@ namespace ImRichText
                         TagStack[CurrentStackPos].second : initialStyle;
                     LOG("Exiting Tag: <%.*s>\n", (int)currTag.size(), currTag.data());
 
-                    if (isList || isParagraph || isHeader || isRawText || isBlockquote)
+                    if (tagType == TagType::List || tagType == TagType::Paragraph || tagType == TagType::Header || 
+                        tagType == TagType::RawText || tagType == TagType::Blockquote || tagType == TagType::LineBreak ||
+                        tagType == TagType::CodeBlock)
                     {
-                        if (isList) {
-                            Token token;
-                            token.Type = TokenType::ListEnd;
-                            AddToken(line, token, config);
+                        if (tagType == TagType::List)
+                        {
                             ListItemCountByDepths[listDepth] = 0;
                             listDepth--;
                         }
 
                         line = MoveToNextLine(styleprops, listDepth, blockquoteDepth, line, result.Foreground, config);
 
-                        if (isBlockquote)
+                        if (tagType == TagType::Blockquote)
                         {
                             assert(!BlockquoteStack[blockquoteDepth].bounds.empty());
                             auto& bounds = BlockquoteStack[blockquoteDepth].bounds.back();
@@ -1336,7 +1384,7 @@ namespace ImRichText
                             bounds.second = ImVec2{ lastLine.width() + bounds.first.x, lastLine.Content.top + lastLine.height() };
                             blockquoteDepth--;
                         }
-                        else if (isHeader)
+                        else if (tagType == TagType::Header)
                         {
                             // Add properties for horizontal line below header
                             auto& style = line.Segments.back().Style;
@@ -1352,7 +1400,7 @@ namespace ImRichText
                             line = MoveToNextLine(styleprops, listDepth, blockquoteDepth, line, result.Foreground, config);
                         }
                     }
-                    else if (isHr)
+                    else if (tagType == TagType::Hr)
                     {
                         // Since hr style is popped, refer to next item in stack
                         auto& prevstyle = TagStack[CurrentStackPos + 1].second;
@@ -1365,20 +1413,12 @@ namespace ImRichText
 
                         line = MoveToNextLine(styleprops, listDepth, blockquoteDepth, line, result.Foreground, config);
                     }
-                    else if (isLineBreak)
-                    {
-                        line = MoveToNextLine(styleprops, listDepth, blockquoteDepth, line, result.Foreground, config);
-                    }
-                    else if (isSuperscript || isSubscript ||
-                        AreSame(currTag, "i") || AreSame(currTag, "b") ||
-                        AreSame(currTag, "em") || AreSame(currTag, "strong") ||
-                        AreSame(currTag, "mark"))
+                    else
                     {
                         AddSegment(line, styleprops, config);
 
-                        // Superscript offsets are cumulative in nature
-                        if (isSuperscript) superscriptLevel--;
-                        else if (isSubscript) subscriptLevel--;
+                        if (tagType == TagType::Superscript) superscriptLevel--;
+                        else if (tagType == TagType::Subscript) subscriptLevel--;
                     }
 
                     if (selfTerminatingTag) TagStack[CurrentStackPos + 1] = std::make_pair(std::string_view{}, SegmentStyle{});
@@ -1625,11 +1665,8 @@ namespace ImRichText
 
         for (const auto& token : segment.Tokens)
         {
-            if (token.Type != TokenType::ListEnd && token.Type != TokenType::ListStart)
-            {
-                if (drawTokens && !DrawToken(drawList, token, initpos, style, config))
-                    drawTokens = false;
-            }
+            if (drawTokens && !DrawToken(drawList, token, initpos, style, config))
+                drawTokens = false;
         }
 
         DrawDebugRect(ContentTypeSegment, drawList, segment.Bounds.start(initpos), segment.Bounds.end(initpos), config);
