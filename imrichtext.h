@@ -157,7 +157,6 @@ namespace ImRichText
         bool HasText = false;
         bool HasSuperscript = false;
         bool HasSubscript = false;
-        bool InsideCodeBlock = false;
 
         float width() const { return Content.width + Offset.left + Offset.right; }
         float height() const { return Content.height + Offset.top + Offset.bottom; }

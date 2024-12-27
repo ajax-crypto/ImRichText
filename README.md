@@ -18,7 +18,6 @@ ImRichText::Draw(rtf.data(), 0, rtf.size());
 ```
 ![Basic screenshot](https://raw.githubusercontent.com/ajax-crypto/ImRichText/refs/heads/main/screenshots/basic.png)
 
-
 ## How to use it?
 Just include the .h and .cpp files in your project. (You will need a C++17 compiler)
 
@@ -33,9 +32,9 @@ The following subset of HTML tags/CSS properties are supported:
 | sup/sub | Superscript/Subscript | Yes[^1] |
 | hr | Horizontal line | Yes |
 | h1...h6 | Header (bold) text with a line underneath | Yes |
-| ul | Un-numbered list (with bullets) |  _Under progress_ |
-| ol | Numbered list (with nested numberings i.e. 1.2.3) |  _Under progress_ |
-| li | List Item |  _Under progress_ |
+| ul | Un-numbered list (with bullets) | Yes |
+| ol | Numbered list (with nested numberings i.e. 1.2.3) | Yes |
+| li | List Item | Yes |
 | br | Line Break | Yes |
 | b/strong | Bold block of text | Yes |
 | i/em | Italics block of text | Yes |
@@ -50,8 +49,6 @@ The following subset of HTML tags/CSS properties are supported:
 | blink | Make current block of text blink | **Not Implemented** |
 | marquee | Make current block of text scroll horizontally | **Not Implemented** |
 
-[^1]: Nested subscript/superscript is untested at the moment
-
 ### General Style Properties
 | Property Name(s) | Value/Example |
 |------------------|:---------------|
@@ -62,19 +59,18 @@ The following subset of HTML tags/CSS properties are supported:
 | font-weight | _value between 0-800_ or `light`/`normal`/`bold` |
 | font-style | italics/oblique |
 | height/width | `px`/`em` |
-| list-style-type | (_Only for list items_) Specify type for list item bullets |
+| list-style-type | (_Only for list items_) `circle`/`disk`/`square`/`custom`[^2] |
 
 In order to handle rich text as specified above, fonts need to be managed i.e. different family, weights, sizes, etc. 
 The library internally uses default fonts (for Windows Segoe UI family for proportional and Consolas for monospace).
 However, user can provide their own font provider through `RenderConfig::GetFont` function pointer.
 
 ## Immediate Goals
-* Add cmake support (**Contributions welcome!**) (_I dislike cmake personally_)
 * Integration example with [Clay layout library](https://github.com/nicbarker/clay?tab=readme-ov-file)
 * Add support for `a`, `underline` and `strikethrough`
 * Add support for `blink` and `marquee` (Requires saving current animation state)
 * Add support for `margin` and possibly `border` (_although the utility of border is debatable_)
-* Implement support for vertical/horizontal text alignment including baseline alignment (_Under progress_)
+* Implement support for vertical/horizontal text alignment including baseline alignment (May need to use FreeType backend)
 * Roman numerals for numeberd lists
 
 ## Future Goals
@@ -82,6 +78,12 @@ However, user can provide their own font provider through `RenderConfig::GetFont
 * Internationalization support by integrating [Harfbuzz](https://github.com/harfbuzz/harfbuzz) (Unicode Bidir algo)
 * Support alternate syntax i.e. Markdown, Restructured Text, MathML, etc.
 * Add ways to remove C++ standard library dependencies
+* Text effects like "glow", "shadow", etc.
+
+## Non-Goals
+* Build scripts like cmake, build2, make, etc. This library is intended to be used by simply copying the .h/.cpp files.
+* Full-fledged support for CSS3 styling with layout
+* Although Qt's rich text in labels supports tables, tables are not supported by design, use ImGui tables instead.
 
 ## Build Dependencies
 The library depends on ImGui and C++17 standard library. It can be compiled using any C++17 compiler.
@@ -114,3 +116,6 @@ is defined as multiple blocks of text containing the same style i.e. background/
 A "block of text" is simply a run of glyphs without any "space"/"blank" characters in between. Once rich text is 
 broken down to lines, it is rendered in two phases i.e. first the background is drawn i.e. blockquote background 
 can span multiple lines. After that, the foreground i.e. text is drawn (with background/foreground colors).
+
+[^1]: Nested subscript/superscript is untested at the moment
+[^2]: Custom bullets are also possible, set `RenderConfig::DrawBullet` function pointer and `list-style-type` property to `custom`

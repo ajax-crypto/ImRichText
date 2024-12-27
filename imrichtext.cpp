@@ -228,11 +228,11 @@ namespace ImRichText
                 base *= 10.f;
             }
 
-            base = 10.f;
+            base = 0.1f;
             for (auto midx = decimal + 1; midx < (int)input.size(); ++midx)
             {
-                result += (input[midx] - '0') / base;
-                base *= 10.f;
+                result += (input[midx] - '0') * base;
+                base *= 0.1f;
             }
         }
         else
@@ -255,9 +255,9 @@ namespace ImRichText
         auto idx = (int)input.size() - 1;
         while (!std::isdigit(input[idx]) && idx >= 0) idx--;
 
-        if (AreSame(input.substr(idx + 1), "pt")) scale = 1.f / 0.75f;
+        if (AreSame(input.substr(idx + 1), "pt")) scale = 1.3333f;
         else if (AreSame(input.substr(idx + 1), "em")) scale = ems;
-        else if (input[idx + 1] == '%') scale = parent / 100.f;
+        else if (input[idx + 1] == '%') scale = parent * 0.01f;
 
         auto num = ExtractNumber(input.substr(0, idx + 1), defaultVal);
         result = num.value;
@@ -714,7 +714,6 @@ namespace ImRichText
 
             std::string_view input{ token.NestedListItemIndex, (size_t)currbuf };
             auto sz = config.GetTextSize(input, segment.Style.font.font);
-            token.Content = input;
             token.Bounds.width = sz.x;
             token.Bounds.height = sz.y;
         }
@@ -751,6 +750,7 @@ namespace ImRichText
         DrawableLine line;
         line.Segments.emplace_back();
         line.Segments.back().Style = styleprops;
+        line.BlockquoteDepth = -1;
         return line;
     }
 
@@ -808,7 +808,7 @@ namespace ImRichText
             sum += multiplier;
             multiplier *= multiplier;
         }
-        return sum * (baseFontSz / 2.f);
+        return sum * (baseFontSz * 0.5f);
     }
 
     float GetMaxSuperscriptOffset(const DrawableLine& line, float scale)
@@ -876,23 +876,23 @@ namespace ImRichText
                 if (segment.SuperscriptDepth > lastSuperscriptDepth)
                 {
                     segment.Style.font.size = lastFontSz * config.ScaleSuperscript;
-                    maxTopOffset -= segment.Style.font.size / 2.f;
+                    maxTopOffset -= segment.Style.font.size * 0.5f;
                 }
                 else if (segment.SuperscriptDepth < lastSuperscriptDepth)
                 {
-                    maxTopOffset += lastFontSz / 2.f;
+                    maxTopOffset += lastFontSz * 0.5f;
                     segment.Style.font.size = lastFontSz / config.ScaleSuperscript;
                 }
 
                 if (segment.SubscriptDepth > lastSubscriptDepth)
                 {
                     segment.Style.font.size = lastFontSz * config.ScaleSubscript;
-                    maxBottomOffset += (lastFontSz - segment.Style.font.size / 2.f);
+                    maxBottomOffset += (lastFontSz - segment.Style.font.size * 0.5f);
                 }
                 else if (segment.SubscriptDepth < lastSubscriptDepth)
                 {
                     segment.Style.font.size = lastFontSz / config.ScaleSubscript;
-                    maxBottomOffset -= segment.Style.font.size / 2.f;
+                    maxBottomOffset -= segment.Style.font.size * 0.5f;
                 }
 
                 segment.Style.superscriptOffset = maxTopOffset;
@@ -920,7 +920,7 @@ namespace ImRichText
         const DrawableLine& line, std::deque<DrawableLine>& result, const RenderConfig& config,
         bool wordwrap)
     {
-        if (IsLineEmpty(line)) return line;
+        auto isEmpty = IsLineEmpty(line);
         result.emplace_back(line);
         std::vector<int> linesModified;
 
@@ -957,7 +957,7 @@ namespace ImRichText
             for (auto& segment : line.Segments)
             {
                 // This will align the segment as vertical centre, TODO: Handle other alignments
-                segment.Bounds.top = line.Content.top + line.Offset.top + ((line.Content.height - segment.height()) / 2.f);
+                segment.Bounds.top = line.Content.top + line.Offset.top + ((line.Content.height - segment.height()) * 0.5f);
                 segment.Bounds.left = currx; // This will align left, TODO: Handle other alignments
 
                 currx += segment.Style.padding.left;
@@ -966,7 +966,7 @@ namespace ImRichText
                 {
                     token.Bounds.top = segment.Bounds.top + segment.Style.padding.top +
                         + segment.Style.superscriptOffset + segment.Style.subscriptOffset +
-                        (segment.Bounds.height - token.Bounds.height) / 2.f;
+                        ((segment.Bounds.height - token.Bounds.height) * 0.5f);
                     token.Bounds.left = currx;
                     currx += token.Bounds.width;
                 }
@@ -979,9 +979,9 @@ namespace ImRichText
                 (int)line.Segments.size());
         }
 
-        newline.Content.left = (float)(listDepth + 1) * config.ListItemIndent + 
-            (float)(blockquoteDepth + 1) * config.BlockquoteOffset;
-        newline.Content.top = lastline.Content.top + lastline.height() + config.LineGap;
+        newline.Content.left = ((float)(listDepth + 1) * config.ListItemIndent) + 
+            ((float)(blockquoteDepth + 1) * config.BlockquoteOffset);
+        newline.Content.top = lastline.Content.top + lastline.height() + (isEmpty ? 0.f : config.LineGap);
         return newline;
     }
 
@@ -1291,7 +1291,8 @@ namespace ImRichText
         DrawableLine line = CreateNewLine(initialStyle, config);
         int listDepth = -1, blockquoteDepth = -1;
         int subscriptLevel = 0, superscriptLevel = 0;
-        ImVec2 offseth{ 0.f, 0.f };
+        bool currentListIsNumbered = false;
+        std::memset(ListItemCountByDepths, 0, IM_RICHTEXT_MAX_LISTDEPTH);
 
         for (auto idx = start; idx < end;)
         {
@@ -1322,7 +1323,7 @@ namespace ImRichText
                     if (tagType == TagType::List)
                     {
                         listDepth++;
-                        ListItemCountByDepths[listDepth]++;
+                        currentListIsNumbered = AreSame(currTag, "ol");
                     }
                     else if (tagType == TagType::Paragraph || tagType == TagType::Header || 
                         tagType == TagType::RawText || tagType == TagType::ListItem || 
@@ -1332,13 +1333,14 @@ namespace ImRichText
 
                         if (tagType == TagType::Paragraph && config.ParagraphStop > 0 && config.GetTextSize)
                             line.Offset.left += config.GetTextSize(std::string_view{ LineSpaces,
-                                (std::size_t)std::min(config.ParagraphStop, 32) }, styleprops.font.font).x;
+                                (std::size_t)std::min(config.ParagraphStop, IM_RICHTEXT_MAXTABSTOP) }, styleprops.font.font).x;
                         else if (tagType == TagType::ListItem)
                         {
+                            ListItemCountByDepths[listDepth]++;
+
                             Token token;
-                            token.Type = AreSame(currTag, "ul") ? TokenType::ListItemBullet :
+                            token.Type = !currentListIsNumbered ? TokenType::ListItemBullet :
                                 TokenType::ListItemNumbered;
-                            
                             token.ListDepth = listDepth;
                             token.ListItemIndex = ListItemCountByDepths[listDepth];
                             AddToken(line, token, config);
@@ -1583,13 +1585,13 @@ namespace ImRichText
             {
             case BulletType::Circle: {
                 ImVec2 center = token.Bounds.center(initpos);
-                drawList->AddCircle(center, bulletsz / 2.f, style.fgcolor);
+                drawList->AddCircle(center, bulletsz * 0.5f, style.fgcolor);
                 break;
             }
 
             case BulletType::Disk: {
                 ImVec2 center = token.Bounds.center(initpos);
-                drawList->AddCircleFilled(center, bulletsz / 2.f, style.fgcolor);
+                drawList->AddCircleFilled(center, bulletsz * 0.5f, style.fgcolor);
                 break;
             }
 
@@ -1605,8 +1607,8 @@ namespace ImRichText
 
             case BulletType::Concentric: {
                 ImVec2 center = token.Bounds.center(initpos);
-                drawList->AddCircle(center, bulletsz / 2.f, style.fgcolor);
-                drawList->AddCircleFilled(center, bulletsz / 2.5f, style.fgcolor);
+                drawList->AddCircle(center, bulletsz * 0.5f, style.fgcolor);
+                drawList->AddCircleFilled(center, bulletsz * 0.4f, style.fgcolor);
                 break;
             }
 
@@ -1616,7 +1618,7 @@ namespace ImRichText
                 }
                 else {
                     ImVec2 center = token.Bounds.center(initpos);
-                    drawList->AddCircleFilled(center, bulletsz / 2.f, style.fgcolor);
+                    drawList->AddCircleFilled(center, bulletsz * 0.5f, style.fgcolor);
                 }
                 break;
             }
@@ -1629,8 +1631,7 @@ namespace ImRichText
         }
         else if (token.Type == TokenType::ListItemNumbered)
         {
-            drawList->AddText(token.Bounds.start(initpos), style.fgcolor, token.Content.data(), token.Content.data() +
-                token.Content.size());
+            drawList->AddText(token.Bounds.start(initpos), style.fgcolor, token.NestedListItemIndex);
             DrawDebugRect(ContentTypeToken, drawList, token.Bounds.start(initpos), token.Bounds.end(initpos), config);
         }
         else
