@@ -7,14 +7,33 @@
 
 Implementation of Rich Text Rendering for [ImGui](https://github.com/ocornut/imgui) (**ASCII text only**) akin to Qt support for it. Use it as follows:
 ```c++
-std::string rtf = "2<sup>2</sup> equals 4  <hr style=\"height: 4px; color: sienna;\"/>"
-            "<p style=\"color: rgb(150, 0, 0);\">Paragraph <b>bold <i>italics</i> bold2 </b></p>"
-            "<h1 style=\"color: darkblue;\">Heading&Tab;</h1>"
-            "<span style='background: teal; color: white;'>White on Teal</span><br/>"
-            "<mark>This is highlighted! <small>This is small...</small></mark>";
-auto config = ImRichText::GetDefaultConfig({ 600.f, 800.f }, 24.f, 1.5f);
+// Do not cache anything
+std::string rtf = "<s><q>Quotation </q><cite>Citation</cite></s><ul style='font-size: 36px;'><li>item</li><li>item</li></ul>";
+
+// This creates cacheable drawables after parsing
+auto id = ImRichText::CreateRichText("2<sup>2</sup> equals 4  <hr style=\"height: 4px; color: sienna;\"/>"
+    "<p style=\"color: rgb(150, 0, 0);\">Paragraph <b>bold <i>italics</i> bold2 </b></p>"
+    "<h1 style=\"color: darkblue;\">Heading&Tab;</h1>"
+    "<span style='background: teal; color: white;'>White on Teal</span><br/>"
+    "<mark>This is highlighted! <small>This is small...</small></mark>");
+
+auto config = ImRichText::GetDefaultConfig({ -1.f, -1.f }, 24.f, 1.5f);
+config->Scale = 2.f;
 ImRichText::PushConfig(*config);
-ImRichText::Draw(rtf.data(), 0, rtf.size());
+
+while (<event-loop>)
+{
+    if (ImGui::Begin(...))
+    {
+        // ... other widgets
+        ImRichText::GetCurrentConfig()->DefaultBgColor = ImColor{ 255, 255, 255 };
+        ImRichText::Show(rtf.data(), rtf.data() + rtf.size());
+
+        ImRichText::GetCurrentConfig()->DefaultBgColor = ImColor{ 200, 200, 200 };
+        ImRichText::Show(id);
+        // ... other widgets
+    }
+}
 ```
 ![Basic screenshot](https://raw.githubusercontent.com/ajax-crypto/ImRichText/refs/heads/main/screenshots/basic.png)
 
@@ -66,11 +85,12 @@ The library internally uses default fonts (for Windows Segoe UI family for propo
 However, user can provide their own font provider through `RenderConfig::GetFont` function pointer.
 
 ## Immediate Goals
-* Integration example with [Clay layout library](https://github.com/nicbarker/clay?tab=readme-ov-file)
+* Word wrapping support
 * Add support for `a` tag (hyperlinks with click handling)
 * Add support for `blink` and `marquee` (Requires saving current animation state)
 * Add support for `margin` and possibly `border` (_although the utility of border is debatable_)
 * Implement support for vertical/horizontal text alignment including baseline alignment (May need to use FreeType backend)
+* Integration example with [Clay layout library](https://github.com/nicbarker/clay?tab=readme-ov-file)
 * Roman numerals for numeberd lists
 * Gradient fills for backgrounds
 
