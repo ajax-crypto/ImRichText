@@ -116,14 +116,16 @@ public:
         bool show_another_window = false;
         ImVec4 clear_color = ImVec4(1.f, 1.f, 1.f, 1.00f);
         std::string rtf = "2<sup>2</sup> equals 4  <hr style=\"height: 4px; color: sienna;\"/>"
-            "<blockquote><p style=\"color: rgb(150, 0, 0);\">Paragraph <b>bold <i>italics</i> bold2 </b></p></blockquote>"
+            "<blockquote>This piece of text is inside a blockquote</blockquote>"
+            "<p style=\"color: rgb(150, 0, 0);\">Paragraph <b>bold <i>italics</i> bold2 </b></p>"
             "<h1 style=\"color: darkblue;\">Heading&Tab;</h1>"
             "<ol><li> item#1 </li><li> item#2 </li></ol>"
             "<span style='background: teal; color: white;'>White on Teal</span><br/>"
             "<mark>This is highlighted! <small>This is small...</small></mark>";
 
         auto config = ImRichText::GetDefaultConfig({ 600.f, 800.f }, 24.f, 1.5f);
-        config->DrawDebugRects = true;
+        config->DebugContents[ImRichText::ContentTypeLine] = ImColor{ 255, 0, 0 };
+        config->DebugContents[ImRichText::ContentTypeSegment] = ImColor{ 0, 255, 0 };
         config->Scale = 2.f;
         ImRichText::PushConfig(*config);
 
@@ -163,7 +165,7 @@ public:
             if (ImGui::Begin("main-window", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
                 ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoSavedSettings))
             {
-                ImGui::Button("Test");
+                //ImGui::Button("Test");
                 ImRichText::Draw(rtf.data(), 0, rtf.size());
             }
 

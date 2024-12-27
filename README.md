@@ -1,6 +1,6 @@
 # ImRichText
 
-## Work in Progress!
+## 🚧 Work in Progress!
 
 *NOTE* : *This is not a general purpose HTML renderer, only the specified tags/properties below are targeted*
 ---
@@ -8,7 +8,8 @@
 Implementation of Rich Text Rendering for ImGui (**ASCII text only**) akin to Qt support for it. Use it as follows:
 ```c++
 std::string rtf = "2<sup>2</sup> equals 4  <hr style=\"height: 4px; color: sienna;\"/>"
-            "<blockquote><p style=\"color: rgb(150, 0, 0);\">Paragraph <b>bold <i>italics</i> bold2 </b></p></blockquote>"
+            "<blockquote>This piece of text is inside a blockquote</blockquote>"
+            "<p style=\"color: rgb(150, 0, 0);\">Paragraph <b>bold <i>italics</i> bold2 </b></p>"
             "<h1 style=\"color: darkblue;\">Heading&Tab;</h1>"
             "<ol><li> item#1 </li><li> item#2 </li></ol>"
             "<span style='background: teal; color: white;'>White on Teal</span><br/>"
@@ -31,7 +32,7 @@ The following subset of HTML tags/CSS properties are supported:
 | span  | A region of text with certain style properties | Yes |
 | p | Start a paragraph in new line (paragraph indent can be specified in `RenderConfig::ParagraphStop`) | Yes |
 | font  | Specify size, family, weight, style for a block of text | Yes |
-| sup/sub | Superscript/Subscript | Yes |
+| sup/sub | Superscript/Subscript | Yes[^1] |
 | hr | Horizontal line | Yes |
 | h1...h6 | Header (bold) text with a line underneath | Yes |
 | ul | Un-numbered list (with bullets) | Yes |
@@ -42,14 +43,22 @@ The following subset of HTML tags/CSS properties are supported:
 | i/em | Italics block of text | Yes |
 | mark | Highlight current block of text | Yes |
 | small | Reduce font size to 80% of current block | Yes |
-| blockquote | Blockquote as in HTML | Yes |
+| blockquote | Blockquote as in HTML | _Under progress_ |
 | pre | Preformatted text with monospaced font | _Under progress_ |
 | code | Use monospace font for this block of text | _Under progress_ |
+| strikethrough | Draw a horizontal line in current block of text | **Not Implemented** |
+| u | Underline current block of text | **Not Implemented** |
+| a | Make current block of text a hyperlink (handle click events) | **Not Implemented** |
+| blink | Make current block of text blink | **Not Implemented** |
+| marquee | Make current block of text scroll horizontally | **Not Implemented** |
+
+[^1]: Nested subscript/superscript is untested at the moment
 
 ### General Style Properties
 | Property Name(s) | Value/Example |
 |------------------|:---------------|
-| background/background-color/color | `rgb(r, g, b)`/`rgba(r, g, b, a)`/ [CSS color name](https://developer.mozilla.org/en-US/docs/Web/CSS/named-color) |
+| background/background-color/color | `rgb(r, g, b)`/`rgba(r, g, b, a)`/`hsl(h, s, l)`/ [CSS color name](https://developer.mozilla.org/en-US/docs/Web/CSS/named-color) |
+| padding/padding-top/etc. | `px`/`em` units |
 | font-size | `pt`/`px`/`em` (_absolute_) / % (_of parent font size_) / `xx-small`, `x-small`, `medium`, `large`, etc. |
 | font-family | _name of font family_ |
 | font-weight | _value between 0-800_ or `light`/`normal`/`bold` |
@@ -61,14 +70,23 @@ In order to handle rich text as specified above, fonts need to be managed i.e. d
 The library internally uses default fonts (for Windows Segoe UI family for proportional and Consolas for monospace).
 However, user can provide their own font provider through `RenderConfig::GetFont` function pointer.
 
-## Future Goals
+## Immediate Goals
 * Add cmake support (**Contributions welcome!**) (_I dislike cmake personally_)
 * Integration example with [Clay layout library](https://github.com/nicbarker/clay?tab=readme-ov-file)
 * Add support for `a`, `underline` and `strikethrough`
-* Add support for `margin`, `padding` and possibly `border` (_although the utility of border is debatable_)
-* Implement support for vertical/horizontal text alignment (_Under progress_)
+* Add support for `blink` and `marquee` (Requires saving current animation state)
+* Add support for `margin` and possibly `border` (_although the utility of border is debatable_)
+* Implement support for vertical/horizontal text alignment including baseline alignment (_Under progress_)
+* Roman numerals for numeberd lists
+
+## Future Goals
+* Use a library (roll your own?) to lookup font(s) based on requirements i.e. fuzzy match on family, etc.
 * Internationalization support by integrating [Harfbuzz](https://github.com/harfbuzz/harfbuzz) (Unicode Bidir algo)
 * Support alternate syntax i.e. Markdown, Restructured Text, MathML, etc.
+* Add ways to remove C++ standard library dependencies
+
+## Build Dependencies
+The library depends on ImGui and C++17 standard library. It can be compiled using any C++17 compiler.
 
 ## Build Macros 
 In order to customize certain behavior at build-time, the following macros can be used

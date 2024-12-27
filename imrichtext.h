@@ -11,15 +11,15 @@
 #define IM_RICHTEXT_MONOSPACE_FONTFAMILY "monospace"
 
 #ifndef IM_RICHTEXT_MIN_RTF_CACHESZ
-#define IM_RICHTEXT_MIN_RTF_CACHESZ 128
+#define IM_RICHTEXT_MIN_RTF_CACHESZ 64
 #endif
 
 #ifndef IM_RICHTEXT_MAXDEPTH
-#define IM_RICHTEXT_MAXDEPTH 256
+#define IM_RICHTEXT_MAXDEPTH 32
 #endif
 
 #ifndef IM_RICHTEXT_MAX_LISTDEPTH
-#define IM_RICHTEXT_MAX_LISTDEPTH 256
+#define IM_RICHTEXT_MAX_LISTDEPTH 16
 #endif
 
 #ifndef IM_RICHTEXT_MAX_LISTITEM
@@ -28,6 +28,12 @@
 
 #ifndef IM_RICHTEXT_MAXTABSTOP
 #define IM_RICHTEXT_MAXTABSTOP 32
+#endif
+
+#define IM_RICHTEXT_NESTED_ITEMCOUNT_STRSZ 64
+
+#ifndef IMGUI_DEFINE_MATH_OPERATORS
+ImVec2 operator+(ImVec2 lhs, ImVec2 rhs) { return ImVec2{ lhs.x + rhs.x, lhs.y + rhs.y }; }
 #endif
 
 namespace ImRichText
@@ -62,17 +68,34 @@ namespace ImRichText
         ListItemNumbered,
         ListEnd,
         HorizontalRule,
-        BlockquoteStart,
-        BlockquoteEnd,
         CodeBlockStart,
         CodeBlockEnd
+    };
+
+    struct BoundedBox
+    {
+        float top = 0.f, left = 0.f;
+        float width = 0.f, height = 0.f;
+
+        ImVec2 start(ImVec2 origin) const { return ImVec2{ left, top } + origin; }
+        ImVec2 end(ImVec2 origin) const { return ImVec2{ left + width, top + height } + origin; }
+        ImVec2 center(ImVec2 origin) const { return ImVec2{ left + (0.5f * width), top + (0.5f * height) } + origin; }
+    };
+
+    struct FourSidedMeasure
+    {
+        float top = 0.f, left = 0.f, right = 0.f, bottom = 0.f;
     };
 
     struct Token
     {
         std::string_view Content = "";
-        ImVec2 Size;
+        BoundedBox Bounds;
         TokenType Type = TokenType::Text;
+        char NestedListItemIndex[IM_RICHTEXT_NESTED_ITEMCOUNT_STRSZ];
+
+        int ListDepth = -1;
+        int ListItemIndex = -1;
     };
 
     struct FontStyle
@@ -109,6 +132,7 @@ namespace ImRichText
         VerticalAlignment alignmentV = VerticalAlignment::Center;
         FontStyle font;
         ListStyle list;
+        FourSidedMeasure padding;
         float superscriptOffset = 0.f;
         float subscriptOffset = 0.f;
     };
@@ -117,21 +141,39 @@ namespace ImRichText
     {
         std::vector<Token> Tokens;
         SegmentStyle Style;
-        int subscriptDepth = 0;
-        int superscriptDepth = 0;
+        BoundedBox Bounds;
+
+        int SubscriptDepth = 0;
+        int SuperscriptDepth = 0;
         bool HasText = false;
+
+        float width() const { return Bounds.width + Style.padding.left + Style.padding.right; }
+        float height() const { return Bounds.height + Style.padding.top + Style.padding.bottom; }
     };
 
     struct DrawableLine
     {
         std::vector<SegmentDetails> Segments;
-        ImVec2 offseth = { 0.f, 0.f };
-        ImVec2 offsetv = { 0.f, 0.f };
+        BoundedBox Content;
+        FourSidedMeasure Offset;
+
         int  BlockquoteDepth = 0;
         bool HasText = false;
         bool HasSuperscript = false;
         bool HasSubscript = false;
         bool InsideCodeBlock = false;
+
+        float width() const { return Content.width + Offset.left + Offset.right; }
+        float height() const { return Content.height + Offset.top + Offset.bottom; }
+    };
+
+    enum DebugContentType
+    {
+        ContentTypeToken,
+        ContentTypeSegment,
+        ContentTypeLine,
+        ContentTypeBg,
+        ContentTypeTotal
     };
 
     struct RenderConfig
@@ -147,7 +189,6 @@ namespace ImRichText
 
         float LineGap = 5;
         ImVec2 Bounds;
-        bool DrawDebugRects = false;
         bool WordWrap = false;
 
         int ParagraphStop = 4;
@@ -163,9 +204,9 @@ namespace ImRichText
         ImColor MarkHighlight = ImColor{ 255, 255, 0 };
 
         ImFont* (*GetFont)(std::string_view, float, bool, bool, bool, void*);
-        ImVec2(*GetTextSize)(std::string_view, ImFont*);
-        ImColor(*NamedColor)(const char*, void*);
-        void (*DrawBullet)(ImVec2, ImVec2, const SegmentStyle&, int*, int);
+        ImVec2  (*GetTextSize)(std::string_view, ImFont*);
+        ImColor (*NamedColor)(const char*, void*);
+        void    (*DrawBullet)(ImVec2, ImVec2, const SegmentStyle&, int, int);
 
         float HFontSizes[6] = { 36, 32, 24, 20, 16, 12 };
         ImColor HeaderLineColor = ImColor(128, 128, 128, 255);
@@ -174,24 +215,37 @@ namespace ImRichText
         ImColor BlockquoteBg = { 0.5f, 0.5f, 0.5f, 1.0f };
         float BlockquotePadding = 5.f;
         float BlockquoteOffset = 15.f;
-        float BlockquoteMargins = 10.f;
         float BlockquoteBarWidth = 5.f;
 
         float BulletSizeScale = 2.f;
         float ScaleSuperscript = 0.62f;
         float ScaleSubscript = 0.62f;
-        float DefaultHrVerticalMargins = 8.f;
+        float HrVerticalMargins = 5.f;
         void* UserData = nullptr;
+
+        ImColor DebugContents[ContentTypeTotal] = {
+            IM_COL32_BLACK_TRANS, IM_COL32_BLACK_TRANS, 
+            IM_COL32_BLACK_TRANS, IM_COL32_BLACK_TRANS
+        };
+    };
+
+    struct BackgroundShape
+    {
+        ImVec2 Start, End;
+        ImColor Color;
+    };
+
+    struct Drawables
+    {
+        std::deque<DrawableLine> Foreground;
+        std::deque<BackgroundShape> Background;
     };
 
     [[nodiscard]] RenderConfig* GetDefaultConfig(ImVec2 Bounds, float defaultFontSize, float fontScale = 1.f, bool skipDefaultFontLoading = false);
-    [[nodiscard]] std::deque<DrawableLine> GetDrawableLines(const char* text, int start, int end, RenderConfig& config);
+    [[nodiscard]] Drawables GetDrawables(const char* text, int start, int end, const RenderConfig& config);
 
-#ifdef _DEBUG
-    void PrintAllTokens(const std::deque<DrawableLine>& lines);
-#endif
     void PushConfig(const RenderConfig& config);
     void PopConfig();
     void Draw(const char* text, int start = 0, int end = -1, RenderConfig* config = nullptr);
-    void Draw(const std::deque<DrawableLine>& lines, RenderConfig* config = nullptr);
+    void Draw(const Drawables& drawables, RenderConfig* config = nullptr);
 }
