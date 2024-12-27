@@ -10,10 +10,6 @@
 #define IM_RICHTEXT_DEFAULT_FONTFAMILY "default-font-family"
 #define IM_RICHTEXT_MONOSPACE_FONTFAMILY "monospace"
 
-#ifndef IM_RICHTEXT_MIN_RTF_CACHESZ
-#define IM_RICHTEXT_MIN_RTF_CACHESZ 64
-#endif
-
 #ifndef IM_RICHTEXT_MAXDEPTH
 #define IM_RICHTEXT_MAXDEPTH 32
 #endif
@@ -67,7 +63,7 @@ namespace ImRichText
         Text,
         ListItemBullet,
         ListItemNumbered,
-        HorizontalRule
+        HorizontalRule,
     };
 
     struct BoundedBox
@@ -204,10 +200,11 @@ namespace ImRichText
         ImColor DefaultBgColor = IM_COL32_WHITE;
         ImColor MarkHighlight = ImColor{ 255, 255, 0 };
 
-        ImFont* (*GetFont)(std::string_view, float, bool, bool, bool, void*);
-        ImVec2  (*GetTextSize)(std::string_view, ImFont*);
-        ImColor (*NamedColor)(const char*, void*);
-        void    (*DrawBullet)(ImVec2, ImVec2, const SegmentStyle&, int, int);
+        ImFont* (*GetFont)(std::string_view, float, bool, bool, bool, void*) = nullptr;
+        ImVec2  (*GetTextSize)(std::string_view, ImFont*) = nullptr;
+        ImColor (*NamedColor)(const char*, void*) = nullptr;
+        void    (*DrawBullet)(ImVec2, ImVec2, const SegmentStyle&, int, int, void*) = nullptr;
+        void    (*HandleAttribute)(std::string_view, std::string_view, std::string_view, void*) = nullptr;
 
         float HFontSizes[6] = { 36, 32, 24, 20, 16, 12 };
         ImColor HeaderLineColor = ImColor(128, 128, 128, 255);
@@ -247,11 +244,22 @@ namespace ImRichText
         std::deque<BackgroundShape> Background;
     };
 
+    // RenderConfig related functions. In order to render rich text, such configs should be pushed/popped as desired 
     [[nodiscard]] RenderConfig* GetDefaultConfig(ImVec2 Bounds, float defaultFontSize, float fontScale = 1.f, bool skipDefaultFontLoading = false);
-    [[nodiscard]] Drawables GetDrawables(const char* text, int start, int end, const RenderConfig& config);
-
+    [[nodiscard]] RenderConfig* GetCurrentConfig();
     void PushConfig(const RenderConfig& config);
     void PopConfig();
-    void Draw(const char* text, int start = 0, int end = -1, RenderConfig* config = nullptr);
-    void Draw(const Drawables& drawables, RenderConfig* config = nullptr);
+
+    // Get list of drawables from rich text
+    [[nodiscard]] Drawables GetDrawables(const char* text, const char* textend, const RenderConfig& config);
+    [[nodiscard]] ImVec2 GetBounds(const Drawables& drawables, ImVec2 bounds);
+    void Draw(const Drawables& drawables, ImVec2 pos, ImVec2 bounds, RenderConfig* config = nullptr);
+
+    // Render rich text without any drawable caching
+    bool Show(const char* text, const char* end = nullptr);
+
+    // Create cacheable rich text content
+    [[nodiscard]] std::size_t CreateRichText(const char* text, const char* end = nullptr);
+    void UpdateRichText(std::size_t id, const char* text, const char* end = nullptr);
+    bool Show(std::size_t richTextId);
 }
