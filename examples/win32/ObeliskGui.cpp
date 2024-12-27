@@ -116,7 +116,6 @@ public:
         bool show_another_window = false;
         ImVec4 clear_color = ImVec4(1.f, 1.f, 1.f, 1.00f);
         std::string rtf = "2<sup>2</sup> equals 4  <hr style=\"height: 4px; color: sienna;\"/>"
-            "<blockquote>This piece of text is inside a blockquote</blockquote>"
             "<p style=\"color: rgb(150, 0, 0);\">Paragraph <b>bold <i>italics</i> bold2 </b></p>"
             "<h1 style=\"color: darkblue;\">Heading&Tab;</h1>"
             "<ol><li> item#1 </li><li> item#2 </li></ol>"

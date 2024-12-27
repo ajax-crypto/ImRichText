@@ -8,7 +8,6 @@
 Implementation of Rich Text Rendering for ImGui (**ASCII text only**) akin to Qt support for it. Use it as follows:
 ```c++
 std::string rtf = "2<sup>2</sup> equals 4  <hr style=\"height: 4px; color: sienna;\"/>"
-            "<blockquote>This piece of text is inside a blockquote</blockquote>"
             "<p style=\"color: rgb(150, 0, 0);\">Paragraph <b>bold <i>italics</i> bold2 </b></p>"
             "<h1 style=\"color: darkblue;\">Heading&Tab;</h1>"
             "<ol><li> item#1 </li><li> item#2 </li></ol>"
@@ -18,6 +17,8 @@ auto config = ImRichText::GetDefaultConfig({ 600.f, 800.f }, 24.f, 1.5f);
 ImRichText::PushConfig(*config);
 ImRichText::Draw(rtf.data(), 0, rtf.size());
 ```
+![Basic screenshot](https://raw.githubusercontent.com/ajax-crypto/ImRichText/refs/heads/main/screenshots/basic.png)
+
 
 ## How to use it?
 Just include the .h and .cpp files in your project. (You will need a C++17 compiler)
