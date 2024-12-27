@@ -5,7 +5,7 @@
 *NOTE* : *This is not a general purpose HTML renderer, only the specified tags/properties below are targeted*
 ---
 
-Implementation of Rich Text Rendering for ImGui (**ASCII text only**) akin to Qt support for it. Use it as follows:
+Implementation of Rich Text Rendering for [ImGui](https://github.com/ocornut/imgui) (**ASCII text only**) akin to Qt support for it. Use it as follows:
 ```c++
 std::string rtf = "2<sup>2</sup> equals 4  <hr style=\"height: 4px; color: sienna;\"/>"
             "<p style=\"color: rgb(150, 0, 0);\">Paragraph <b>bold <i>italics</i> bold2 </b></p>"
@@ -43,8 +43,8 @@ The following subset of HTML tags/CSS properties are supported:
 | blockquote | Blockquote as in HTML | _Under progress_ |
 | pre | Preformatted text with monospaced font | _Under progress_ |
 | code | Use monospace font for this block of text | _Under progress_ |
-| strikethrough | Draw a horizontal line in current block of text | **Not Implemented** |
-| u | Underline current block of text | **Not Implemented** |
+| s/del | Draw a horizontal line in current block of text | Yes |
+| u | Underline current block of text | Yes[^3] |
 | a | Make current block of text a hyperlink (handle click events) | **Not Implemented** |
 | blink | Make current block of text blink | **Not Implemented** |
 | marquee | Make current block of text scroll horizontally | **Not Implemented** |
@@ -67,16 +67,16 @@ However, user can provide their own font provider through `RenderConfig::GetFont
 
 ## Immediate Goals
 * Integration example with [Clay layout library](https://github.com/nicbarker/clay?tab=readme-ov-file)
-* Add support for `a`, `underline` and `strikethrough`
+* Add support for `a` tag (hyperlinks with click handling)
 * Add support for `blink` and `marquee` (Requires saving current animation state)
 * Add support for `margin` and possibly `border` (_although the utility of border is debatable_)
 * Implement support for vertical/horizontal text alignment including baseline alignment (May need to use FreeType backend)
 * Roman numerals for numeberd lists
+* Gradient fills for backgrounds
 
 ## Future Goals
 * Use a library (roll your own?) to lookup font(s) based on requirements i.e. fuzzy match on family, etc.
 * Internationalization support by integrating [Harfbuzz](https://github.com/harfbuzz/harfbuzz) (Unicode Bidir algo)
-* Support alternate syntax i.e. Markdown, Restructured Text, MathML, etc.
 * Add ways to remove C++ standard library dependencies
 * Text effects like "glow", "shadow", etc.
 
@@ -84,6 +84,7 @@ However, user can provide their own font provider through `RenderConfig::GetFont
 * Build scripts like cmake, build2, make, etc. This library is intended to be used by simply copying the .h/.cpp files.
 * Full-fledged support for CSS3 styling with layout
 * Although Qt's rich text in labels supports tables, tables are not supported by design, use ImGui tables instead.
+* Support alternate syntax i.e. Markdown, Restructured Text, MathML, etc.
 
 ## Build Dependencies
 The library depends on ImGui and C++17 standard library. It can be compiled using any C++17 compiler.
@@ -119,3 +120,4 @@ can span multiple lines. After that, the foreground i.e. text is drawn (with bac
 
 [^1]: Nested subscript/superscript is untested at the moment
 [^2]: Custom bullets are also possible, set `RenderConfig::DrawBullet` function pointer and `list-style-type` property to `custom`
+[^3]: Underline text due to `<u>` tag is not baseline-underlined, but underlined beneath the whole text

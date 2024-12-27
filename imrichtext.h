@@ -44,9 +44,11 @@ namespace ImRichText
         FilledCircle,
         Disk = FilledCircle,
         Square,
-        FilledSquare,
+        Triangle,
+        Arrow,
+        CheckMark,
+        CheckBox,
         Concentric,
-        Cross,
         Custom
     };
 
@@ -102,6 +104,8 @@ namespace ImRichText
         bool bold = false;
         bool italics = false;
         bool light = false;
+        bool strike = false;
+        bool underline = false;
     };
 
     struct ListStyle

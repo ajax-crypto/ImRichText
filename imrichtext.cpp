@@ -1,6 +1,7 @@
 #include "ImRichText.h"
 #include "imrichtextfont.h"
 #include "imrichtextcolor.h"
+#include "imgui_internal.h"
 
 #include <unordered_map>
 #include <cstring>
@@ -124,10 +125,12 @@ namespace ImRichText
     }
 #pragma optimize( "", off )
 
+#ifndef IMGUI_DEFINE_MATH_OPERATORS
     [[nodiscard]] ImVec2 operator*(ImVec2 lhs, float rhs)
     {
         return ImVec2{ lhs.x * rhs, lhs.y * rhs };
     }
+#endif
 
     [[nodiscard]] bool AreSame(const std::string_view lhs, const char* rhs)
     {
@@ -213,7 +216,7 @@ namespace ImRichText
 
     [[nodiscard]] IntOrFloat ExtractNumber(std::string_view input, float defaultVal)
     {
-        float result = defaultVal, base = 1.f;
+        float result = 0.f, base = 1.f;
         bool isInt = false;
         auto idx = (int)input.size() - 1;
 
@@ -512,9 +515,10 @@ namespace ImRichText
             if (AreSame(stylePropVal, "circle")) style.list.itemStyle = BulletType::Circle;
             else if (AreSame(stylePropVal, "disk")) style.list.itemStyle = BulletType::Disk;
             else if (AreSame(stylePropVal, "square")) style.list.itemStyle = BulletType::Square;
-            else if (AreSame(stylePropVal, "solidsquare")) style.list.itemStyle = BulletType::FilledSquare;
-            else if (AreSame(stylePropVal, "custom")) style.list.itemStyle = BulletType::Custom;
-            // TODO: Others...
+            else if (AreSame(stylePropVal, "tickmark")) style.list.itemStyle = BulletType::CheckMark;
+            else if (AreSame(stylePropVal, "checkbox")) style.list.itemStyle = BulletType::CheckBox;
+            else if (AreSame(stylePropVal, "arrow")) style.list.itemStyle = BulletType::Arrow;
+            else if (AreSame(stylePropVal, "triangle")) style.list.itemStyle = BulletType::Triangle;
             prop = StyleListBulletType;
         }
         else
@@ -1171,6 +1175,8 @@ namespace ImRichText
         Unknonwn,
         Bold,
         Italics,
+        Underline,
+        Strikethrough,
         Mark,
         Small,
         Span,
@@ -1182,6 +1188,7 @@ namespace ImRichText
         Blockquote,
         Subscript,
         Superscript,
+        Quotation,
         Hr,
         LineBreak,
         CodeBlock
@@ -1190,7 +1197,7 @@ namespace ImRichText
     TagType GetTagType(std::string_view currTag)
     {
         if (AreSame(currTag, "b") || AreSame(currTag, "strong")) return TagType::Bold;
-        else if (AreSame(currTag, "i") || AreSame(currTag, "em")) return TagType::Italics;
+        else if (AreSame(currTag, "i") || AreSame(currTag, "em") || AreSame(currTag, "cite")) return TagType::Italics;
         else if (AreSame(currTag, "hr")) return TagType::Hr;
         else if (AreSame(currTag, "br")) return TagType::LineBreak;
         else if (AreSame(currTag, "span")) return TagType::Span;
@@ -1202,7 +1209,10 @@ namespace ImRichText
         else if (AreSame(currTag, "p")) return TagType::Paragraph;
         else if (currTag.size() == 2u && (currTag[0] == 'h' || currTag[0] == 'H') && std::isdigit(currTag[1])) return TagType::Header;
         else if (AreSame(currTag, "li")) return TagType::ListItem;
+        else if (AreSame(currTag, "q")) return TagType::Quotation;
         else if (AreSame(currTag, "pre")) return TagType::RawText;
+        else if (AreSame(currTag, "u")) return TagType::Underline;
+        else if (AreSame(currTag, "s") || AreSame(currTag, "del")) return TagType::Strikethrough;
         else if (AreSame(currTag, "blockquote")) return TagType::Blockquote;
         else if (AreSame(currTag, "code")) return TagType::CodeBlock;
         return TagType::Unknonwn;
@@ -1265,6 +1275,8 @@ namespace ImRichText
             styleprops.font.size *= config.ScaleSubscript;
             propsChanged = propsChanged | StyleFontSize;
         }
+        else if (tagType == TagType::Underline) styleprops.font.underline = true;
+        else if (tagType == TagType::Strikethrough) styleprops.font.strike = true;
         
         if (propsChanged != NoStyleChange)
         {
@@ -1353,6 +1365,13 @@ namespace ImRichText
                         auto& start = BlockquoteStack[blockquoteDepth].bounds.emplace_back();
                         start.first = ImVec2{ line.Content.left, line.Content.top };
                     }
+                    else if (tagType == TagType::Quotation)
+                    {
+                        Token token;
+                        token.Type = TokenType::Text;
+                        token.Content = "\"";
+                        AddToken(line, token, config);
+                    }
                 }
 
                 selfTerminatingTag = (text[idx - 2] == '/' && text[idx - 1] == config.TagEnd) || (tagType == TagType::Hr) || 
@@ -1414,6 +1433,13 @@ namespace ImRichText
                         AddToken(line, token, config);
 
                         line = MoveToNextLine(styleprops, listDepth, blockquoteDepth, line, result.Foreground, config);
+                    }
+                    else if (tagType == TagType::Quotation)
+                    {
+                        Token token;
+                        token.Type = TokenType::Text;
+                        token.Content = "\"";
+                        AddToken(line, token, config);
                     }
                     else
                     {
@@ -1596,11 +1622,6 @@ namespace ImRichText
             }
 
             case BulletType::Square: {
-                drawList->AddRect(token.Bounds.start(initpos), token.Bounds.end(initpos), style.fgcolor);
-                break;
-            }
-
-            case BulletType::FilledSquare: {
                 drawList->AddRectFilled(token.Bounds.start(initpos), token.Bounds.end(initpos), style.fgcolor);
                 break;
             }
@@ -1609,6 +1630,62 @@ namespace ImRichText
                 ImVec2 center = token.Bounds.center(initpos);
                 drawList->AddCircle(center, bulletsz * 0.5f, style.fgcolor);
                 drawList->AddCircleFilled(center, bulletsz * 0.4f, style.fgcolor);
+                break;
+            }
+
+            case BulletType::Triangle: {
+                auto startpos = token.Bounds.start(initpos);
+                auto offset = bulletsz * 0.25f;
+                ImVec2 a{ startpos.x, startpos.y },
+                       b{ startpos.x + bulletsz, startpos.y + (bulletsz * 0.5f) },
+                       c{ startpos.x, startpos.y + bulletsz };
+                drawList->AddTriangleFilled(a, b, c, style.fgcolor);
+                break;
+            }
+
+            case BulletType::Arrow: {
+                auto startpos = token.Bounds.start(initpos);
+                auto bsz2 = bulletsz * 0.5f;
+                auto bsz3 = bulletsz * 0.33333f;
+                auto bsz6 = bsz3 * 0.5f;
+                auto bsz38 = bulletsz * 0.375f;
+                ImVec2 points[7];
+                points[0] = { startpos.x, startpos.y + bsz38 };
+                points[1] = { startpos.x + bsz2, startpos.y + bsz38 };
+                points[2] = { startpos.x + bsz2, startpos.y + bsz6 };
+                points[3] = { startpos.x + bulletsz, startpos.y + bsz2 };
+                points[4] = { startpos.x + bsz2, startpos.y + bulletsz - bsz6 };
+                points[5] = { startpos.x + bsz2, startpos.y + bulletsz - bsz38 };
+                points[6] = { startpos.x, startpos.y + bulletsz - bsz38 };
+                drawList->AddRectFilled(points[0], points[5], style.fgcolor);
+                drawList->AddTriangleFilled(points[2], points[3], points[4], style.fgcolor);
+                break;
+            }
+
+            case BulletType::CheckMark: {
+                auto startpos = token.Bounds.start(initpos);
+                auto bsz3 = (bulletsz * 0.25f);
+                auto thickness = bulletsz * 0.2f;
+                ImVec2 points[3];
+                points[0] = { startpos.x, startpos.y + (2.5f * bsz3) };
+                points[1] = { startpos.x + (bulletsz * 0.3333f), startpos.y + bulletsz};
+                points[2] = { startpos.x + bulletsz, startpos.y + bsz3 };
+                drawList->AddPolyline(points, 3, style.fgcolor, 0, thickness);
+                break;
+            }
+
+            case BulletType::CheckBox: {
+                auto startpos = token.Bounds.start(initpos);
+                auto checkpos = ImVec2{ startpos.x + (bulletsz * 0.25f), startpos.y + (bulletsz * 0.25f) };
+                bulletsz *= 0.75f;
+                auto bsz3 = (bulletsz * 0.25f);
+                auto thickness = bulletsz * 0.25f;
+                ImVec2 points[3];
+                points[0] = { checkpos.x, checkpos.y + (2.5f * bsz3) };
+                points[1] = { checkpos.x + (bulletsz * 0.3333f), checkpos.y + bulletsz };
+                points[2] = { checkpos.x + bulletsz, checkpos.y + bsz3 };
+                drawList->AddPolyline(points, 3, style.fgcolor, 0, thickness);
+                drawList->AddRect(startpos, token.Bounds.end(initpos), style.fgcolor, thickness);
                 break;
             }
 
@@ -1637,14 +1714,16 @@ namespace ImRichText
         else
         {
             auto textend = token.Content.data() + token.Content.size();
+            auto startpos = token.Bounds.start(initpos);
+            auto endpos = token.Bounds.end(initpos);
+            auto halfh = token.Bounds.height * 0.5f;
 
-            if (style.bgcolor.Value != config.DefaultBgColor.Value)
-            {
-                drawList->AddRectFilled(token.Bounds.start(initpos), token.Bounds.end(initpos), style.bgcolor);
-            }
+            if (style.bgcolor.Value != config.DefaultBgColor.Value) drawList->AddRectFilled(startpos, endpos, style.bgcolor);
+            drawList->AddText(startpos, style.fgcolor, token.Content.data(), textend);
+            if (style.font.strike) drawList->AddLine(startpos + ImVec2{ 0.f, halfh }, endpos + ImVec2{ 0.f, -halfh }, style.fgcolor);
+            if (style.font.underline) drawList->AddLine(startpos + ImVec2{ 0.f, token.Bounds.height }, endpos, style.fgcolor);
 
-            drawList->AddText(token.Bounds.start(initpos), style.fgcolor, token.Content.data(), textend);
-            DrawDebugRect(ContentTypeToken, drawList, token.Bounds.start(initpos), token.Bounds.end(initpos), config);
+            DrawDebugRect(ContentTypeToken, drawList, startpos, endpos, config);
         }
 
         if ((token.Bounds.left + token.Bounds.width) > (config.Bounds.x + initpos.x)) return false;
@@ -1742,7 +1821,6 @@ namespace ImRichText
         drawList->AddRectFilled(currpos, currpos + config->Bounds, config->DefaultBgColor);
 
         DrawBackgroundLayer(drawList, currpos, drawables.Background);
-        DrawForegroundLayer(drawList, currpos, drawables.Foreground, *config);
 
         ImGui::PopClipRect();
     }
