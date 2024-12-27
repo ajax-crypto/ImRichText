@@ -115,17 +115,14 @@ public:
         bool show_demo_window = true;
         bool show_another_window = false;
         ImVec4 clear_color = ImVec4(1.f, 1.f, 1.f, 1.00f);
-        std::string rtf = "2<sup>2</sup> equals 4  <hr style=\"height: 4px; color: sienna;\"/>"
-            "<p style=\"color: rgb(150, 0, 0);\">Paragraph <b>bold <i>italics</i> bold2 </b></p>"
-            "<h1 style=\"color: darkblue;\">Heading&Tab;</h1>"
-            "<span style='background: teal; color: white;'>White on Teal</span><br/>"
-            "<mark>This is highlighted! <small>This is small...</small></mark>";
+        std::string rtf = "<s><q>Quotation </q><cite>Citation</cite></s><ul style='font-size: 36px;'><li>item</li><li>item</li></ul>";
 
         auto config = ImRichText::GetDefaultConfig({ 600.f, 800.f }, 24.f, 1.5f);
 #ifdef _DEBUG
         config->DebugContents[ImRichText::ContentTypeLine] = ImColor{ 255, 0, 0 };
         config->DebugContents[ImRichText::ContentTypeSegment] = ImColor{ 0, 255, 0 };
 #endif
+        config->ListItemBullet = ImRichText::BulletType::CheckBox;
         config->Scale = 2.f;
         ImRichText::PushConfig(*config);
 

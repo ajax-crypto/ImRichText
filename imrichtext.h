@@ -67,7 +67,7 @@ namespace ImRichText
         Text,
         ListItemBullet,
         ListItemNumbered,
-        HorizontalRule
+        HorizontalRule,
     };
 
     struct BoundedBox

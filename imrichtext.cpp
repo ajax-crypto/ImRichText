@@ -1815,13 +1815,31 @@ namespace ImRichText
     {
         config = GetRenderConfig(config);
         auto currpos = ImGui::GetCursorScreenPos();
-        auto drawList = ImGui::GetWindowDrawList();
+        auto endpos = currpos + config->Bounds;
 
-        ImGui::PushClipRect(currpos, currpos + config->Bounds, true);
-        drawList->AddRectFilled(currpos, currpos + config->Bounds, config->DefaultBgColor);
+        if (config->Bounds.x == -1.f || config->Bounds.y == -1.f) 
+        {
+            float width = 0.f;
+            for (const auto& line : drawables.Foreground)
+                width = std::max(width, line.width() + line.Content.left);
+            for (const auto& bg : drawables.Background)
+                width = std::max(width, bg.End.x);
 
-        DrawBackgroundLayer(drawList, currpos, drawables.Background);
+            const auto& lastFg = drawables.Foreground.back();
+            const auto& lastBg = drawables.Background.back();
+            endpos = { width, lastFg.height() + lastFg.Content.top };
+            config->Bounds.x = endpos.x - currpos.x;
+            config->Bounds.y = endpos.y - currpos.y;
+        }
+
+        ImGui::ItemSize(config->Bounds);
+        ImGui::PushClipRect(currpos, endpos, true);
+        ImGui::GetBackgroundDrawList()->AddRectFilled(currpos, endpos, config->DefaultBgColor);
+
+        DrawBackgroundLayer(ImGui::GetBackgroundDrawList(), currpos, drawables.Background);
+        DrawForegroundLayer(ImGui::GetForegroundDrawList(), currpos, drawables.Foreground, *config);
 
         ImGui::PopClipRect();
+        ImGui::SetCursorScreenPos(endpos);
     }
 }
