@@ -260,6 +260,8 @@ namespace ImRichText
 
     // Create cacheable rich text content
     [[nodiscard]] std::size_t CreateRichText(const char* text, const char* end = nullptr);
-    void UpdateRichText(std::size_t id, const char* text, const char* end = nullptr);
+    bool UpdateRichText(std::size_t id, const char* text, const char* end = nullptr);
+    bool RemoveRichText(std::size_t id);
+    void ClearAllRichTexts();
     bool Show(std::size_t richTextId);
 }

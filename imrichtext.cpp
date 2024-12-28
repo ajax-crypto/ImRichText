@@ -1495,6 +1495,7 @@ namespace ImRichText
         for (const auto& shape : shapes)
         {
             drawList->AddRectFilled(shape.Start + initpos, shape.End + initpos, shape.Color);
+            if (shape.End.y > (bounds.y + initpos.y)) break;
         }
     }
 
@@ -1920,24 +1921,46 @@ namespace ImRichText
         return it->second;
     }
 
-    void UpdateRichText(std::size_t id, const char* text, const char* end)
+    bool UpdateRichText(std::size_t id, const char* text, const char* end)
     {
-        auto it = RichTextStrings.begin();
-        while (it != RichTextStrings.end())
-            if (it->second == id) {
-                it = RichTextStrings.erase(it);
-                break;
-            }
-            else it++;
+        auto rit = RichTextMap.find(id);
 
-        if (it != RichTextStrings.end())
+        if (rit != RichTextMap.end())
         {
-            if (end == nullptr) end = text + std::strlen(text);
-            std::string_view key{ text, (size_t)(end - text) };
-            it = RichTextStrings.emplace(key, id).first;
-            RichTextMap[id].richText.assign(key.data(), key.size());
-            RichTextMap[id].contentChanged = true;
+            auto it = RichTextStrings.find(rit->second.richText);
+
+            if (it != RichTextStrings.end())
+            {
+                if (end == nullptr) end = text + std::strlen(text);
+                std::string_view key{ text, (size_t)(end - text) };
+                it = RichTextStrings.emplace(key, id).first;
+                RichTextMap[id].richText.assign(key.data(), key.size());
+                RichTextMap[id].contentChanged = true;
+                return true;
+            }
         }
+
+        return false;
+    }
+
+    bool RemoveRichText(std::size_t id)
+    {
+        auto it = RichTextMap.find(id);
+
+        if (it != RichTextMap.end())
+        {
+            RichTextStrings.erase(it->second.richText);
+            RichTextMap.erase(it);
+            return true;
+        }
+
+        return false;
+    }
+
+    void ClearAllRichTexts()
+    {
+        RichTextMap.clear();
+        RichTextStrings.clear();
     }
 
     bool Show(std::size_t richTextId)
@@ -1952,6 +1975,7 @@ namespace ImRichText
             if (config != drawdata.config || drawdata.contentChanged)
             {
                 drawdata.contentChanged = false;
+                drawdata.config = config;
                 drawdata.drawables = GetDrawables(drawdata.richText.data(),
                     drawdata.richText.data() + drawdata.richText.size(), *config);
             }

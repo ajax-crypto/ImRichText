@@ -56,9 +56,10 @@ The following subset of HTML tags/CSS properties are supported:
 | li | List Item | Yes |
 | br | Line Break | Yes |
 | b/strong | Bold block of text | Yes |
-| i/em | Italics block of text | Yes |
+| i/em/cite | Italics block of text | Yes |
 | mark | Highlight current block of text | Yes |
 | small | Reduce font size to 80% of current block | Yes |
+| q | Wrap text inside quotation mark | Yes |
 | blockquote | Blockquote as in HTML | _Under progress_ |
 | pre | Preformatted text with monospaced font | _Under progress_ |
 | code | Use monospace font for this block of text | _Under progress_ |
@@ -113,7 +114,6 @@ The library depends on ImGui and C++17 standard library. It can be compiled usin
 In order to customize certain behavior at build-time, the following macros can be used
 | Macro name | Functionality | Default Value |
 |------------|:--------------|:--------------|
-| `IM_RICHTEXT_MIN_RTF_CACHESZ` | Minimum RTF string size to cache the drawables from the RTF specified and reuse | 64 |
 | `IM_RICHTEXT_MAXDEPTH` | Maximum depth of nested blocks/tags in Rich Text | 32 |
 | `IM_RICHTEXT_MAX_LISTDEPTH` | Maximum depth of nested lists | 16 |
 | `IM_RICHTEXT_MAX_LISTITEM` | Maxmimum number of list items at a specific depth | 128 |
