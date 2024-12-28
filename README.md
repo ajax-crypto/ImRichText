@@ -2,7 +2,7 @@
 
 ## 🚧 Work in Progress!
 
-*NOTE* : *This is not a general purpose HTML renderer, only the specified tags/properties below are targeted*
+*NOTE* : *This is not a general purpose HTML/CSS renderer, only the specified tags/properties below are targeted*
 ---
 
 Implementation of Rich Text Rendering for [ImGui](https://github.com/ocornut/imgui) (**ASCII text only**) akin to Qt support for it. Use it as follows:
@@ -61,12 +61,12 @@ The following subset of HTML tags/CSS properties are supported:
 | small | Reduce font size to 80% of current block | Yes |
 | q | Wrap text inside quotation mark | Yes |
 | u | Underline current block of text | Yes[^3] |
-| a | Make current block of text a hyperlink (handle click events) | Yes |
+| a | Make current block of text a hyperlink (handle click events) | Yes[^4] |
 | abbr | Mark current block as an abbreviation, `title` attribute contains tooltip | Yes |
+| s/del | Draw a horizontal line through the text content | Yes |
 | blockquote | Blockquote as in HTML | _Under progress_ |
 | pre | Preformatted text with monospaced font | _Under progress_ |
 | code | Use monospace font for this block of text | _Under progress_ |
-| s/del | Draw a horizontal line in current block of text | Yes |
 | blink | Make current block of text blink | **Not Implemented** |
 | marquee | Make current block of text scroll horizontally | **Not Implemented** |
 
@@ -88,6 +88,7 @@ However, user can provide their own font provider through `RenderConfig::GetFont
 
 ## Immediate Goals
 * Word wrapping support
+* Maybe add `<center>` and `<font>` tags? (These are deprecated in HTML5)
 * Add support for `blink` and `marquee` (Requires saving current animation state)
 * Add support for `margin` and possibly `border` (_although the utility of border is debatable_)
 * Implement support for vertical/horizontal text alignment including baseline alignment (May need to use FreeType backend)
@@ -141,3 +142,4 @@ can span multiple lines. After that, the foreground i.e. text is drawn (with bac
 [^1]: Nested subscript/superscript is untested at the moment
 [^2]: Custom bullets are also possible, set `RenderConfig::DrawBullet` function pointer and `list-style-type` property to `custom`
 [^3]: Underline text due to `<u>` tag is not baseline-underlined, but underlined beneath the whole text
+[^4]: Set `RenderConfig::HandleHyperlink` function pointer to handle hyperlinks clicked

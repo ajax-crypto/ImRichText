@@ -202,11 +202,6 @@ namespace ImRichText
         ImColor DefaultBgColor = IM_COL32_WHITE;
         ImColor MarkHighlight = ImColor{ 255, 255, 0 };
         ImColor HyperlinkColor = ImColor{ 0, 50, 255 };
-        ImColor TooltipBgColor = ImColor{ 230, 230, 230 };
-        ImColor TooltipFgColor = ImColor{ 50, 50, 50 };
-        float TooltipPadding = 5.f;
-        float TooltipBorderRadius = 2.f;
-        int TooltipDrawFlags = ImDrawFlags_RoundCornersAll;
 
         ImFont* (*GetFont)(std::string_view, float, bool, bool, bool, void*) = nullptr;
         ImVec2  (*GetTextSize)(std::string_view, ImFont*) = nullptr;

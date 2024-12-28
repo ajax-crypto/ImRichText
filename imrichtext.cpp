@@ -58,6 +58,12 @@ namespace ImRichText
         bool contentChanged = false;
     };
 
+    struct TooltipData
+    {
+        ImVec2 pos;
+        std::string_view content;
+    };
+
     static std::unordered_map<std::string_view, std::size_t> RichTextStrings;
     static std::unordered_map<std::size_t, RichTextData> RichTextMap;
     static std::pair<std::string_view, SegmentStyle> TagStack[IM_RICHTEXT_MAXDEPTH];
@@ -1323,12 +1329,6 @@ namespace ImRichText
 #else
 #define DrawDebugRect(...)
 #endif
-
-    struct TooltipData
-    {
-        ImVec2 pos;
-        std::string_view content;
-    };
 
     bool DrawToken(ImDrawList* drawList, const Token& token, ImVec2 initpos,
         ImVec2 bounds, const SegmentStyle& style, const RenderConfig& config, 
