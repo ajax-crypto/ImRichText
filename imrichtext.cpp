@@ -1034,8 +1034,10 @@ namespace ImRichText
         Superscript,
         Quotation,
         Hr,
+        Abbr,
         LineBreak,
-        CodeBlock
+        CodeBlock,
+        Hyperlink
     };
 
     bool IsStyleSupported(TagType type)
@@ -1054,7 +1056,7 @@ namespace ImRichText
         }
     }
 
-    int ExtractStyleParams(const char* text, int end, std::string_view currTag, TagType tagType, const RenderConfig& config, SegmentStyle& style, const SegmentStyle& initialStyle, int& idx)
+    int ExtractAttributes(const char* text, int end, std::string_view currTag, TagType tagType, const RenderConfig& config, SegmentStyle& style, const SegmentStyle& initialStyle, int& idx)
     {
         const auto& parentStyle = CurrentStackPos > 0 ? TagStack[CurrentStackPos - 1].second : initialStyle;
         int result = NoStyleChange;
@@ -1117,6 +1119,10 @@ namespace ImRichText
                         }
                     }
                 }
+                else if (tagType == TagType::Abbr && AreSame(attribName, "title") && attribValue.has_value())
+                    style.tooltip = attribValue.value();
+                else if (tagType == TagType::Hyperlink && AreSame(attribName, "href") && attribValue.has_value())
+                    style.link = attribValue.value();
                 else if (config.HandleAttribute)
                     config.HandleAttribute(currTag, attribName, attribValue.value_or(std::string_view{}), config.UserData);
             }
@@ -1204,6 +1210,7 @@ namespace ImRichText
         else if (AreSame(currTag, "hr")) return TagType::Hr;
         else if (AreSame(currTag, "br")) return TagType::LineBreak;
         else if (AreSame(currTag, "span")) return TagType::Span;
+        else if (AreSame(currTag, "a")) return TagType::Hyperlink;
         else if (AreSame(currTag, "sub")) return TagType::Subscript;
         else if (AreSame(currTag, "sup")) return TagType::Superscript;
         else if (AreSame(currTag, "mark")) return TagType::Mark;
@@ -1218,6 +1225,7 @@ namespace ImRichText
         else if (AreSame(currTag, "s") || AreSame(currTag, "del")) return TagType::Strikethrough;
         else if (AreSame(currTag, "blockquote")) return TagType::Blockquote;
         else if (AreSame(currTag, "code")) return TagType::CodeBlock;
+        else if (AreSame(currTag, "abbr")) return TagType::Abbr;
         return TagType::Unknown;
     }
 
@@ -1288,8 +1296,15 @@ namespace ImRichText
         {
             styleprops.padding.right = config.ListItemOffset;
         }
+        else if (tagType == TagType::Hyperlink)
+        {
+            if ((propsChanged & StyleFontStyle) == 0) styleprops.font.underline = true;
+            if ((propsChanged & StyleFgColor) == 0) styleprops.fgcolor = config.HyperlinkColor;
+            propsChanged = propsChanged | StyleFontStyle;
+            propsChanged = propsChanged | StyleFgColor;
+        }
         
-        if (propsChanged != NoStyleChange)
+        if (propsChanged != NoStyleChange || tagType == TagType::Abbr)
         {
             styleprops.font.font = config.GetFont(styleprops.font.family, styleprops.font.size,
                 styleprops.font.bold, styleprops.font.italics, styleprops.font.light, config.UserData);
@@ -1309,8 +1324,15 @@ namespace ImRichText
 #define DrawDebugRect(...)
 #endif
 
+    struct TooltipData
+    {
+        ImVec2 pos;
+        std::string_view content;
+    };
+
     bool DrawToken(ImDrawList* drawList, const Token& token, ImVec2 initpos,
-        ImVec2 bounds, const SegmentStyle& style, const RenderConfig& config)
+        ImVec2 bounds, const SegmentStyle& style, const RenderConfig& config, 
+        TooltipData& tooltip)
     {
         if (token.Type == TokenType::HorizontalRule)
         {
@@ -1439,6 +1461,37 @@ namespace ImRichText
             if (style.font.strike) drawList->AddLine(startpos + ImVec2{ 0.f, halfh }, endpos + ImVec2{ 0.f, -halfh }, style.fgcolor);
             if (style.font.underline) drawList->AddLine(startpos + ImVec2{ 0.f, token.Bounds.height }, endpos, style.fgcolor);
 
+            if (!style.tooltip.empty())
+            {
+                if (!style.font.underline)
+                {
+                    auto posx = startpos.x;
+                    while (posx < endpos.x)
+                    {
+                        drawList->AddCircleFilled(ImVec2{ posx, endpos.y }, 1.f, style.fgcolor);
+                        posx += 3.f;
+                    }
+                }
+
+                auto mousepos = ImGui::GetIO().MousePos;
+                if (ImRect{ startpos, endpos }.Contains(mousepos))
+                {
+                    tooltip.pos = mousepos;
+                    tooltip.content = style.tooltip;
+                }
+            }
+            else if (!style.link.empty())
+            {
+                if (ImRect{ startpos, endpos }.Contains(ImGui::GetIO().MousePos))
+                {
+                    ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+                    if (ImGui::GetIO().MouseReleased[0] && config.HandleHyperlink)
+                        config.HandleHyperlink(style.link, config.UserData);
+                }
+                else
+                    ImGui::SetMouseCursor(ImGuiMouseCursor_Arrow);
+            }
+
             DrawDebugRect(ContentTypeToken, drawList, startpos, endpos, config);
         }
 
@@ -1447,7 +1500,7 @@ namespace ImRichText
     }
 
     bool DrawSegment(ImDrawList* drawList, const SegmentDetails& segment,
-        ImVec2 initpos, ImVec2 bounds, const RenderConfig& config)
+        ImVec2 initpos, ImVec2 bounds, const RenderConfig& config, TooltipData& tooltip)
     {
         auto popFont = false;
         if (segment.Style.font.font != nullptr)
@@ -1461,7 +1514,7 @@ namespace ImRichText
 
         for (const auto& token : segment.Tokens)
         {
-            if (drawTokens && !DrawToken(drawList, token, initpos, bounds, style, config))
+            if (drawTokens && !DrawToken(drawList, token, initpos, bounds, style, config, tooltip))
                 drawTokens = false;
         }
 
@@ -1470,7 +1523,8 @@ namespace ImRichText
         return drawTokens;
     }
 
-    void DrawForegroundLayer(ImDrawList* drawList, ImVec2 initpos, ImVec2 bounds, const std::deque<DrawableLine>& lines, const RenderConfig& config)
+    void DrawForegroundLayer(ImDrawList* drawList, ImVec2 initpos, ImVec2 bounds, const std::deque<DrawableLine>& lines, 
+        const RenderConfig& config, TooltipData& tooltip)
     {
         int listCountByDepth[IM_RICHTEXT_MAX_LISTDEPTH];
         int listDepth = -1;
@@ -1481,7 +1535,7 @@ namespace ImRichText
 
             for (const auto& segment : lines[lineidx].Segments)
             {
-                if (!DrawSegment(drawList, segment, initpos, bounds, config))
+                if (!DrawSegment(drawList, segment, initpos, bounds, config, tooltip))
                     break;
             }
 
@@ -1596,7 +1650,7 @@ namespace ImRichText
                     if (tagType == TagType::Superscript) superscriptLevel++;
                     else if (tagType == TagType::Subscript) subscriptLevel++;
 
-                    auto propsChanged = ExtractStyleParams(text, end, currTag, tagType, config, styleprops, initialStyle, idx);
+                    auto propsChanged = ExtractAttributes(text, end, currTag, tagType, config, styleprops, initialStyle, idx);
                     const auto& parentStyle = CurrentStackPos >= 0 ? TagStack[CurrentStackPos - 1].second : initialStyle;
                     auto& segment = UpdateSegmentStyle(tagType, currTag, styleprops, parentStyle,
                         line, propsChanged, config);
@@ -1877,17 +1931,30 @@ namespace ImRichText
         return result;
     }
 
+    void DrawTooltip(ImDrawList* drawList, const TooltipData& tooltip, const RenderConfig& config)
+    {
+        if (!tooltip.content.empty())
+        {
+            auto font = config.GetFont(config.DefaultFontFamily, config.DefaultFontSize, false, false, false, config.UserData);
+            ImGui::PushFont(font);
+            ImGui::SetTooltip("%.*s", (int)tooltip.content.size(), tooltip.content.data());
+            ImGui::PopFont();
+        }
+    }
+
     void Draw(const Drawables& drawables, ImVec2 pos, ImVec2 bounds, RenderConfig* config)
     {
         config = GetRenderConfig(config);
         auto endpos = pos + bounds;
-        auto drawList = ImGui::GetForegroundDrawList();
+        auto drawList = ImGui::GetCurrentWindow()->DrawList;
+        TooltipData tooltip;
 
         ImGui::PushClipRect(pos, endpos, true);
         drawList->AddRectFilled(pos, endpos, config->DefaultBgColor);
 
         DrawBackgroundLayer(drawList, pos, bounds, drawables.Background);
-        DrawForegroundLayer(drawList, pos, bounds, drawables.Foreground, *config);
+        DrawForegroundLayer(drawList, pos, bounds, drawables.Foreground, *config, tooltip);
+        DrawTooltip(drawList, tooltip, *config);
 
         ImGui::PopClipRect();
     }

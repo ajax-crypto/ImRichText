@@ -60,12 +60,13 @@ The following subset of HTML tags/CSS properties are supported:
 | mark | Highlight current block of text | Yes |
 | small | Reduce font size to 80% of current block | Yes |
 | q | Wrap text inside quotation mark | Yes |
+| u | Underline current block of text | Yes[^3] |
+| a | Make current block of text a hyperlink (handle click events) | Yes |
+| abbr | Mark current block as an abbreviation, `title` attribute contains tooltip | Yes |
 | blockquote | Blockquote as in HTML | _Under progress_ |
 | pre | Preformatted text with monospaced font | _Under progress_ |
 | code | Use monospace font for this block of text | _Under progress_ |
 | s/del | Draw a horizontal line in current block of text | Yes |
-| u | Underline current block of text | Yes[^3] |
-| a | Make current block of text a hyperlink (handle click events) | **Not Implemented** |
 | blink | Make current block of text blink | **Not Implemented** |
 | marquee | Make current block of text scroll horizontally | **Not Implemented** |
 
@@ -87,12 +88,11 @@ However, user can provide their own font provider through `RenderConfig::GetFont
 
 ## Immediate Goals
 * Word wrapping support
-* Add support for `a` tag (hyperlinks with click handling)
 * Add support for `blink` and `marquee` (Requires saving current animation state)
 * Add support for `margin` and possibly `border` (_although the utility of border is debatable_)
 * Implement support for vertical/horizontal text alignment including baseline alignment (May need to use FreeType backend)
 * Integration example with [Clay layout library](https://github.com/nicbarker/clay?tab=readme-ov-file)
-* Roman numerals for numeberd lists
+* Roman numerals for numbered lists
 * Gradient fills for backgrounds
 
 ## Future Goals

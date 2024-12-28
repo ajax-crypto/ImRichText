@@ -131,6 +131,8 @@ namespace ImRichText
         FourSidedMeasure padding;
         float superscriptOffset = 0.f;
         float subscriptOffset = 0.f;
+        std::string_view tooltip = "";
+        std::string_view link = "";
     };
 
     struct SegmentDetails
@@ -199,12 +201,19 @@ namespace ImRichText
         ImColor DefaultFgColor = IM_COL32_BLACK;
         ImColor DefaultBgColor = IM_COL32_WHITE;
         ImColor MarkHighlight = ImColor{ 255, 255, 0 };
+        ImColor HyperlinkColor = ImColor{ 0, 50, 255 };
+        ImColor TooltipBgColor = ImColor{ 230, 230, 230 };
+        ImColor TooltipFgColor = ImColor{ 50, 50, 50 };
+        float TooltipPadding = 5.f;
+        float TooltipBorderRadius = 2.f;
+        int TooltipDrawFlags = ImDrawFlags_RoundCornersAll;
 
         ImFont* (*GetFont)(std::string_view, float, bool, bool, bool, void*) = nullptr;
         ImVec2  (*GetTextSize)(std::string_view, ImFont*) = nullptr;
         ImColor (*NamedColor)(const char*, void*) = nullptr;
         void    (*DrawBullet)(ImVec2, ImVec2, const SegmentStyle&, int, int, void*) = nullptr;
         void    (*HandleAttribute)(std::string_view, std::string_view, std::string_view, void*) = nullptr;
+        void    (*HandleHyperlink)(std::string_view, void*) = nullptr;
 
         float HFontSizes[6] = { 36, 32, 24, 20, 16, 12 };
         ImColor HeaderLineColor = ImColor(128, 128, 128, 255);
