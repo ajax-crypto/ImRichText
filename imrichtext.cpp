@@ -67,7 +67,7 @@ namespace ImRichText
 
     struct AnimationData
     {
-        float xpos = 0.f;
+        std::vector<float> xoffsets;
         long long lastBlinkTime;
         long long lastMarqueeTime;
         bool isVisible = true;
@@ -755,10 +755,35 @@ namespace ImRichText
         return line;
     }
 
-    [[nodiscard]] DrawableLine MoveToNextLine(const SegmentStyle& styleprops, int listDepth, int blockquoteDepth,
-        const DrawableLine& line, std::deque<DrawableLine>& result, const RenderConfig& config, bool wordwrap = false);
+    enum TagType
+    {
+        Unknown,
+        Bold,
+        Italics,
+        Underline,
+        Strikethrough,
+        Mark,
+        Small,
+        Span,
+        List,
+        ListItem,
+        Paragraph,
+        Header,
+        RawText,
+        Blockquote,
+        Subscript,
+        Superscript,
+        Quotation,
+        Hr,
+        Abbr,
+        LineBreak,
+        CodeBlock,
+        Hyperlink,
+        Blink,
+        Marquee
+    };
 
-    std::vector<int> PerformWordWrap(std::deque<DrawableLine>& lines, int index, int listDepth, int blockquoteDepth,
+    std::vector<int> PerformWordWrap(std::deque<DrawableLine>& lines, TagType tagType, int index, int listDepth, int blockquoteDepth,
         const RenderConfig& config)
     {
         std::vector<int> result;
@@ -783,7 +808,9 @@ namespace ImRichText
 
                     if (currentx + sz.x > availwidth)
                     {
-                        currline = MoveToNextLine(segment.Style, listDepth, blockquoteDepth, currline, newlines, config);
+                        newlines.push_back(currline);
+                        currline.Segments.clear();
+                        currline.Segments.emplace_back();
                         currentx = 0.f;
                     }
 
@@ -917,34 +944,9 @@ namespace ImRichText
         return isEmpty;
     }
 
-    DrawableLine MoveToNextLine(const SegmentStyle& styleprops, int listDepth, int blockquoteDepth,
-        const DrawableLine& line, std::deque<DrawableLine>& result, const RenderConfig& config,
-        bool wordwrap)
+    void ComputeLineBounds(std::deque<DrawableLine>& result, const std::vector<int>& linesModified, 
+        const RenderConfig& config)
     {
-        auto isEmpty = IsLineEmpty(line);
-        result.emplace_back(line);
-        std::vector<int> linesModified;
-
-        if (line.Segments.size() == 1u && line.Segments.front().Tokens.size() == 1u &&
-            line.Segments.front().Tokens.front().Type == TokenType::HorizontalRule)
-        {
-            linesModified.push_back((int)result.size() - 1);
-        }
-        else
-        {
-            if (wordwrap && config.Bounds.x > 0.f) linesModified = PerformWordWrap(result, (int)result.size() - 1, listDepth, blockquoteDepth, config);
-            else linesModified.push_back((int)result.size() - 1);
-            AdjustForSuperSubscripts(linesModified, result, config);
-        }
-
-        auto& lastline = result.back();
-        auto newline = CreateNewLine(styleprops, config);
-        newline.BlockquoteDepth = blockquoteDepth;
-
-        if (blockquoteDepth > 0) newline.Offset.left = newline.Offset.right = config.BlockquotePadding;
-        if (blockquoteDepth > lastline.BlockquoteDepth) newline.Offset.top = config.BlockquotePadding;
-        else if (blockquoteDepth < lastline.BlockquoteDepth) lastline.Offset.bottom = config.BlockquotePadding;
-
         for (auto index : linesModified)
         {
             auto& line = result[index];
@@ -967,7 +969,7 @@ namespace ImRichText
                 {
                     auto& token = segment.Tokens[tokidx];
                     token.Bounds.top = segment.Bounds.top + segment.Style.padding.top +
-                        + segment.Style.superscriptOffset + segment.Style.subscriptOffset +
+                        +segment.Style.superscriptOffset + segment.Style.subscriptOffset +
                         ((segment.Bounds.height - token.Bounds.height) * 0.5f);
 
                     // TODO: Fix bullet positioning w.r.t. first text block (baseline aligned?)
@@ -984,6 +986,38 @@ namespace ImRichText
                 line.Content.left, line.Content.top, line.Content.width, line.Content.height,
                 (int)line.Segments.size());
         }
+    }
+
+    DrawableLine MoveToNextLine(const SegmentStyle& styleprops, TagType tagType, int listDepth, int blockquoteDepth,
+        DrawableLine& line, std::deque<DrawableLine>& result, const RenderConfig& config, bool isTagStart)
+    {
+        auto isEmpty = IsLineEmpty(line);
+        result.emplace_back(line);
+        std::vector<int> linesModified;
+
+        if (line.Segments.size() == 1u && line.Segments.front().Tokens.size() == 1u &&
+            line.Segments.front().Tokens.front().Type == TokenType::HorizontalRule)
+        {
+            linesModified.push_back((int)result.size() - 1);
+        }
+        else
+        {
+            if (!line.Marquee && config.Bounds.x > 0.f)
+                linesModified = PerformWordWrap(result, tagType, (int)result.size() - 1, listDepth, blockquoteDepth, config);
+            else linesModified.push_back((int)result.size() - 1);
+            AdjustForSuperSubscripts(linesModified, result, config);
+        }
+
+        auto& lastline = result.back();
+        auto newline = CreateNewLine(styleprops, config);
+        newline.BlockquoteDepth = blockquoteDepth;
+        if (isTagStart) newline.Marquee = tagType == TagType::Marquee;
+
+        if (blockquoteDepth > 0) newline.Offset.left = newline.Offset.right = config.BlockquotePadding;
+        if (blockquoteDepth > lastline.BlockquoteDepth) newline.Offset.top = config.BlockquotePadding;
+        else if (blockquoteDepth < lastline.BlockquoteDepth) lastline.Offset.bottom = config.BlockquotePadding;
+
+        ComputeLineBounds(result, linesModified, config);
 
         newline.Content.left = ((float)(listDepth + 1) * config.ListItemIndent) + 
             ((float)(blockquoteDepth + 1) * config.BlockquoteOffset);
@@ -1030,34 +1064,6 @@ namespace ImRichText
 
         return { hasEscape, isNewLine };
     }
-
-    enum TagType
-    {
-        Unknown,
-        Bold,
-        Italics,
-        Underline,
-        Strikethrough,
-        Mark,
-        Small,
-        Span,
-        List,
-        ListItem,
-        Paragraph,
-        Header,
-        RawText,
-        Blockquote,
-        Subscript,
-        Superscript,
-        Quotation,
-        Hr,
-        Abbr,
-        LineBreak,
-        CodeBlock,
-        Hyperlink,
-        Blink,
-        Marquee
-    };
 
     bool IsStyleSupported(TagType type)
     {
@@ -1348,9 +1354,9 @@ namespace ImRichText
 #define DrawDebugRect(...)
 #endif
 
-    bool DrawToken(ImDrawList* drawList, const Token& token, ImVec2 initpos,
+    bool DrawToken(ImDrawList* drawList, int lineidx, const Token& token, ImVec2 initpos,
         ImVec2 bounds, const SegmentStyle& style, const RenderConfig& config, 
-        TooltipData& tooltip, AnimationData& animation)
+        TooltipData& tooltip, AnimationData& animation, bool isMarquee)
     {
         if (style.blink && !animation.isVisible) return true;
 
@@ -1475,6 +1481,7 @@ namespace ImRichText
             auto startpos = token.Bounds.start(initpos);
             auto endpos = token.Bounds.end(initpos);
             auto halfh = token.Bounds.height * 0.5f;
+            if (isMarquee) startpos.x += animation.xoffsets[lineidx];
 
             if (style.bgcolor.Value != config.DefaultBgColor.Value) drawList->AddRectFilled(startpos, endpos, style.bgcolor);
             drawList->AddText(startpos, style.fgcolor, token.Content.data(), textend);
@@ -1519,9 +1526,9 @@ namespace ImRichText
         return true;
     }
 
-    bool DrawSegment(ImDrawList* drawList, const SegmentDetails& segment,
+    bool DrawSegment(ImDrawList* drawList, int lineidx, const SegmentDetails& segment,
         ImVec2 initpos, ImVec2 bounds, const RenderConfig& config, 
-        TooltipData& tooltip, AnimationData& animation)
+        TooltipData& tooltip, AnimationData& animation, bool isMarquee)
     {
         auto popFont = false;
         if (segment.Style.font.font != nullptr)
@@ -1535,7 +1542,8 @@ namespace ImRichText
 
         for (const auto& token : segment.Tokens)
         {
-            if (drawTokens && !DrawToken(drawList, token, initpos, bounds, style, config, tooltip, animation))
+            if (drawTokens && !DrawToken(drawList, lineidx, token, initpos, bounds, style, 
+                config, tooltip, animation, isMarquee))
                 drawTokens = false;
         }
 
@@ -1557,7 +1565,7 @@ namespace ImRichText
 
             for (const auto& segment : lines[lineidx].Segments)
             {
-                if (!DrawSegment(drawList, segment, initpos, bounds, config, tooltip, animation))
+                if (!DrawSegment(drawList, lineidx, segment, initpos, bounds, config, tooltip, animation, lines[lineidx].Marquee))
                     break;
             }
 
@@ -1596,6 +1604,13 @@ namespace ImRichText
         auto drawList = ImGui::GetCurrentWindow()->DrawList;
         TooltipData tooltip;
         auto& animation = AnimationMap[richText];
+        
+        if (animation.xoffsets.empty())
+        {
+            animation.xoffsets.resize(drawables.Foreground.size());
+            std::fill(animation.xoffsets.begin(), animation.xoffsets.end(), 0.f);
+        }
+
         auto currFrameTime = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
 
         ImGui::PushClipRect(pos, endpos, true);
@@ -1613,7 +1628,15 @@ namespace ImRichText
 
         if (currFrameTime - animation.lastMarqueeTime > IM_RICHTEXT_MARQUEE_ANIMATION_INTERVAL)
         {
-            animation.xpos += 1.f;
+            for (auto lineidx = 0; lineidx < (int)animation.xoffsets.size(); ++lineidx)
+            {
+                animation.xoffsets[lineidx] += 1.f;
+                auto linewidth = drawables.Foreground[lineidx].width();
+
+                if (animation.xoffsets[lineidx] >= linewidth)
+                    animation.xoffsets[lineidx] = -linewidth;
+            }
+
             animation.lastMarqueeTime = currFrameTime;
         }
 
@@ -1676,9 +1699,9 @@ namespace ImRichText
     Drawables GetDrawables(const char* text, const char* textend, const RenderConfig& config)
     {
         Drawables result;
-        auto end = textend - text;
-        auto start = 0;
+        int end = (int)(textend - text), start = 0;
         start = SkipSpace(text, start, end);
+
         auto initialStyle = CreateDefaultStyle(config);
         CurrentStackPos = -1;
         std::string_view currTag;
@@ -1691,6 +1714,8 @@ namespace ImRichText
         int listDepth = -1, blockquoteDepth = -1;
         int subscriptLevel = 0, superscriptLevel = 0;
         bool currentListIsNumbered = false;
+        float maxWidth = config.Bounds.x;
+        TagType tagType = TagType::Unknown;
         std::memset(ListItemCountByDepths, 0, IM_RICHTEXT_MAX_LISTDEPTH);
 
         for (auto idx = start; idx < end;)
@@ -1698,12 +1723,11 @@ namespace ImRichText
             if (text[idx] == config.TagStart)
             {
                 idx++;
-                auto tagStart = true;
-                auto selfTerminatingTag = false;
+                auto tagStart = true, selfTerminatingTag = false;
                 auto [currTag, status] = ExtractTag(text, end, config, idx, tagStart);
                 if (!status) return result;
 
-                auto tagType = GetTagType(currTag);
+                tagType = GetTagType(currTag);
                 if (tagType == TagType::Unknown)
                 {
                     ERROR("Unknown Tag encountered: <%.*s>\n", (int)currTag.size(), currTag.data());
@@ -1736,7 +1760,8 @@ namespace ImRichText
                         tagType == TagType::RawText || tagType == TagType::ListItem ||
                         tagType == TagType::CodeBlock || tagType == TagType::Marquee)
                     {
-                        line = MoveToNextLine(styleprops, listDepth, blockquoteDepth, line, result.Foreground, config);
+                        line = MoveToNextLine(styleprops, tagType, listDepth, blockquoteDepth, line, result.Foreground, config, tagStart);
+                        maxWidth = std::max(maxWidth, result.Foreground.back().Content.width);
 
                         if (tagType == TagType::Paragraph && config.ParagraphStop > 0 && config.GetTextSize)
                             line.Offset.left += config.GetTextSize(std::string_view{ LineSpaces,
@@ -1757,7 +1782,8 @@ namespace ImRichText
                     else if (tagType == TagType::Blockquote)
                     {
                         blockquoteDepth++;
-                        line = MoveToNextLine(styleprops, listDepth, blockquoteDepth, line, result.Foreground, config);
+                        line = MoveToNextLine(styleprops, tagType, listDepth, blockquoteDepth, line, result.Foreground, config, tagStart);
+                        maxWidth = std::max(maxWidth, result.Foreground.back().Content.width);
                         auto& start = BlockquoteStack[blockquoteDepth].bounds.emplace_back();
                         start.first = ImVec2{ line.Content.left, line.Content.top };
                     }
@@ -1791,7 +1817,8 @@ namespace ImRichText
                             listDepth--;
                         }
 
-                        line = MoveToNextLine(styleprops, listDepth, blockquoteDepth, line, result.Foreground, config);
+                        line = MoveToNextLine(styleprops, tagType, listDepth, blockquoteDepth, line, result.Foreground, config, tagStart);
+                        maxWidth = std::max(maxWidth, result.Foreground.back().Content.width);
 
                         if (tagType == TagType::Blockquote)
                         {
@@ -1814,7 +1841,8 @@ namespace ImRichText
                             AddToken(line, token, config);
 
                             // Move to next line for other content
-                            line = MoveToNextLine(styleprops, listDepth, blockquoteDepth, line, result.Foreground, config);
+                            line = MoveToNextLine(styleprops, tagType, listDepth, blockquoteDepth, line, result.Foreground, config, tagStart);
+                            maxWidth = std::max(maxWidth, result.Foreground.back().Content.width);
                         }
                     }
                     else if (tagType == TagType::Hr)
@@ -1822,13 +1850,15 @@ namespace ImRichText
                         // Since hr style is popped, refer to next item in stack
                         auto& prevstyle = TagStack[CurrentStackPos + 1].second;
                         prevstyle.padding.top = prevstyle.padding.bottom = config.HrVerticalMargins;
-                        line = MoveToNextLine(prevstyle, listDepth, blockquoteDepth, line, result.Foreground, config);
+                        line = MoveToNextLine(prevstyle, tagType, listDepth, blockquoteDepth, line, result.Foreground, config, tagStart);
+                        maxWidth = std::max(maxWidth, result.Foreground.back().Content.width);
 
                         Token token;
                         token.Type = TokenType::HorizontalRule;
                         AddToken(line, token, config);
 
-                        line = MoveToNextLine(styleprops, listDepth, blockquoteDepth, line, result.Foreground, config);
+                        line = MoveToNextLine(styleprops, tagType, listDepth, blockquoteDepth, line, result.Foreground, config, true);
+                        maxWidth = std::max(maxWidth, result.Foreground.back().Content.width);
                     }
                     else if (tagType == TagType::Quotation)
                     {
@@ -1847,6 +1877,7 @@ namespace ImRichText
 
                     if (selfTerminatingTag) TagStack[CurrentStackPos + 1] = std::make_pair(std::string_view{}, SegmentStyle{});
                     currTag = CurrentStackPos == -1 ? "" : TagStack[CurrentStackPos].first;
+                    tagType = TagType::Unknown;
                 }
             }
             else
@@ -1869,7 +1900,8 @@ namespace ImRichText
                             if (!subscriptLevel && !superscriptLevel)
                             {
                                 GenerateToken(line, content, curridx, start, config);
-                                line = MoveToNextLine(styleprops, listDepth, blockquoteDepth, line, result.Foreground, config);
+                                line = MoveToNextLine(styleprops, tagType, listDepth, blockquoteDepth, line, result.Foreground, config, true);
+                                maxWidth = std::max(maxWidth, result.Foreground.back().Content.width);
                                 start = curridx;
                             }
                             else
@@ -1920,7 +1952,11 @@ namespace ImRichText
                             curridx = start;
 
                             if (isNewLine && !subscriptLevel && !superscriptLevel)
-                                line = MoveToNextLine(styleprops, listDepth, blockquoteDepth, line, result.Foreground, config, true);
+                            {
+                                line = MoveToNextLine(styleprops, tagType, listDepth, blockquoteDepth, line, result.Foreground, config, true);
+                                maxWidth = std::max(maxWidth, result.Foreground.back().Content.width);
+                            }
+
                             if (hasEscape) continue;
                         }
                         else if (content[curridx] == ' ')
@@ -1948,7 +1984,11 @@ namespace ImRichText
             }
         }
 
-        MoveToNextLine(SegmentStyle{}, listDepth, blockquoteDepth, line, result.Foreground, config, true);
+        MoveToNextLine(SegmentStyle{}, tagType, listDepth, blockquoteDepth, line, result.Foreground, config, true);
+        maxWidth = std::max(maxWidth, result.Foreground.back().Content.width);
+
+        for (auto& line : result.Foreground)
+            if (line.Marquee) line.Content.width = maxWidth;
 
         for (auto depth = 0; depth < IM_RICHTEXT_MAXDEPTH; ++depth)
         {

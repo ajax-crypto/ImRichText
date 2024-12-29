@@ -115,7 +115,10 @@ public:
         bool show_demo_window = true;
         bool show_another_window = false;
         ImVec4 clear_color = ImVec4(1.f, 1.f, 1.f, 1.00f);
-        std::string rtf = "<s><q>Quotation </q><cite>Citation</cite></s><ul style='font-size: 36px;'><li>item</li><li>item</li></ul>";
+        std::string rtf = "<blink>This is blinking</blink>"
+            "<marquee>This is moving...</marquee>"
+            "<s><q>Quotation </q><cite>Citation</cite></s>"
+            "<ul style='font-size: 36px;'><li>item</li><li>item</li></ul>";
         auto id = ImRichText::CreateRichText("2<sup>2</sup> equals 4  <hr style=\"height: 4px; color: sienna;\"/>"
             "<p style=\"color: rgb(150, 0, 0);\">Paragraph <b>bold <i>italics</i> bold2 </b></p>"
             "<h1 style=\"color: darkblue;\">Heading&Tab;</h1>"
@@ -123,6 +126,7 @@ public:
             "<mark>This is highlighted! <small>This is small...</small></mark>");
 
         auto config = ImRichText::GetDefaultConfig({ -1.f, -1.f }, 24.f, 1.5f);
+        config->ListItemBullet = ImRichText::BulletType::Arrow;
 #ifdef _DEBUG
         config->DebugContents[ImRichText::ContentTypeLine] = ImColor{ 255, 0, 0 };
         config->DebugContents[ImRichText::ContentTypeSegment] = ImColor{ 0, 255, 0 };
