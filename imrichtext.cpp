@@ -10,6 +10,7 @@
 #include <cstdlib>
 #include <string>
 #include <tuple>
+#include <chrono>
 
 #ifdef _DEBUG
 #include <cstdio>
@@ -64,9 +65,19 @@ namespace ImRichText
         std::string_view content;
     };
 
+    struct AnimationData
+    {
+        float xpos = 0.f;
+        long long lastBlinkTime;
+        long long lastMarqueeTime;
+        bool isVisible = true;
+    };
+
     static std::unordered_map<std::string_view, std::size_t> RichTextStrings;
     static std::unordered_map<std::size_t, RichTextData> RichTextMap;
     static std::pair<std::string_view, SegmentStyle> TagStack[IM_RICHTEXT_MAXDEPTH];
+    static std::unordered_map<std::string_view, AnimationData> AnimationMap;
+
     static int CurrentStackPos = -1;
     static int ListItemCountByDepths[IM_RICHTEXT_MAX_LISTDEPTH];
     static BlockquoteDrawData BlockquoteStack[IM_RICHTEXT_MAXDEPTH];
@@ -1043,7 +1054,9 @@ namespace ImRichText
         Abbr,
         LineBreak,
         CodeBlock,
-        Hyperlink
+        Hyperlink,
+        Blink,
+        Marquee
     };
 
     bool IsStyleSupported(TagType type)
@@ -1212,7 +1225,8 @@ namespace ImRichText
     TagType GetTagType(std::string_view currTag)
     {
         if (AreSame(currTag, "b") || AreSame(currTag, "strong")) return TagType::Bold;
-        else if (AreSame(currTag, "i") || AreSame(currTag, "em") || AreSame(currTag, "cite")) return TagType::Italics;
+        else if (AreSame(currTag, "i") || AreSame(currTag, "em") || AreSame(currTag, "cite") || AreSame(currTag, "var")) 
+            return TagType::Italics;
         else if (AreSame(currTag, "hr")) return TagType::Hr;
         else if (AreSame(currTag, "br")) return TagType::LineBreak;
         else if (AreSame(currTag, "span")) return TagType::Span;
@@ -1226,12 +1240,14 @@ namespace ImRichText
         else if (currTag.size() == 2u && (currTag[0] == 'h' || currTag[0] == 'H') && std::isdigit(currTag[1])) return TagType::Header;
         else if (AreSame(currTag, "li")) return TagType::ListItem;
         else if (AreSame(currTag, "q")) return TagType::Quotation;
-        else if (AreSame(currTag, "pre")) return TagType::RawText;
+        else if (AreSame(currTag, "pre") || AreSame(currTag, "samp")) return TagType::RawText;
         else if (AreSame(currTag, "u")) return TagType::Underline;
         else if (AreSame(currTag, "s") || AreSame(currTag, "del")) return TagType::Strikethrough;
         else if (AreSame(currTag, "blockquote")) return TagType::Blockquote;
         else if (AreSame(currTag, "code")) return TagType::CodeBlock;
         else if (AreSame(currTag, "abbr")) return TagType::Abbr;
+        else if (AreSame(currTag, "blink")) return TagType::Blink;
+        else if (AreSame(currTag, "marquee")) return TagType::Marquee;
         return TagType::Unknown;
     }
 
@@ -1309,8 +1325,10 @@ namespace ImRichText
             propsChanged = propsChanged | StyleFontStyle;
             propsChanged = propsChanged | StyleFgColor;
         }
+        else if (tagType == TagType::Blink) styleprops.blink = true;
         
-        if (propsChanged != NoStyleChange || tagType == TagType::Abbr)
+        if (propsChanged != NoStyleChange || tagType == TagType::Abbr ||
+            tagType == TagType::Blink)
         {
             styleprops.font.font = config.GetFont(styleprops.font.family, styleprops.font.size,
                 styleprops.font.bold, styleprops.font.italics, styleprops.font.light, config.UserData);
@@ -1332,8 +1350,10 @@ namespace ImRichText
 
     bool DrawToken(ImDrawList* drawList, const Token& token, ImVec2 initpos,
         ImVec2 bounds, const SegmentStyle& style, const RenderConfig& config, 
-        TooltipData& tooltip)
+        TooltipData& tooltip, AnimationData& animation)
     {
+        if (style.blink && !animation.isVisible) return true;
+
         if (token.Type == TokenType::HorizontalRule)
         {
             drawList->AddRectFilled(token.Bounds.start(initpos), token.Bounds.end(initpos), style.fgcolor);
@@ -1500,7 +1520,8 @@ namespace ImRichText
     }
 
     bool DrawSegment(ImDrawList* drawList, const SegmentDetails& segment,
-        ImVec2 initpos, ImVec2 bounds, const RenderConfig& config, TooltipData& tooltip)
+        ImVec2 initpos, ImVec2 bounds, const RenderConfig& config, 
+        TooltipData& tooltip, AnimationData& animation)
     {
         auto popFont = false;
         if (segment.Style.font.font != nullptr)
@@ -1514,7 +1535,7 @@ namespace ImRichText
 
         for (const auto& token : segment.Tokens)
         {
-            if (drawTokens && !DrawToken(drawList, token, initpos, bounds, style, config, tooltip))
+            if (drawTokens && !DrawToken(drawList, token, initpos, bounds, style, config, tooltip, animation))
                 drawTokens = false;
         }
 
@@ -1523,8 +1544,9 @@ namespace ImRichText
         return drawTokens;
     }
 
-    void DrawForegroundLayer(ImDrawList* drawList, ImVec2 initpos, ImVec2 bounds, const std::deque<DrawableLine>& lines, 
-        const RenderConfig& config, TooltipData& tooltip)
+    void DrawForegroundLayer(ImDrawList* drawList, ImVec2 initpos, ImVec2 bounds, 
+        const std::deque<DrawableLine>& lines, const RenderConfig& config, 
+        TooltipData& tooltip, AnimationData& animation)
     {
         int listCountByDepth[IM_RICHTEXT_MAX_LISTDEPTH];
         int listDepth = -1;
@@ -1535,7 +1557,7 @@ namespace ImRichText
 
             for (const auto& segment : lines[lineidx].Segments)
             {
-                if (!DrawSegment(drawList, segment, initpos, bounds, config, tooltip))
+                if (!DrawSegment(drawList, segment, initpos, bounds, config, tooltip, animation))
                     break;
             }
 
@@ -1544,13 +1566,58 @@ namespace ImRichText
         }
     }
 
-    void DrawBackgroundLayer(ImDrawList* drawList, ImVec2 initpos, ImVec2 bounds, const std::deque<BackgroundShape>& shapes)
+    void DrawBackgroundLayer(ImDrawList* drawList, ImVec2 initpos, ImVec2 bounds, 
+        const std::deque<BackgroundShape>& shapes)
     {
         for (const auto& shape : shapes)
         {
             drawList->AddRectFilled(shape.Start + initpos, shape.End + initpos, shape.Color);
             if (shape.End.y > (bounds.y + initpos.y)) break;
         }
+    }
+
+    void DrawTooltip(ImDrawList* drawList, const TooltipData& tooltip, const RenderConfig& config)
+    {
+        if (!tooltip.content.empty())
+        {
+            auto font = config.GetFont(config.DefaultFontFamily, config.DefaultFontSize, false, false, false, config.UserData);
+            ImGui::PushFont(font);
+            ImGui::SetTooltip("%.*s", (int)tooltip.content.size(), tooltip.content.data());
+            ImGui::PopFont();
+        }
+    }
+
+    void Draw(std::string_view richText, const Drawables& drawables, ImVec2 pos, ImVec2 bounds, RenderConfig* config)
+    {
+        using namespace std::chrono;
+
+        config = GetRenderConfig(config);
+        auto endpos = pos + bounds;
+        auto drawList = ImGui::GetCurrentWindow()->DrawList;
+        TooltipData tooltip;
+        auto& animation = AnimationMap[richText];
+        auto currFrameTime = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+
+        ImGui::PushClipRect(pos, endpos, true);
+        drawList->AddRectFilled(pos, endpos, config->DefaultBgColor);
+
+        DrawBackgroundLayer(drawList, pos, bounds, drawables.Background);
+        DrawForegroundLayer(drawList, pos, bounds, drawables.Foreground, *config, tooltip, animation);
+        DrawTooltip(drawList, tooltip, *config);
+
+        if (currFrameTime - animation.lastBlinkTime > IM_RICHTEXT_BLINK_ANIMATION_INTERVAL)
+        {
+            animation.isVisible = !animation.isVisible;
+            animation.lastBlinkTime = currFrameTime;
+        }
+
+        if (currFrameTime - animation.lastMarqueeTime > IM_RICHTEXT_MARQUEE_ANIMATION_INTERVAL)
+        {
+            animation.xpos += 1.f;
+            animation.lastMarqueeTime = currFrameTime;
+        }
+
+        ImGui::PopClipRect();
     }
 
     bool ShowDrawables(std::string_view content, const Drawables& drawables, RenderConfig* config)
@@ -1565,7 +1632,7 @@ namespace ImRichText
         auto pos = window->DC.CursorPos;
         ImGui::ItemSize(bounds);
         ImGui::ItemAdd(ImRect{ pos, pos + bounds }, id);
-        Draw(drawables, pos + style.FramePadding, bounds, config);
+        Draw(content, drawables, pos + style.FramePadding, bounds, config);
         return true;
     }
 
@@ -1657,6 +1724,9 @@ namespace ImRichText
                     segment.SubscriptDepth = subscriptLevel;
                     segment.SuperscriptDepth = superscriptLevel;
 
+                    if (tagType == TagType::Marquee || tagType == TagType::Blink)
+                        AnimationMap[std::string_view{ text, (size_t)(textend - text) }];
+
                     if (tagType == TagType::List)
                     {
                         listDepth++;
@@ -1664,7 +1734,7 @@ namespace ImRichText
                     }
                     else if (tagType == TagType::Paragraph || tagType == TagType::Header ||
                         tagType == TagType::RawText || tagType == TagType::ListItem ||
-                        tagType == TagType::CodeBlock)
+                        tagType == TagType::CodeBlock || tagType == TagType::Marquee)
                     {
                         line = MoveToNextLine(styleprops, listDepth, blockquoteDepth, line, result.Foreground, config);
 
@@ -1713,7 +1783,7 @@ namespace ImRichText
 
                     if (tagType == TagType::List || tagType == TagType::Paragraph || tagType == TagType::Header ||
                         tagType == TagType::RawText || tagType == TagType::Blockquote || tagType == TagType::LineBreak ||
-                        tagType == TagType::CodeBlock)
+                        tagType == TagType::CodeBlock || tagType == TagType::Marquee)
                     {
                         if (tagType == TagType::List)
                         {
@@ -1931,34 +2001,6 @@ namespace ImRichText
         return result;
     }
 
-    void DrawTooltip(ImDrawList* drawList, const TooltipData& tooltip, const RenderConfig& config)
-    {
-        if (!tooltip.content.empty())
-        {
-            auto font = config.GetFont(config.DefaultFontFamily, config.DefaultFontSize, false, false, false, config.UserData);
-            ImGui::PushFont(font);
-            ImGui::SetTooltip("%.*s", (int)tooltip.content.size(), tooltip.content.data());
-            ImGui::PopFont();
-        }
-    }
-
-    void Draw(const Drawables& drawables, ImVec2 pos, ImVec2 bounds, RenderConfig* config)
-    {
-        config = GetRenderConfig(config);
-        auto endpos = pos + bounds;
-        auto drawList = ImGui::GetCurrentWindow()->DrawList;
-        TooltipData tooltip;
-
-        ImGui::PushClipRect(pos, endpos, true);
-        drawList->AddRectFilled(pos, endpos, config->DefaultBgColor);
-
-        DrawBackgroundLayer(drawList, pos, bounds, drawables.Background);
-        DrawForegroundLayer(drawList, pos, bounds, drawables.Foreground, *config, tooltip);
-        DrawTooltip(drawList, tooltip, *config);
-
-        ImGui::PopClipRect();
-    }
-
     bool Show(const char* text, const char* textend)
     {
         if (textend == nullptr) textend = text + std::strlen(text);
@@ -2017,6 +2059,7 @@ namespace ImRichText
         if (it != RichTextMap.end())
         {
             RichTextStrings.erase(it->second.richText);
+            AnimationMap.erase(it->second.richText);
             RichTextMap.erase(it);
             return true;
         }

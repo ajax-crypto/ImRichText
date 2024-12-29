@@ -26,6 +26,14 @@
 #define IM_RICHTEXT_MAXTABSTOP 32
 #endif
 
+#ifndef IM_RICHTEXT_BLINK_ANIMATION_INTERVAL
+#define IM_RICHTEXT_BLINK_ANIMATION_INTERVAL 500
+#endif
+
+#ifndef IM_RICHTEXT_MARQUEE_ANIMATION_INTERVAL
+#define IM_RICHTEXT_MARQUEE_ANIMATION_INTERVAL 18
+#endif
+
 #define IM_RICHTEXT_NESTED_ITEMCOUNT_STRSZ 64
 
 #ifndef IMGUI_DEFINE_MATH_OPERATORS
@@ -133,6 +141,7 @@ namespace ImRichText
         float subscriptOffset = 0.f;
         std::string_view tooltip = "";
         std::string_view link = "";
+        bool blink = false;
     };
 
     struct SegmentDetails
@@ -159,6 +168,7 @@ namespace ImRichText
         bool HasText = false;
         bool HasSuperscript = false;
         bool HasSubscript = false;
+        bool Marquee = false;
 
         float width() const { return Content.width + Offset.left + Offset.right; }
         float height() const { return Content.height + Offset.top + Offset.bottom; }
@@ -257,7 +267,6 @@ namespace ImRichText
     // Get list of drawables from rich text
     [[nodiscard]] Drawables GetDrawables(const char* text, const char* textend, const RenderConfig& config);
     [[nodiscard]] ImVec2 GetBounds(const Drawables& drawables, ImVec2 bounds);
-    void Draw(const Drawables& drawables, ImVec2 pos, ImVec2 bounds, RenderConfig* config = nullptr);
 
     // Render rich text without any drawable caching
     bool Show(const char* text, const char* end = nullptr);
