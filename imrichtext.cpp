@@ -144,6 +144,16 @@ namespace ImRichText
     {
         return ImVec2{ lhs.x * rhs, lhs.y * rhs };
     }
+
+    [[nodiscard]] ImVec2 operator+(ImVec2 lhs, ImVec2 rhs)
+    {
+        return ImVec2{ lhs.x + rhs.x, lhs.y + rhs.y };
+    }
+
+    [[nodiscard]] ImVec2 operator-(ImVec2 lhs, ImVec2 rhs)
+    {
+        return ImVec2{ lhs.x - rhs.x, lhs.y - rhs.y };
+    }
 #endif
 
     [[nodiscard]] bool AreSame(const std::string_view lhs, const char* rhs)
@@ -667,7 +677,7 @@ namespace ImRichText
         return { width, height };
     }
 
-    void AddToken(DrawableLine& line, Token token, const RenderConfig& config)
+    void AddToken(DrawableLine& line, Token token, int propsChanged, const RenderConfig& config)
     {
         auto& segment = line.Segments.back();
 
@@ -718,6 +728,11 @@ namespace ImRichText
             token.Bounds.width = sz.x;
             token.Bounds.height = sz.y;
         }
+        else if (token.Type == TokenType::Meter)
+        {
+            if ((propsChanged & StyleWidth) == 0) token.Bounds.width = config.MeterDefaultSize.x;
+            if ((propsChanged & StyleHeight) == 0) token.Bounds.height = config.MeterDefaultSize.y;
+        }
 
         segment.Tokens.emplace_back(token);
         segment.HasText = segment.HasText || (!token.Content.empty());
@@ -755,7 +770,7 @@ namespace ImRichText
         return line;
     }
 
-    enum TagType
+    enum class TagType
     {
         Unknown,
         Bold,
@@ -780,7 +795,8 @@ namespace ImRichText
         CodeBlock,
         Hyperlink,
         Blink,
-        Marquee
+        Marquee,
+        Meter
     };
 
     std::vector<int> PerformWordWrap(std::deque<DrawableLine>& lines, TagType tagType, int index, int listDepth, int blockquoteDepth,
@@ -1025,12 +1041,12 @@ namespace ImRichText
         return newline;
     }
 
-    void GenerateToken(DrawableLine& line, std::string_view content,
+    void GenerateTextToken(DrawableLine& line, std::string_view content,
         int curridx, int start, const RenderConfig& config)
     {
         Token token;
         token.Content = content.substr(start, curridx - start);
-        AddToken(line, token, config);
+        AddToken(line, token, NoStyleChange, config);
     }
 
     [[nodiscard]] std::pair<bool, bool> AddEscapeSequences(const std::string_view content,
@@ -1069,13 +1085,13 @@ namespace ImRichText
     {
         switch (type)
         {
-            case ImRichText::Unknown:
-            case ImRichText::Bold:
-            case ImRichText::Italics:
-            case ImRichText::Underline:
-            case ImRichText::Strikethrough:
-            case ImRichText::Small:
-            case ImRichText::LineBreak:
+            case TagType::Unknown:
+            case TagType::Bold:
+            case TagType::Italics:
+            case TagType::Underline:
+            case TagType::Strikethrough:
+            case TagType::Small:
+            case TagType::LineBreak:
                 return false;
             default: return true;
         }
@@ -1148,6 +1164,12 @@ namespace ImRichText
                     style.tooltip = attribValue.value();
                 else if (tagType == TagType::Hyperlink && AreSame(attribName, "href") && attribValue.has_value())
                     style.link = attribValue.value();
+                else if (tagType == TagType::Meter)
+                {
+                    if (AreSame(attribName, "value") && attribValue.has_value()) style.value = ExtractInt(attribValue.value(), 0);
+                    if (AreSame(attribName, "min") && attribValue.has_value()) style.range.first = ExtractInt(attribValue.value(), 0);
+                    if (AreSame(attribName, "max") && attribValue.has_value()) style.range.second = ExtractInt(attribValue.value(), 0);
+                }
                 else if (config.HandleAttribute)
                     config.HandleAttribute(currTag, attribName, attribValue.value_or(std::string_view{}), config.UserData);
             }
@@ -1254,6 +1276,7 @@ namespace ImRichText
         else if (AreSame(currTag, "abbr")) return TagType::Abbr;
         else if (AreSame(currTag, "blink")) return TagType::Blink;
         else if (AreSame(currTag, "marquee")) return TagType::Marquee;
+        else if (AreSame(currTag, "meter")) return TagType::Meter;
         return TagType::Unknown;
     }
 
@@ -1332,6 +1355,13 @@ namespace ImRichText
             propsChanged = propsChanged | StyleFgColor;
         }
         else if (tagType == TagType::Blink) styleprops.blink = true;
+        else if (tagType == TagType::Meter)
+        {
+            if ((propsChanged & StyleBgColor) == 0) styleprops.bgcolor = config.MeterBgColor;
+            if ((propsChanged & StyleFgColor) == 0) styleprops.fgcolor = config.MeterFgColor;
+            propsChanged = propsChanged | StyleBgColor;
+            propsChanged = propsChanged | StyleFgColor;
+        }
         
         if (propsChanged != NoStyleChange || tagType == TagType::Abbr ||
             tagType == TagType::Blink)
@@ -1474,6 +1504,20 @@ namespace ImRichText
         {
             drawList->AddText(token.Bounds.start(initpos), style.fgcolor, token.NestedListItemIndex);
             DrawDebugRect(ContentTypeToken, drawList, token.Bounds.start(initpos), token.Bounds.end(initpos), config);
+        }
+        else if (token.Type == TokenType::Meter)
+        {
+            auto start = token.Bounds.start(initpos);
+            auto end = token.Bounds.end(initpos);
+            auto border = ImVec2{ 1.f, 1.f };
+            auto borderRadius = (end.y - start.y) * 0.5f;
+            auto diff = style.range.second - style.range.first;
+            auto progress = (style.value / diff) * token.Bounds.width;
+
+            drawList->AddRectFilled(start, end, style.bgcolor, borderRadius, ImDrawFlags_RoundCornersAll);
+            drawList->AddRect(start, end, config.MeterBorderColor, borderRadius, ImDrawFlags_RoundCornersAll);
+            drawList->AddRectFilled(start + border, start - border + ImVec2{ progress, token.Bounds.height }, 
+                style.fgcolor, borderRadius, ImDrawFlags_RoundCornersBottomLeft | ImDrawFlags_RoundCornersTopLeft);
         }
         else
         {
@@ -1620,10 +1664,11 @@ namespace ImRichText
         DrawForegroundLayer(drawList, pos, bounds, drawables.Foreground, *config, tooltip, animation);
         DrawTooltip(drawList, tooltip, *config);
 
-        if (currFrameTime - animation.lastBlinkTime > IM_RICHTEXT_BLINK_ANIMATION_INTERVAL)
+        if (!config->IsStrictHTML5 && (currFrameTime - animation.lastBlinkTime > IM_RICHTEXT_BLINK_ANIMATION_INTERVAL))
         {
             animation.isVisible = !animation.isVisible;
             animation.lastBlinkTime = currFrameTime;
+            if (config->NewFrameGenerated) config->NewFrameGenerated(config->UserData);
         }
 
         if (currFrameTime - animation.lastMarqueeTime > IM_RICHTEXT_MARQUEE_ANIMATION_INTERVAL)
@@ -1635,6 +1680,8 @@ namespace ImRichText
 
                 if (animation.xoffsets[lineidx] >= linewidth)
                     animation.xoffsets[lineidx] = -linewidth;
+
+                if (config->NewFrameGenerated) config->NewFrameGenerated(config->UserData);
             }
 
             animation.lastMarqueeTime = currFrameTime;
@@ -1670,6 +1717,7 @@ namespace ImRichText
             std::end(EscapeCodes));
         config->FontScale = fontScale;
         config->DefaultFontSize = defaultFontSize;
+        config->MeterDefaultSize = { defaultFontSize * 5.0f, defaultFontSize };
 
         DefaultRenderConfigInit = true;
         if (!skipDefaultFontLoading) LoadDefaultFonts(*config);
@@ -1775,7 +1823,7 @@ namespace ImRichText
                                 TokenType::ListItemNumbered;
                             token.ListDepth = listDepth;
                             token.ListItemIndex = ListItemCountByDepths[listDepth];
-                            AddToken(line, token, config);
+                            AddToken(line, token, propsChanged, config);
                             AddSegment(line, styleprops, config);
                         }
                     }
@@ -1792,7 +1840,13 @@ namespace ImRichText
                         Token token;
                         token.Type = TokenType::Text;
                         token.Content = "\"";
-                        AddToken(line, token, config);
+                        AddToken(line, token, propsChanged, config);
+                    }
+                    else if (tagType == TagType::Meter)
+                    {
+                        Token token;
+                        token.Type = TokenType::Meter;
+                        AddToken(line, token, propsChanged, config);
                     }
                 }
 
@@ -1838,7 +1892,7 @@ namespace ImRichText
 
                             Token token;
                             token.Type = TokenType::HorizontalRule;
-                            AddToken(line, token, config);
+                            AddToken(line, token, NoStyleChange, config);
 
                             // Move to next line for other content
                             line = MoveToNextLine(styleprops, tagType, listDepth, blockquoteDepth, line, result.Foreground, config, tagStart);
@@ -1855,7 +1909,7 @@ namespace ImRichText
 
                         Token token;
                         token.Type = TokenType::HorizontalRule;
-                        AddToken(line, token, config);
+                        AddToken(line, token, NoStyleChange, config);
 
                         line = MoveToNextLine(styleprops, tagType, listDepth, blockquoteDepth, line, result.Foreground, config, true);
                         maxWidth = std::max(maxWidth, result.Foreground.back().Content.width);
@@ -1865,7 +1919,7 @@ namespace ImRichText
                         Token token;
                         token.Type = TokenType::Text;
                         token.Content = "\"";
-                        AddToken(line, token, config);
+                        AddToken(line, token, NoStyleChange, config);
                     }
                     else
                     {
@@ -1899,14 +1953,14 @@ namespace ImRichText
                         {
                             if (!subscriptLevel && !superscriptLevel)
                             {
-                                GenerateToken(line, content, curridx, start, config);
+                                GenerateTextToken(line, content, curridx, start, config);
                                 line = MoveToNextLine(styleprops, tagType, listDepth, blockquoteDepth, line, result.Foreground, config, true);
                                 maxWidth = std::max(maxWidth, result.Foreground.back().Content.width);
                                 start = curridx;
                             }
                             else
                             {
-                                GenerateToken(line, content, curridx, start, config);
+                                GenerateTextToken(line, content, curridx, start, config);
                                 start = curridx;
                             }
                         }
@@ -1916,7 +1970,7 @@ namespace ImRichText
 
                     if (curridx > start)
                     {
-                        GenerateToken(line, content, curridx, start, config);
+                        GenerateTextToken(line, content, curridx, start, config);
                     }
                 }
                 else
@@ -1932,19 +1986,19 @@ namespace ImRichText
                     {
                         if (content[curridx] == '\n')
                         {
-                            GenerateToken(line, content, curridx, start, config);
+                            GenerateTextToken(line, content, curridx, start, config);
                             while (curridx < (int)content.size() && content[curridx] == '\n') curridx++;
                             start = curridx;
                         }
                         else if (content[curridx] == '\t')
                         {
-                            GenerateToken(line, content, curridx, start, config);
+                            GenerateTextToken(line, content, curridx, start, config);
                             while (curridx < (int)content.size() && content[curridx] == '\t') curridx++;
                             start = curridx;
                         }
                         else if (content[curridx] == config.EscapeSeqStart)
                         {
-                            GenerateToken(line, content, curridx, start, config);
+                            GenerateTextToken(line, content, curridx, start, config);
 
                             curridx++;
                             auto [hasEscape, isNewLine] = AddEscapeSequences(content, curridx, config.EscapeCodes,
@@ -1963,11 +2017,7 @@ namespace ImRichText
                         {
                             curridx++;
 
-                            if (curridx - start > 0)
-                            {
-                                GenerateToken(line, content, curridx, start, config);
-                            }
-
+                            if (curridx - start > 0) GenerateTextToken(line, content, curridx, start, config);
                             curridx = SkipSpace(content, curridx);
                             start = curridx;
                             continue;
@@ -1976,10 +2026,7 @@ namespace ImRichText
                         curridx++;
                     }
 
-                    if (curridx > start)
-                    {
-                        GenerateToken(line, content, curridx, start, config);
-                    }
+                    if (curridx > start) GenerateTextToken(line, content, curridx, start, config);
                 }
             }
         }

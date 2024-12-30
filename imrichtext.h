@@ -72,6 +72,7 @@ namespace ImRichText
         ListItemBullet,
         ListItemNumbered,
         HorizontalRule,
+        Meter
     };
 
     struct BoundedBox
@@ -141,6 +142,8 @@ namespace ImRichText
         float subscriptOffset = 0.f;
         std::string_view tooltip = "";
         std::string_view link = "";
+        float value = 0.f;
+        std::pair<float, float> range = { 0.f, 0.f };
         bool blink = false;
     };
 
@@ -200,14 +203,14 @@ namespace ImRichText
         ImVec2 Bounds;
         bool WordWrap = false;
 
-        int ParagraphStop = 4;
-        int TabStop = 4;
+        int   ParagraphStop = 4;
+        int   TabStop = 4;
         float ListItemIndent = 15.f;
         float ListItemOffset = 15.f;
         BulletType ListItemBullet = BulletType::FilledCircle;
 
         std::string_view DefaultFontFamily = IM_RICHTEXT_DEFAULT_FONTFAMILY;
-        float DefaultFontSize = 20;
+        float   DefaultFontSize = 20;
         ImColor DefaultFgColor = IM_COL32_BLACK;
         ImColor DefaultBgColor = IM_COL32_WHITE;
         ImColor MarkHighlight = ImColor{ 255, 255, 0 };
@@ -219,24 +222,31 @@ namespace ImRichText
         void    (*DrawBullet)(ImVec2, ImVec2, const SegmentStyle&, int, int, void*) = nullptr;
         void    (*HandleAttribute)(std::string_view, std::string_view, std::string_view, void*) = nullptr;
         void    (*HandleHyperlink)(std::string_view, void*) = nullptr;
+        void    (*NewFrameGenerated)(void*) = nullptr;
 
-        float HFontSizes[6] = { 36, 32, 24, 20, 16, 12 };
+        float   HFontSizes[6] = { 36, 32, 24, 20, 16, 12 };
         ImColor HeaderLineColor = ImColor(128, 128, 128, 255);
 
         ImColor BlockquoteBar = { 0.25f, 0.25f, 0.25f, 1.0f };
         ImColor BlockquoteBg = { 0.5f, 0.5f, 0.5f, 1.0f };
-        float BlockquotePadding = 5.f;
-        float BlockquoteOffset = 15.f;
-        float BlockquoteBarWidth = 5.f;
+        float   BlockquotePadding = 5.f;
+        float   BlockquoteOffset = 15.f;
+        float   BlockquoteBarWidth = 5.f;
 
+        ImColor MeterBorderColor = ImColor{ 100, 100, 100 };
+        ImColor MeterBgColor = ImColor{ 200, 200, 200 };
+        ImColor MeterFgColor = ImColor{ 0, 200, 25 };
+        ImVec2  MeterDefaultSize = { 80.f, 16.f };
         ImColor CodeBlockBg = IM_COL32_BLACK_TRANS;
-        float CodeBlockPadding = 5.f;
+        float   CodeBlockPadding = 5.f;
 
         float BulletSizeScale = 2.f;
         float ScaleSuperscript = 0.62f;
         float ScaleSubscript = 0.62f;
         float HrVerticalMargins = 5.f;
         void* UserData = nullptr;
+
+        bool IsStrictHTML5 = false;
 
 #ifdef _DEBUG
         ImColor DebugContents[ContentTypeTotal] = {

@@ -117,8 +117,11 @@ public:
         ImVec4 clear_color = ImVec4(1.f, 1.f, 1.f, 1.00f);
         std::string rtf = "<blink>This is blinking</blink>"
             "<marquee>This is moving...</marquee>"
+            "<meter value='3' max='10'></meter>"
             "<s><q>Quotation </q><cite>Citation</cite></s>"
+            "<br>Powered by: <a href='https://https://github.com/ajax-crypto/ImRichText'>ImRichText</a>"
             "<ul style='font-size: 36px;'><li>item</li><li>item</li></ul>";
+
         auto id = ImRichText::CreateRichText("2<sup>2</sup> equals 4  <hr style=\"height: 4px; color: sienna;\"/>"
             "<p style=\"color: rgb(150, 0, 0);\">Paragraph <b>bold <i>italics</i> bold2 </b></p>"
             "<h1 style=\"color: darkblue;\">Heading&Tab;</h1>"

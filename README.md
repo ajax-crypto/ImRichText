@@ -8,9 +8,14 @@
 Implementation of Rich Text Rendering for [ImGui](https://github.com/ocornut/imgui) (**ASCII text only**) akin to Qt support for it. Use it as follows:
 ```c++
 // Do not cache anything
-std::string rtf = "<s><q>Quotation </q><cite>Citation</cite></s><ul style='font-size: 36px;'><li>item</li><li>item</li></ul>";
+std::string rtf = "<blink>This is blinking</blink>"
+    "<marquee>This is moving...</marquee>"
+    "<meter value='3' max='10'></meter>"
+    "<s><q>Quotation </q><cite>Citation</cite></s>"
+    "<br>Powered by: <a href='https://https://github.com/ajax-crypto/ImRichText'>ImRichText</a>"
+    "<ul style='font-size: 36px;'><li>item</li><li>item</li></ul>";
 
-// This creates cacheable drawables after parsing
+// Create rich text with cacehable drawables
 auto id = ImRichText::CreateRichText("2<sup>2</sup> equals 4  <hr style=\"height: 4px; color: sienna;\"/>"
     "<p style=\"color: rgb(150, 0, 0);\">Paragraph <b>bold <i>italics</i> bold2 </b></p>"
     "<h1 style=\"color: darkblue;\">Heading&Tab;</h1>"
@@ -19,6 +24,7 @@ auto id = ImRichText::CreateRichText("2<sup>2</sup> equals 4  <hr style=\"height
 
 auto config = ImRichText::GetDefaultConfig({ -1.f, -1.f }, 24.f, 1.5f);
 config->Scale = 2.f;
+config->ListItemBullet = ImRichText::BulletType::Arrow;
 ImRichText::PushConfig(*config);
 
 while (<event-loop>)
@@ -35,7 +41,7 @@ while (<event-loop>)
     }
 }
 ```
-![Basic screenshot](https://raw.githubusercontent.com/ajax-crypto/ImRichText/refs/heads/main/screenshots/basic.png)
+![Basic screenshot](https://raw.githubusercontent.com/ajax-crypto/ImRichText/refs/heads/main/screenshots/imrichtext.gif)
 
 ## How to use it?
 Just include the .h and .cpp files in your project. (You will need a C++17 compiler)
@@ -64,11 +70,12 @@ The following subset of HTML tags/CSS properties are supported:
 | a | Make current block of text a hyperlink (handle click events) | Yes[^4] |
 | abbr | Mark current block as an abbreviation, `title` attribute contains tooltip | Yes |
 | s/del | Draw a horizontal line through the text content | Yes |
+| blink | Make current block of text blink | Yes |
+| marquee | Make current block of text scroll horizontally | Yes |
+| meter | Create a progress bar inline | Yes |
 | blockquote | Blockquote as in HTML | _Under progress_ |
 | pre | Preformatted text with monospaced font | _Under progress_ |
 | code | Use monospace font for this block of text | _Under progress_ |
-| blink | Make current block of text blink | **Not Implemented** |
-| marquee | Make current block of text scroll horizontally | **Not Implemented** |
 
 ### General Style Properties
 | Property Name(s) | Value/Example |
@@ -89,12 +96,12 @@ However, user can provide their own font provider through `RenderConfig::GetFont
 ## Immediate Goals
 * Word wrapping support
 * Maybe add `<center>` and `<font>` tags? (These are deprecated in HTML5)
-* Add support for `blink` and `marquee` (Requires saving current animation state)
 * Add support for `margin` and possibly `border` (_although the utility of border is debatable_)
 * Implement support for vertical/horizontal text alignment including baseline alignment (May need to use FreeType backend)
 * Integration example with [Clay layout library](https://github.com/nicbarker/clay?tab=readme-ov-file)
 * Roman numerals for numbered lists
 * Gradient fills for backgrounds
+* Tables (`<table>`, `<tr>`, `<th>`, `<td>` tags)
 
 ## Future Goals
 * Use a library (roll your own?) to lookup font(s) based on requirements i.e. fuzzy match on family, etc.
@@ -105,7 +112,6 @@ However, user can provide their own font provider through `RenderConfig::GetFont
 ## Non-Goals
 * Build scripts like cmake, build2, make, etc. This library is intended to be used by simply copying the .h/.cpp files.
 * Full-fledged support for CSS3 styling with layout
-* Although Qt's rich text in labels supports tables, tables are not supported by design, use ImGui tables instead.
 * Support alternate syntax i.e. Markdown, Restructured Text, MathML, etc.
 
 ## Build Dependencies
@@ -120,6 +126,8 @@ In order to customize certain behavior at build-time, the following macros can b
 | `IM_RICHTEXT_MAX_LISTITEM` | Maxmimum number of list items at a specific depth | 128 |
 | `IM_RICHTEXT_MAXTABSTOP` | Maxmimum number of nested `<p>`/paragraphs | 32 |
 | `IM_RICHTEXT_ENABLE_PARSER_LOGS` | Enable printing parsing + layout logs in console in debug builds | Not defined |
+| `IM_RICHTEXT_BLINK_ANIMATION_INTERVAL` | Specify blink animation interval | 500ms |
+| `IM_RICHTEXT_MARQUEE_ANIMATION_INTERVAL` | Specify interval (`1/FPS`) for marquee animation | 18ms |
 
 ## Error Reporting
 When `_DEBUG` macro is defined, if a console is present, error messages will be printed along
