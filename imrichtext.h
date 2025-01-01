@@ -127,10 +127,50 @@ namespace ImRichText
         LeftSide
     };
 
+    struct ColorStop
+    {
+        ImColor from, to;
+        float pos = -1.f;
+    };
+
+    struct ColorGradient
+    {
+        std::vector<ColorStop> colorStops;
+        float angleDegrees = 0.f;
+        bool reverseOrder = false;
+    };
+
+    enum StyleProperty
+    {
+        StyleError = -1,
+        NoStyleChange = 0,
+        StyleBackground = 1,
+        StyleFgColor = 2,
+        StyleFontSize = 4,
+        StyleFontFamily = 8,
+        StyleFontWeight = 16,
+        StyleFontStyle = 32,
+        StyleHeight = 64,
+        StyleWidth = 128,
+        StyleListBulletType = 256,
+        StyleHAlignment = 512,
+        StyleVAlignment = 1024,
+        StylePaddingTop = 2048,
+        StylePaddingBottom = 4096,
+        StylePaddingLeft = 8192,
+        StylePaddingRight = 16384
+    };
+
+    // A rich text consists of the following hierarchial structures:
+    // Array of segments of unqiue style
+    // Each segment consists of block of lines
+    // Each line consists of array of tokens
+
     struct SegmentStyle
     {
+        int propsSpecified = 0;
         ImColor fgcolor = IM_COL32_BLACK;
-        ImColor bgcolor = IM_COL32_WHITE;
+        ImColor bgcolor = IM_COL32_BLACK_TRANS;
         float height = 0;
         float width = 0;
         HorizontalAlignment alignmentH = HorizontalAlignment::Left;
@@ -140,6 +180,8 @@ namespace ImRichText
         FourSidedMeasure padding;
         float superscriptOffset = 0.f;
         float subscriptOffset = 0.f;
+        ColorGradient gradient;
+        
         std::string_view tooltip = "";
         std::string_view link = "";
         float value = 0.f;
@@ -147,9 +189,24 @@ namespace ImRichText
         bool blink = false;
     };
 
-    struct SegmentDetails
+    struct DrawableLine
     {
         std::vector<Token> Tokens;
+        BoundedBox Bounds;
+
+        int  BlockquoteDepth = -1;
+        bool HasText = false;
+        bool HasSuperscript = false;
+        bool HasSubscript = false;
+        bool Marquee = false;
+
+        float width() const { return Bounds.width + Bounds.left; }
+        float height() const { return Bounds.height + Bounds.top; }
+    };
+
+    struct SegmentData
+    {
+        std::vector<DrawableLine> Tokens;
         SegmentStyle Style;
         BoundedBox Bounds;
 
@@ -161,20 +218,11 @@ namespace ImRichText
         float height() const { return Bounds.height + Style.padding.top + Style.padding.bottom; }
     };
 
-    struct DrawableLine
+    struct BackgroundShape
     {
-        std::vector<SegmentDetails> Segments;
-        BoundedBox Content;
-        FourSidedMeasure Offset;
-
-        int  BlockquoteDepth = 0;
-        bool HasText = false;
-        bool HasSuperscript = false;
-        bool HasSubscript = false;
-        bool Marquee = false;
-
-        float width() const { return Content.width + Offset.left + Offset.right; }
-        float height() const { return Content.height + Offset.top + Offset.bottom; }
+        ImVec2 Start, End;
+        ImColor Color = IM_COL32_BLACK_TRANS;
+        ColorGradient Gradient;
     };
 
 #ifdef _DEBUG
@@ -256,16 +304,10 @@ namespace ImRichText
 #endif
     };
 
-    struct BackgroundShape
-    {
-        ImVec2 Start, End;
-        ImColor Color;
-    };
-
     struct Drawables
     {
-        std::deque<DrawableLine> Foreground;
-        std::deque<BackgroundShape> Background;
+        std::deque<SegmentData>      ForegroundSegments;
+        std::vector<BackgroundShape> BackgroundShapes;
     };
 
     // RenderConfig related functions. In order to render rich text, such configs should be pushed/popped as desired 

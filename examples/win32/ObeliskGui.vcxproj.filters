@@ -94,5 +94,8 @@
     <ClInclude Include="..\..\imrichtextcolor.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\imrichtextutils.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

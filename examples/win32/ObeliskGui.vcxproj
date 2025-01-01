@@ -165,6 +165,7 @@
     <ClInclude Include="..\..\imrichtext.h" />
     <ClInclude Include="..\..\imrichtextcolor.h" />
     <ClInclude Include="..\..\imrichtextfont.h" />
+    <ClInclude Include="..\..\imrichtextutils.h" />
     <ClInclude Include="inc\GLFW\glfw3.h" />
     <ClInclude Include="inc\GLFW\glfw3native.h" />
     <ClInclude Include="inc\IComponent.h" />

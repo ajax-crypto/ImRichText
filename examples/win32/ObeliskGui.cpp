@@ -115,18 +115,18 @@ public:
         bool show_demo_window = true;
         bool show_another_window = false;
         ImVec4 clear_color = ImVec4(1.f, 1.f, 1.f, 1.00f);
-        std::string rtf = "<blink>This is blinking</blink>"
-            "<marquee>This is moving...</marquee>"
+        std::string rtf = /*"<marquee>This is moving...</marquee>"
+            "<blink>This is blinking</blink>"
             "<meter value='3' max='10'></meter>"
             "<s><q>Quotation </q><cite>Citation</cite></s>"
             "<br>Powered by: <a href='https://https://github.com/ajax-crypto/ImRichText'>ImRichText</a>"
-            "<ul style='font-size: 36px;'><li>item</li><li>item</li></ul>";
+            "<ul style='font-size: 36px;'><li>item</li><li>item</li></ul>"*/ "";
 
-        auto id = ImRichText::CreateRichText("2<sup>2</sup> equals 4  <hr style=\"height: 4px; color: sienna;\"/>"
+        auto id = ImRichText::CreateRichText(/*"2<sup>2</sup> equals 4  <hr style=\"height: 4px; color: sienna;\"/>"
             "<p style=\"color: rgb(150, 0, 0);\">Paragraph <b>bold <i>italics</i> bold2 </b></p>"
-            "<h1 style=\"color: darkblue;\">Heading&Tab;</h1>"
-            "<span style='background: teal; color: white;'>White on Teal</span><br/>"
-            "<mark>This is highlighted! <small>This is small...</small></mark>");
+            "<h1 style=\"color: darkblue;\">Heading&Tab;</h1>"*/
+            "<span style='background: linear-gradient(red, yellow, green); color: white;'>Multi-line <br> Text on gradient</span><br/>"
+            /*"<mark>This is highlighted! <small>This is small...</small></mark>"*/);
 
         auto config = ImRichText::GetDefaultConfig({ -1.f, -1.f }, 24.f, 1.5f);
         config->ListItemBullet = ImRichText::BulletType::Arrow;
