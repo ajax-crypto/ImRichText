@@ -1,6 +1,7 @@
 #pragma once
 
 #include "imgui.h"
+#include "imrichtextutils.h"
 
 #include <string_view>
 #include <vector>
@@ -42,20 +43,6 @@ ImVec2 operator+(ImVec2 lhs, ImVec2 rhs) { return ImVec2{ lhs.x + rhs.x, lhs.y +
 
 namespace ImRichText
 {
-    enum class BulletType
-    {
-        Circle,
-        FilledCircle,
-        Disk = FilledCircle,
-        Square,
-        Triangle,
-        Arrow,
-        CheckMark,
-        CheckBox,
-        Concentric,
-        Custom
-    };
-
     enum class HorizontalAlignment
     {
         Left, Right, Center, Justify
@@ -75,30 +62,18 @@ namespace ImRichText
         Meter
     };
 
-    struct BoundedBox
-    {
-        float top = 0.f, left = 0.f;
-        float width = 0.f, height = 0.f;
-
-        ImVec2 start(ImVec2 origin) const { return ImVec2{ left, top } + origin; }
-        ImVec2 end(ImVec2 origin) const { return ImVec2{ left + width, top + height } + origin; }
-        ImVec2 center(ImVec2 origin) const { return ImVec2{ left + (0.5f * width), top + (0.5f * height) } + origin; }
-    };
-
-    struct FourSidedMeasure
-    {
-        float top = 0.f, left = 0.f, right = 0.f, bottom = 0.f;
-    };
-
     struct Token
     {
         std::string_view Content = "";
         BoundedBox Bounds;
         TokenType Type = TokenType::Text;
+        FourSidedMeasure Offset;
         char NestedListItemIndex[IM_RICHTEXT_NESTED_ITEMCOUNT_STRSZ];
 
         int ListDepth = -1;
         int ListItemIndex = -1;
+        int VisibleTextSize = -1;
+        bool AddEllipsis = false;
     };
 
     struct FontStyle
@@ -111,33 +86,14 @@ namespace ImRichText
         bool light = false;
         bool strike = false;
         bool underline = false;
+        bool wrap = true;
+        bool overflowEllipsis = false;
     };
 
     struct ListStyle
     {
         ImColor itemColor = IM_COL32_BLACK;
         BulletType itemStyle = BulletType::FilledCircle;
-    };
-
-    enum BoxSide
-    {
-        TopSide,
-        RightSide,
-        BottomSide,
-        LeftSide
-    };
-
-    struct ColorStop
-    {
-        ImColor from, to;
-        float pos = -1.f;
-    };
-
-    struct ColorGradient
-    {
-        std::vector<ColorStop> colorStops;
-        float angleDegrees = 0.f;
-        bool reverseOrder = false;
     };
 
     enum StyleProperty
@@ -158,28 +114,25 @@ namespace ImRichText
         StylePaddingTop = 2048,
         StylePaddingBottom = 4096,
         StylePaddingLeft = 8192,
-        StylePaddingRight = 16384
+        StylePaddingRight = 16384,
+        StyleBlink = 32768,
+        StyleNoWrap = 65536
     };
 
-    // A rich text consists of the following hierarchial structures:
-    // Array of segments of unqiue style
-    // Each segment consists of block of lines
-    // Each line consists of array of tokens
-
-    struct SegmentStyle
+    struct StyleDescriptor
     {
         int propsSpecified = 0;
         ImColor fgcolor = IM_COL32_BLACK;
         ImColor bgcolor = IM_COL32_BLACK_TRANS;
         float height = 0;
         float width = 0;
-        HorizontalAlignment alignmentH = HorizontalAlignment::Left;
-        VerticalAlignment alignmentV = VerticalAlignment::Center;
+        HorizontalAlignment alignmentH = HorizontalAlignment::Left; // UNUSED
+        VerticalAlignment alignmentV = VerticalAlignment::Center; // UNUSED
         FontStyle font;
         ListStyle list;
         FourSidedMeasure padding;
-        float superscriptOffset = 0.f;
-        float subscriptOffset = 0.f;
+        float superscriptOffset = 0.f; // TODO: Move to DrawableLine
+        float subscriptOffset = 0.f; // TODO: Move to DrawableLine
         ColorGradient gradient;
         
         std::string_view tooltip = "";
@@ -189,33 +142,35 @@ namespace ImRichText
         bool blink = false;
     };
 
-    struct DrawableLine
+    // TODO: Can we remove this? Segmentation is not technically required...
+    struct SegmentData
     {
         std::vector<Token> Tokens;
         BoundedBox Bounds;
-
-        int  BlockquoteDepth = -1;
-        bool HasText = false;
-        bool HasSuperscript = false;
-        bool HasSubscript = false;
-        bool Marquee = false;
-
-        float width() const { return Bounds.width + Bounds.left; }
-        float height() const { return Bounds.height + Bounds.top; }
-    };
-
-    struct SegmentData
-    {
-        std::vector<DrawableLine> Tokens;
-        SegmentStyle Style;
-        BoundedBox Bounds;
+        int StyleIdx = -1;
 
         int SubscriptDepth = 0;
         int SuperscriptDepth = 0;
         bool HasText = false;
 
-        float width() const { return Bounds.width + Style.padding.left + Style.padding.right; }
-        float height() const { return Bounds.height + Style.padding.top + Style.padding.bottom; }
+        float width() const { return Bounds.width; }
+        float height() const { return Bounds.height; }
+    };
+
+    struct DrawableLine
+    {
+        std::vector<SegmentData> Segments;
+        BoundedBox Content;
+        FourSidedMeasure Offset;
+
+        int  BlockquoteDepth = 0;
+        bool HasText = false;
+        bool HasSuperscript = false;
+        bool HasSubscript = false;
+        bool Marquee = false;
+
+        float width() const { return Content.width + Offset.left + Offset.right; }
+        float height() const { return Content.height + Offset.top + Offset.bottom; }
     };
 
     struct BackgroundShape
@@ -245,6 +200,8 @@ namespace ImRichText
         char TagEnd = '>';
         char EscapeSeqStart = '&';
         char EscapeSeqEnd = ';';
+        std::string_view CommentStart = "!--"; // UNUSED
+        std::string_view CommentEnd = "--"; // UNUSED
         std::vector<std::pair<std::string_view, std::string_view>> EscapeCodes;
 
         float LineGap = 5;
@@ -267,10 +224,10 @@ namespace ImRichText
         ImFont* (*GetFont)(std::string_view, float, bool, bool, bool, void*) = nullptr;
         ImVec2  (*GetTextSize)(std::string_view, ImFont*) = nullptr;
         ImColor (*NamedColor)(const char*, void*) = nullptr;
-        void    (*DrawBullet)(ImVec2, ImVec2, const SegmentStyle&, int, int, void*) = nullptr;
+        void    (*DrawBullet)(ImVec2, ImVec2, const StyleDescriptor&, int, int, void*) = nullptr;
         void    (*HandleAttribute)(std::string_view, std::string_view, std::string_view, void*) = nullptr;
         void    (*HandleHyperlink)(std::string_view, void*) = nullptr;
-        void    (*NewFrameGenerated)(void*) = nullptr;
+        void    (*RequestFrame)(void*) = nullptr;
 
         float   HFontSizes[6] = { 36, 32, 24, 20, 16, 12 };
         ImColor HeaderLineColor = ImColor(128, 128, 128, 255);
@@ -306,12 +263,14 @@ namespace ImRichText
 
     struct Drawables
     {
-        std::deque<SegmentData>      ForegroundSegments;
+        std::deque<DrawableLine>     ForegroundLines;
         std::vector<BackgroundShape> BackgroundShapes;
+        std::vector<StyleDescriptor> StyleDescriptors;
     };
 
     // RenderConfig related functions. In order to render rich text, such configs should be pushed/popped as desired 
-    [[nodiscard]] RenderConfig* GetDefaultConfig(ImVec2 Bounds, float defaultFontSize, float fontScale = 1.f, bool skipDefaultFontLoading = false);
+    [[nodiscard]] RenderConfig* GetDefaultConfig(ImVec2 Bounds = { -1.f, -1.f }, float defaultFontSize = 24.f, 
+        float fontScale = 1.f, bool skipDefaultFontLoading = false);
     [[nodiscard]] RenderConfig* GetCurrentConfig();
     void PushConfig(const RenderConfig& config);
     void PopConfig();
@@ -329,4 +288,5 @@ namespace ImRichText
     bool RemoveRichText(std::size_t id);
     void ClearAllRichTexts();
     bool Show(std::size_t richTextId);
+    bool ToggleOverlay();
 }

@@ -1,5 +1,6 @@
 #include "imrichtextfont.h"
 #include "imrichtext.h"
+#include "misc/freetype/imgui_freetype.h"
 
 #include <unordered_set>
 #include <unordered_map>
@@ -67,13 +68,17 @@ namespace ImRichText
         ImFontConfig fconfig;
         fconfig.OversampleH = 3.0;
         fconfig.OversampleV = 1.0;
+        fconfig.RasterizerMultiply = sz <= 16.f ? 2.f : 1.f;
+#ifdef IMGUI_ENABLE_FREETYPE
+        fconfig.FontBuilderFlags = ImGuiFreeTypeBuilderFlags_LightHinting;
+#endif
 
         auto copyFileName = [](const std::string_view fontname, char* fontpath, int startidx) {
             auto sz = std::min((int)fontname.size(), _MAX_PATH - startidx);
             std::memcpy(fontpath + startidx, fontname.data(), sz);
             fontpath[startidx + sz] = 0;
             return fontpath;
-            };
+        };
 
         if (names == nullptr)
         {
@@ -203,5 +208,11 @@ namespace ImRichText
         else if (italics) return szit->second.Italics;
         else if (light) return szit->second.Light;
         else return szit->second.Normal;
+    }
+
+    ImFont* GetOverlayFont()
+    {
+        auto it = LookupFontFamily(IM_RICHTEXT_DEFAULT_FONTFAMILY);
+        return it->second.begin()->second.Bold;
     }
 }

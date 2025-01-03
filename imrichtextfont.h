@@ -30,4 +30,5 @@ namespace ImRichText
     bool LoadDefaultFonts(const RenderConfig& config);
 
     [[nodiscard]] ImFont* GetFont(std::string_view family, float size, bool bold, bool italics, bool light, void*);
+    [[nodiscard]] ImFont* GetOverlayFont();
 }
