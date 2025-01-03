@@ -44,7 +44,7 @@
     <ClCompile Include="..\..\imrichtextfont.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\imrichtextcolor.cpp">
+    <ClCompile Include="..\..\imrichtextutils.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -89,9 +89,6 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\imrichtextfont.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\imrichtextcolor.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\imrichtextutils.h">
