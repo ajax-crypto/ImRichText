@@ -339,8 +339,14 @@ namespace ImRichText
                         auto colorstop = ExtractColorStop(part, NamedColor, userData);
                         if (colorstop.second != -1.f) total += colorstop.second;
                         else unspecified += 1.f;
-                        if (lastStop.has_value()) gradient.colorStops.emplace_back(
-                            ColorStop{ lastStop.value().first, colorstop.first, colorstop.second });
+
+                        if (lastStop.has_value())
+                        {
+                            gradient.colorStops[gradient.totalStops] =
+                                ColorStop{ lastStop.value().first, colorstop.first, colorstop.second };
+                            gradient.totalStops = std::min(gradient.totalStops + 1, IMRICHTEXT_MAX_COLORSTOPS-1);
+                        }
+
                         lastStop = colorstop;
                     }
                 }

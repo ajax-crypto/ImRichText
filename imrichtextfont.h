@@ -24,7 +24,7 @@ namespace ImRichText
 
     struct RenderConfig;
 
-    bool LoadFonts(std::string_view family, const FontCollectionFile& files, float size, const ImFontConfig& config);
+    bool LoadFonts(std::string_view family, const FontCollectionFile& files, float size, ImFontConfig config);
     bool LoadDefaultFonts(float sz, FontFileNames* names = nullptr);
     bool LoadDefaultFonts(const std::initializer_list<float>& szs, FontFileNames* names = nullptr);
     bool LoadDefaultFonts(const RenderConfig& config);

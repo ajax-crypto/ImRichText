@@ -5,7 +5,6 @@
 
 #include <string_view>
 #include <vector>
-#include <deque>
 #include <initializer_list>
 
 #define IM_RICHTEXT_DEFAULT_FONTFAMILY "default-font-family"
@@ -140,6 +139,8 @@ namespace ImRichText
         float value = 0.f;
         std::pair<float, float> range = { 0.f, 0.f };
         bool blink = false;
+
+        int backgroundIdx = -1; // If multi-line background, index in Drawables::BackgroundShapes
     };
 
     // TODO: Can we remove this? Segmentation is not technically required...
@@ -263,9 +264,10 @@ namespace ImRichText
 
     struct Drawables
     {
-        std::deque<DrawableLine>     ForegroundLines;
+        std::vector<DrawableLine>    ForegroundLines;
         std::vector<BackgroundShape> BackgroundShapes;
         std::vector<StyleDescriptor> StyleDescriptors;
+        bool BoundsComputed = false;
     };
 
     // RenderConfig related functions. In order to render rich text, such configs should be pushed/popped as desired 

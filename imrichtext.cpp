@@ -12,6 +12,7 @@
 #include <cstdlib>
 #include <string>
 #include <chrono>
+#include <deque>
 
 #ifdef _DEBUG
 #include <cstdio>
@@ -78,8 +79,8 @@ namespace ImRichText
 
     struct BackgroundSpanData
     {
-        std::pair<int, int> start;
-        std::pair<int, int> end;
+        std::pair<int, int> start{ -1, -1 };
+        std::pair<int, int> end{ -1, -1 };
     };
 
     struct StackData
@@ -489,34 +490,16 @@ namespace ImRichText
 
     enum class TagType
     {
-        Unknown,
-        Bold,
-        Italics,
-        Underline,
-        Strikethrough,
-        Mark,
-        Small,
-        Span,
-        List,
-        ListItem,
-        Paragraph,
-        Header,
-        RawText,
-        Blockquote,
-        Subscript,
-        Superscript,
-        Quotation,
-        Hr,
-        Abbr,
-        LineBreak,
-        CodeBlock,
-        Hyperlink,
-        Blink,
-        Marquee,
+        Unknown, 
+        Bold, Italics, Underline, Strikethrough, Mark, Small,
+        Span, List, ListItem, Paragraph, Header, RawText, Blockquote, Quotation, Abbr, CodeBlock, Hyperlink,
+        Subscript, Superscript,
+        Hr, LineBreak,
+        Blink, Marquee,
         Meter
     };
 
-    std::vector<int> PerformWordWrap(std::deque<DrawableLine>& lines, TagType tagType, int index, int listDepth, int blockquoteDepth,
+    std::vector<int> PerformWordWrap(std::vector<DrawableLine>& lines, TagType tagType, int index, int listDepth, int blockquoteDepth,
         const std::vector<StyleDescriptor>& styles, const RenderConfig& config)
     {
         std::vector<int> result;
@@ -526,7 +509,7 @@ namespace ImRichText
             return result;
         }
 
-        std::deque<DrawableLine> newlines;
+        std::vector<DrawableLine> newlines;
         auto currline = CreateNewLine(-1);
         auto currentx = 0.f;
         auto availwidth = lines[index].Content.width;
@@ -622,7 +605,7 @@ namespace ImRichText
         return topOffset;
     }
 
-    void AdjustForSuperSubscripts(const std::vector<int>& indexes, std::deque<DrawableLine>& lines, 
+    void AdjustForSuperSubscripts(const std::vector<int>& indexes, std::vector<DrawableLine>& lines,
         std::vector<StyleDescriptor>& styles, const RenderConfig& config)
     {
         for (auto idx : indexes)
@@ -682,7 +665,7 @@ namespace ImRichText
         return isEmpty;
     }
 
-    void ComputeLineBounds(std::deque<DrawableLine>& result, const std::vector<int>& linesModified, 
+    void ComputeLineBounds(std::vector<DrawableLine>& result, const std::vector<int>& linesModified,
         const std::vector<StyleDescriptor>& styles, const RenderConfig& config)
     {
         for (auto index : linesModified)
@@ -716,8 +699,8 @@ namespace ImRichText
                     // TODO: Fix bullet positioning w.r.t. first text block (baseline aligned?)
                     /*if ((token.Type == TokenType::ListItemBullet) && ((tokidx + 1) < (int)segment.Tokens.size()))
                          segment.Tokens[tokidx + 1]*/
-                    token.Bounds.left = currx;
-                    currx += token.Bounds.width;
+                    token.Bounds.left = currx + token.Offset.left;
+                    currx += token.Bounds.width + token.Offset.h();
                 }
 
                 currx += style.padding.right;
@@ -769,7 +752,7 @@ namespace ImRichText
     }
 
     DrawableLine MoveToNextLine(TagType tagType, int listDepth, int blockquoteDepth, int styleIdx,
-        DrawableLine& line, std::deque<DrawableLine>& result, std::vector<StyleDescriptor>& styles,
+        DrawableLine& line, std::vector<DrawableLine>& result, std::vector<StyleDescriptor>& styles,
         const RenderConfig& config, bool isTagStart)
     {
         auto isEmpty = IsLineEmpty(line);
@@ -1064,10 +1047,17 @@ namespace ImRichText
     }
 
 #ifdef _DEBUG
-    inline void DrawDebugRect(DebugContentType type, ImDrawList* drawList, ImVec2 startpos, ImVec2 endpos, const RenderConfig& config)
+    inline void DrawDebugRect(DebugContentType type, ImVec2 startpos, ImVec2 endpos, const RenderConfig& config)
     {
+        auto drawList = ImGui::GetForegroundDrawList();
         if (config.DebugContents[type].Value != ImColor{ IM_COL32_BLACK_TRANS }.Value) 
             drawList->AddRect(startpos, endpos, config.DebugContents[type]);
+    }
+
+    inline void DrawDebugRect(ImColor color, ImVec2 startpos, ImVec2 endpos)
+    {
+        auto drawList = ImGui::GetForegroundDrawList();
+        drawList->AddRect(startpos, endpos, color);
     }
 #else
 #define DrawDebugRect(...)
@@ -1129,12 +1119,12 @@ namespace ImRichText
     void DrawBackground(ImDrawList* drawList, ImVec2 startpos, ImVec2 endpos,
         const ColorGradient& gradient, ImColor color, const RenderConfig& config)
     {
-        if (!gradient.colorStops.empty())
+        if (gradient.totalStops != 0)
             (!gradient.reverseOrder) ?
             DrawLinearGradient(drawList, startpos, endpos, gradient.angleDegrees, gradient.dir,
-                gradient.colorStops.begin(), gradient.colorStops.end()) :
+                std::begin(gradient.colorStops), std::begin(gradient.colorStops) + gradient.totalStops) :
             DrawLinearGradient(drawList, startpos, endpos, gradient.angleDegrees, gradient.dir,
-                gradient.colorStops.rbegin(), gradient.colorStops.rend());
+                std::rbegin(gradient.colorStops), std::rbegin(gradient.colorStops) + gradient.totalStops);
         else if (color.Value != config.DefaultBgColor.Value && color.Value != ImColor{ IM_COL32_BLACK_TRANS }.Value)
             drawList->AddRectFilled(startpos, endpos, color);
     }
@@ -1190,8 +1180,36 @@ namespace ImRichText
                 startpos.x, startpos.y, token.Bounds.width, token.Bounds.height);
 
             currpos += std::snprintf(buffer + currpos, 1023 + 2048 - currpos, 
-                "\nProperties Specified: %s\nForeground Color: (%d, %d, %d)\nBackground Color: (%d, %d, %d)\n"
-                "Height: %.2fpx\nWidth: %.2fpx\nTooltip: %.*s\nLink: %.*s\nBlink: %s\n", props, fr, fg, fb, br, bg, bb,
+                "\nProperties Specified: %s\nForeground Color: (%d, %d, %d)\n",
+                props, fr, fg, fb);
+
+            if (style.backgroundIdx != -1)
+            {
+                if (style.gradient.totalStops == 0)
+                    if (style.bgcolor != IM_COL32_BLACK_TRANS)
+                        currpos += std::snprintf(buffer + currpos, 1023 + 2048 - currpos, "Background Color: (%d, %d, %d)\n", br, bg, bb);
+                    else
+                        currpos += std::snprintf(buffer + currpos, 1023 + 2048 - currpos, "Background Color: Transparent\n");
+                else
+                {
+                    currpos += std::snprintf(buffer + currpos, 1023 + 2048 - currpos, "Linear Gradient:");
+
+                    for (auto idx = 0; idx < style.gradient.totalStops; ++idx)
+                    {
+                        auto r1 = (int)(style.gradient.colorStops[idx].from.Value.x * 255.f);
+                        auto g1 = (int)(style.gradient.colorStops[idx].from.Value.y * 255.f);
+                        auto b1 = (int)(style.gradient.colorStops[idx].from.Value.z * 255.f);
+                        auto r2 = (int)(style.gradient.colorStops[idx].to.Value.x * 255.f);
+                        auto g2 = (int)(style.gradient.colorStops[idx].to.Value.y * 255.f);
+                        auto b2 = (int)(style.gradient.colorStops[idx].to.Value.z * 255.f);
+                        currpos += std::snprintf(buffer + currpos, 1023 + 2048 - currpos, "From (%d, %d, %d) To (%d, %d, %d) at %.2f\n",
+                            r1, g1, b1, r2, g2, b2, style.gradient.colorStops[idx].pos);
+                    }
+                }
+            }
+
+            currpos += std::snprintf(buffer + currpos, 1023 + 2048 - currpos,
+                "\nHeight: %.2fpx\nWidth: %.2fpx\nTooltip: %.*s\nLink: %.*s\nBlink: %s\n",
                 style.width, style.height, (int)style.tooltip.size(), style.tooltip.data(),
                 (int)style.link.size(), style.link.data(), yesorno(style.blink));
 
@@ -1223,7 +1241,7 @@ namespace ImRichText
 
     bool DrawToken(ImDrawList* drawList, int lineidx, const Token& token, ImVec2 initpos,
         ImVec2 bounds, const StyleDescriptor& style, const RenderConfig& config, 
-        TooltipData& tooltip, AnimationData& animation, bool isMarquee)
+        TooltipData& tooltip, AnimationData& animation)
     {
         auto startpos = token.Bounds.start(initpos);
         auto endpos = token.Bounds.end(initpos);
@@ -1268,10 +1286,7 @@ namespace ImRichText
             else
             {
                 auto textend = token.Content.data() + token.VisibleTextSize;
-
                 auto halfh = token.Bounds.height * 0.5f;
-                if (isMarquee) startpos.x += animation.xoffsets[lineidx];
-
                 drawList->AddText(startpos, style.fgcolor, token.Content.data(), textend);
 
                 if (style.font.strike) drawList->AddLine(startpos + ImVec2{ 0.f, halfh }, endpos + ImVec2{ 0.f, -halfh }, style.fgcolor);
@@ -1281,6 +1296,7 @@ namespace ImRichText
                 {
                     if (!style.font.underline)
                     {
+                        // TODO: Refactor this out
                         auto posx = startpos.x;
                         while (posx < endpos.x)
                         {
@@ -1310,14 +1326,14 @@ namespace ImRichText
             }
         }
 
-        if (DrawOverlay(startpos, endpos, token, style)) DrawDebugRect(ContentTypeToken, drawList, startpos, endpos, config);
+        if (DrawOverlay(startpos, endpos, token, style)) DrawDebugRect(ContentTypeToken, startpos, endpos, config);
         if ((token.Bounds.left + token.Bounds.width) > (bounds.x + initpos.x)) return false;
         return true;
     }
 
     bool DrawSegment(ImDrawList* drawList, int lineidx, const SegmentData& segment,
         ImVec2 initpos, ImVec2 bounds, const std::vector<StyleDescriptor>& styles, const RenderConfig& config,
-        TooltipData& tooltip, AnimationData& animation, bool isMarquee)
+        TooltipData& tooltip, AnimationData& animation)
     {
         if (segment.Tokens.empty()) return true;
 
@@ -1339,21 +1355,21 @@ namespace ImRichText
         for (const auto& token : segment.Tokens)
         {
             if (drawTokens && !DrawToken(drawList, lineidx, token, initpos, bounds, style,
-                config, tooltip, animation, isMarquee))
+                config, tooltip, animation))
             {
                 drawTokens = false; 
                 break;
             }
         }
 
-        DrawDebugRect(ContentTypeSegment, drawList, startpos, endpos, config);
+        DrawDebugRect(ContentTypeSegment, startpos, endpos, config);
 
         if (popFont) ImGui::PopFont();
         return drawTokens;
     }
 
     void DrawForegroundLayer(ImDrawList* drawList, ImVec2 initpos, ImVec2 bounds, 
-        const std::deque<DrawableLine>& lines, const std::vector<StyleDescriptor>& styles, 
+        const std::vector<DrawableLine>& lines, const std::vector<StyleDescriptor>& styles,
         const RenderConfig& config, TooltipData& tooltip, AnimationData& animation)
     {
         int listCountByDepth[IM_RICHTEXT_MAX_LISTDEPTH];
@@ -1365,11 +1381,17 @@ namespace ImRichText
 
             for (const auto& segment : lines[lineidx].Segments)
             {
-                if (!DrawSegment(drawList, lineidx, segment, initpos, bounds, styles, config, tooltip, animation, lines[lineidx].Marquee))
+                auto linestart = initpos;
+                if (lines[lineidx].Marquee) linestart.x += animation.xoffsets[lineidx];
+                if (!DrawSegment(drawList, lineidx, segment, linestart, bounds, styles, config, tooltip, animation))
                     break;
             }
             
-            DrawDebugRect(ContentTypeLine, drawList, lines[lineidx].Content.start(initpos), lines[lineidx].Content.end(initpos), config);
+#ifdef _DEBUG
+            auto linestart = lines[lineidx].Content.start(initpos) + ImVec2{ lines[lineidx].Offset.left, lines[lineidx].Offset.top };
+            auto lineend = lines[lineidx].Content.end(initpos);
+            DrawDebugRect(ContentTypeLine, linestart, lineend, config);
+#endif
             if ((lines[lineidx].Content.top + lines[lineidx].height()) > (bounds.y + initpos.y)) break;
         }
     }
@@ -1381,7 +1403,7 @@ namespace ImRichText
         {
             DrawBackground(drawList, shape.Start + initpos, shape.End + initpos,
                 shape.Gradient, shape.Color, config);
-
+            DrawDebugRect(ContentTypeBg, shape.Start + initpos, shape.End + initpos, config);
             if (shape.End.y > (bounds.y + initpos.y)) break;
         }
     }
@@ -1448,23 +1470,13 @@ namespace ImRichText
         ImGui::PopClipRect();
     }
 
-    bool ShowDrawables(std::string_view content, Drawables& drawables, RenderConfig* config)
+    bool ShowDrawables(std::string_view content, Drawables& drawables, ImVec2 bounds, RenderConfig* config)
     {
         ImGuiWindow* window = ImGui::GetCurrentWindow();
         if (window->SkipItems)
             return false;
 
         const auto& style = ImGui::GetCurrentContext()->Style;
-        auto bounds = GetBounds(drawables, config->Bounds);
-
-        // <hr> elements may not have width unless pre-specified, hence update them
-        for (auto& line : drawables.ForegroundLines)
-            for (auto& segment : line.Segments)
-                for (auto& token : segment.Tokens)
-                    if ((token.Type == TokenType::HorizontalRule) && ((drawables.StyleDescriptors[segment.StyleIdx + 1].propsSpecified & StyleWidth) == 0)
-                        && token.Bounds.width == -1.f)
-                        token.Bounds.width = segment.Bounds.width = line.Content.width = bounds.x;
-
         auto id = window->GetID(content.data(), content.data() + content.size());
         auto pos = window->DC.CursorPos;
         ImGui::ItemSize(bounds);
@@ -1583,6 +1595,8 @@ namespace ImRichText
                 // Create multi-line background shapes for each depth and reset original specifications
                 for (const auto& bgdata : BackgroundSpans[depth])
                 {
+                    if (bgdata.span.end.first == -1) continue;
+
                     BackgroundShape background;
                     auto& firstSegment = result.ForegroundLines[bgdata.span.start.first].Segments[bgdata.span.start.second];
                     const auto& lastSegment = result.ForegroundLines[bgdata.span.end.first].Segments[bgdata.span.end.second];
@@ -1591,10 +1605,14 @@ namespace ImRichText
                     background.Start = { firstSegment.Bounds.left, firstSegment.Bounds.top };
                     background.End = { lastSegment.Bounds.left + lastSegment.Bounds.width,
                         lastSegment.Bounds.top + result.ForegroundLines[bgdata.span.end.first].height() };
+                    background.Start.x = std::min(background.Start.x, lastSegment.Bounds.left);
+                    background.End.x = std::max(background.End.x, firstSegment.Bounds.left + firstSegment.Bounds.width);
                     background.Color = firstStyle.bgcolor;
                     background.Gradient = firstStyle.gradient;
+
                     firstStyle.bgcolor = IM_COL32_BLACK_TRANS;
                     firstStyle.gradient = ColorGradient{};
+                    firstStyle.backgroundIdx = (int)result.BackgroundShapes.size();
                     result.BackgroundShapes.push_back(background);
                 }
             }
@@ -1652,6 +1670,7 @@ namespace ImRichText
 
         bool TagStartDone()
         {
+            auto hasSegments = !currline.Segments.empty();
             auto hasUniqueStyle = CreateNewStyle();
             auto segmentAdded = hasUniqueStyle;
             auto& currentStyle = Style(CurrentStackPos);
@@ -1665,7 +1684,7 @@ namespace ImRichText
                 tagType == TagType::RawText || tagType == TagType::ListItem ||
                 tagType == TagType::CodeBlock || tagType == TagType::Marquee)
             {
-                if (!currline.Segments.empty())
+                if (hasSegments)
                     currline = MoveToNextLine(tagType, listDepth, blockquoteDepth, styleIdx, currline, result.ForegroundLines, result.StyleDescriptors, config, true);
                 maxWidth = std::max(maxWidth, result.ForegroundLines.empty() ? 0.f : result.ForegroundLines.back().Content.width);
 
@@ -1716,8 +1735,7 @@ namespace ImRichText
             segment.SubscriptDepth = subscriptLevel;
             segment.SuperscriptDepth = superscriptLevel;
 
-            if ((currentStyle.propsSpecified & StyleBackground) != 0 &&
-                tagType == TagType::Paragraph)
+            if ((currentStyle.propsSpecified & StyleBackground) != 0 && IsContentMultiline(tagType))
             {
                 // The current line is `currline` which is not yet added, hence record .size()
                 auto& bgidx = BackgroundSpans[CurrentStackPos].emplace_back();
@@ -1847,6 +1865,7 @@ namespace ImRichText
                     listDepth--;
                 }
 
+                currline.Marquee = tagType == TagType::Marquee;
                 currline = MoveToNextLine(tagType, listDepth, blockquoteDepth, styleIdx, currline, result.ForegroundLines, result.StyleDescriptors, config, false);
                 maxWidth = std::max(maxWidth, result.ForegroundLines.back().Content.width);
 
@@ -1903,7 +1922,7 @@ namespace ImRichText
                 token.Content = "\"";
                 AddToken(currline, token, NoStyleChange, result.StyleDescriptors, config);
             }
-            else
+            else if (tagType != TagType::Unknown)
             {
                 AddSegment(currline, styleIdx, result.StyleDescriptors, config);
                 segmentAdded = true;
@@ -1914,7 +1933,8 @@ namespace ImRichText
 
             // If background spans multiple lines, record it separately
             if (!selfTerminatingTag && !BackgroundSpans[CurrentStackPos + 1].empty() && hasBgSpecified
-                && (int)result.ForegroundLines.size() > BackgroundSpans[CurrentStackPos + 1].back().span.start.first)
+                && (int)result.ForegroundLines.size() > BackgroundSpans[CurrentStackPos + 1].back().span.start.first
+                && BackgroundSpans[CurrentStackPos + 1].back().span.end.first == -1)
             {
                 auto& lastLineIdx = BackgroundSpans[CurrentStackPos + 1].back();
                 lastLineIdx.span.end.first = (int)result.ForegroundLines.size();
@@ -1985,6 +2005,20 @@ namespace ImRichText
         return result;
     }
 
+    ImVec2 ComputeBounds(Drawables& drawables, RenderConfig* config)
+    {
+        auto bounds = GetBounds(drawables, config->Bounds);
+
+        // <hr> elements may not have width unless pre-specified, hence update them
+        for (auto& line : drawables.ForegroundLines)
+            for (auto& segment : line.Segments)
+                for (auto& token : segment.Tokens)
+                    if ((token.Type == TokenType::HorizontalRule) && ((drawables.StyleDescriptors[segment.StyleIdx + 1].propsSpecified & StyleWidth) == 0)
+                        && token.Bounds.width == -1.f)
+                        token.Bounds.width = segment.Bounds.width = line.Content.width = bounds.x;
+        return bounds;
+    }
+
     bool Show(const char* text, const char* textend)
     {
         if (textend == nullptr) textend = text + std::strlen(text);
@@ -1994,7 +2028,8 @@ namespace ImRichText
         if (config->Bounds.x == 0 || config->Bounds.y == 0) return false;
 
         auto drawables = GetDrawables(text, textend, *config);
-        return ShowDrawables(std::string_view{ text, (size_t)(textend - text) }, drawables, config);
+        auto bounds = ComputeBounds(drawables, config);
+        return ShowDrawables(std::string_view{ text, (size_t)(textend - text) }, drawables, bounds, config);
     }
 
     std::size_t CreateRichText(const char* text, const char* end)
@@ -2075,11 +2110,21 @@ namespace ImRichText
                 drawdata.bgcolor = config->DefaultBgColor;
                 drawdata.scale = config->Scale;
                 drawdata.fontScale = config->FontScale;
+
+#ifdef _DEBUG
+                auto ts = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock().now().time_since_epoch());
                 drawdata.drawables = GetDrawables(drawdata.richText.data(),
                     drawdata.richText.data() + drawdata.richText.size(), *config);
+                ts = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock().now().time_since_epoch()) - ts;
+                HIGHLIGHT("\nParsing [#%d] took %lldus", (int)richTextId, ts.count());
+#else
+                drawdata.drawables = GetDrawables(drawdata.richText.data(),
+                    drawdata.richText.data() + drawdata.richText.size(), *config);
+#endif
             }
 
-            ShowDrawables(drawdata.richText, drawdata.drawables, config);
+            auto bounds = ComputeBounds(drawdata.drawables, config);
+            ShowDrawables(drawdata.richText, drawdata.drawables, bounds, config);
             return true;
         }
 

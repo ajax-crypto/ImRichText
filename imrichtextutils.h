@@ -6,6 +6,10 @@
 
 #include "imgui.h"
 
+#ifndef IMRICHTEXT_MAX_COLORSTOPS
+#define IMRICHTEXT_MAX_COLORSTOPS 8
+#endif
+
 namespace ImRichText
 {
     // Implement this interface to hndle parsed rich text
@@ -39,7 +43,8 @@ namespace ImRichText
 
     struct ColorGradient
     {
-        std::vector<ColorStop> colorStops; // TODO: Maybe an array of fixed size?
+        ColorStop colorStops[IMRICHTEXT_MAX_COLORSTOPS];
+        int totalStops = 0;
         float angleDegrees = 0.f;
         ImGuiDir dir = ImGuiDir::ImGuiDir_Down;
         bool reverseOrder = false;
@@ -76,6 +81,11 @@ namespace ImRichText
 
         float h() const { return left + right; }
         float v() const { return top + bottom; }
+    };
+
+    enum LineType
+    {
+        Dashed, Dotted, DashDot
     };
 
     // Generic string helpers, case-insensitive matches
