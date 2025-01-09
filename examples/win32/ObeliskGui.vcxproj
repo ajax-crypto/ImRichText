@@ -72,8 +72,8 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <IncludePath>inc;..\..\..\;..\..\..\glfw-3.4.bin.WIN64\include;$(IncludePath)</IncludePath>
-    <LibraryPath>..\..\..\glfw-3.4.bin.WIN64\lib-vc2022\;$(LibraryPath)</LibraryPath>
+    <IncludePath>inc;..\..\..\;..\..\..\freetype2\include;..\..\..\glfw-3.4.bin.WIN64\include;$(IncludePath)</IncludePath>
+    <LibraryPath>lib\;..\..\..\glfw-3.4.bin.WIN64\lib-vc2022\;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <IncludePath>inc;..\..\..\;..\..\..\glfw-3.4.bin.WIN64\include;$(IncludePath)</IncludePath>
@@ -123,7 +123,7 @@
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>opengl32.lib;glfw3_mt.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>freetype.lib;opengl32.lib;glfw3_mt.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -150,8 +150,9 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="..\..\imrichtext.cpp" />
-    <ClCompile Include="..\..\imrichtextcolor.cpp" />
     <ClCompile Include="..\..\imrichtextfont.cpp" />
+    <ClCompile Include="..\..\imrichtextutils.cpp" />
+    <ClCompile Include="inc\misc\freetype\imgui_freetype.cpp" />
     <ClCompile Include="ObeliskGui.cpp" />
     <ClCompile Include="src\imgui.cpp" />
     <ClCompile Include="src\imgui_demo.cpp" />
@@ -163,8 +164,8 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\imrichtext.h" />
-    <ClInclude Include="..\..\imrichtextcolor.h" />
     <ClInclude Include="..\..\imrichtextfont.h" />
+    <ClInclude Include="..\..\imrichtextutils.h" />
     <ClInclude Include="inc\GLFW\glfw3.h" />
     <ClInclude Include="inc\GLFW\glfw3native.h" />
     <ClInclude Include="inc\IComponent.h" />
@@ -177,6 +178,7 @@
     <ClInclude Include="inc\imstb_rectpack.h" />
     <ClInclude Include="inc\imstb_textedit.h" />
     <ClInclude Include="inc\imstb_truetype.h" />
+    <ClInclude Include="inc\misc\freetype\imgui_freetype.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

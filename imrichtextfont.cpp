@@ -1,5 +1,6 @@
 #include "imrichtextfont.h"
 #include "imrichtext.h"
+#include "misc/freetype/imgui_freetype.h"
 
 #include <unordered_set>
 #include <unordered_map>
@@ -20,7 +21,7 @@ namespace ImRichText
 
     static std::unordered_map<std::string_view, std::map<float, FontCollection>> FontStore;
 
-    bool LoadFonts(std::string_view family, const FontCollectionFile& files, float size, const ImFontConfig& config)
+    bool LoadFonts(std::string_view family, const FontCollectionFile& files, float size, ImFontConfig config)
     {
         ImGuiIO& io = ImGui::GetIO();
         auto& fonts = FontStore[family][size];
@@ -29,10 +30,33 @@ namespace ImRichText
         fonts.Normal = files.Normal.empty() ? nullptr : io.Fonts->AddFontFromFileTTF(files.Normal.data(), size, &config);
         assert(fonts.Normal != nullptr);
 
-        fonts.Light = files.Light.empty() ? fonts.Normal : io.Fonts->AddFontFromFileTTF(files.Light.data(), size, &config);
+#ifdef IMGUI_ENABLE_FREETYPE
+        auto configFlags = config.FontBuilderFlags;
+
+        if (files.Bold.empty()) { 
+            config.FontBuilderFlags = configFlags | ImGuiFreeTypeBuilderFlags_Bold;
+            fonts.Bold = io.Fonts->AddFontFromFileTTF(files.Normal.data(), size, &config);
+        }
+        else fonts.Bold = io.Fonts->AddFontFromFileTTF(files.Bold.data(), size, &config);
+
+        if (files.Italics.empty()) {
+            config.FontBuilderFlags = configFlags | ImGuiFreeTypeBuilderFlags_Oblique;
+            fonts.Italics = io.Fonts->AddFontFromFileTTF(files.Normal.data(), size, &config);
+        }
+        else fonts.Italics = io.Fonts->AddFontFromFileTTF(files.Italics.data(), size, &config);
+
+        if (files.BoldItalics.empty()) {
+            config.FontBuilderFlags = configFlags | ImGuiFreeTypeBuilderFlags_Oblique | ImGuiFreeTypeBuilderFlags_Bold;
+            fonts.Italics = io.Fonts->AddFontFromFileTTF(files.Normal.data(), size, &config);
+        }
+        else fonts.BoldItalics = io.Fonts->AddFontFromFileTTF(files.BoldItalics.data(), size, &config);
+#else
+        
         fonts.Bold = files.Bold.empty() ? fonts.Normal : io.Fonts->AddFontFromFileTTF(files.Bold.data(), size, &config);
         fonts.Italics = files.Italics.empty() ? fonts.Normal : io.Fonts->AddFontFromFileTTF(files.Italics.data(), size, &config);
         fonts.BoldItalics = files.BoldItalics.empty() ? fonts.Normal : io.Fonts->AddFontFromFileTTF(files.BoldItalics.data(), size, &config);
+#endif
+        fonts.Light = files.Light.empty() ? fonts.Normal : io.Fonts->AddFontFromFileTTF(files.Light.data(), size, &config);
         return true;
     }
 
@@ -47,6 +71,7 @@ namespace ImRichText
             "c:\\Windows\\Fonts\\segoeuiz.ttf"
             }, sz, fconfig);
 #endif
+        // TODO: Add default fonts for other platforms
     }
 
     void LoadDefaultMonospaceFont(float sz, const ImFontConfig& fconfig)
@@ -60,6 +85,7 @@ namespace ImRichText
             "c:\\Windows\\Fonts\\consolaz.ttf"
             }, sz, fconfig);
 #endif
+        // TODO: Add default fonts for other platforms
     }
 
     bool LoadDefaultFonts(float sz, FontFileNames* names)
@@ -67,13 +93,17 @@ namespace ImRichText
         ImFontConfig fconfig;
         fconfig.OversampleH = 3.0;
         fconfig.OversampleV = 1.0;
+        fconfig.RasterizerMultiply = sz <= 16.f ? 2.f : 1.f;
+#ifdef IMGUI_ENABLE_FREETYPE
+        fconfig.FontBuilderFlags = ImGuiFreeTypeBuilderFlags_LightHinting;
+#endif
 
         auto copyFileName = [](const std::string_view fontname, char* fontpath, int startidx) {
             auto sz = std::min((int)fontname.size(), _MAX_PATH - startidx);
             std::memcpy(fontpath + startidx, fontname.data(), sz);
             fontpath[startidx + sz] = 0;
             return fontpath;
-            };
+        };
 
         if (names == nullptr)
         {
@@ -203,5 +233,11 @@ namespace ImRichText
         else if (italics) return szit->second.Italics;
         else if (light) return szit->second.Light;
         else return szit->second.Normal;
+    }
+
+    ImFont* GetOverlayFont()
+    {
+        auto it = LookupFontFamily(IM_RICHTEXT_DEFAULT_FONTFAMILY);
+        return it->second.begin()->second.Bold;
     }
 }
