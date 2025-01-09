@@ -80,7 +80,7 @@ The following subset of HTML tags/CSS properties are supported:
 ### General Style Properties
 | Property Name(s) | Value/Example |
 |------------------|:---------------|
-| background/background-color/color | `rgb(r, g, b)`/`rgba(r, g, b, a)`/`hsl(h, s, l)`/ [CSS color name](https://developer.mozilla.org/en-US/docs/Web/CSS/named-color) |
+| background/background-color/color | `rgb(r, g, b)`/`rgba(r, g, b, a)`/`hsl(h, s, l)`/`linear-gradient(color-stops)`[^5] [CSS color name](https://developer.mozilla.org/en-US/docs/Web/CSS/named-color) |
 | padding/padding-top/etc. | `px`/`em` units |
 | font-size | `pt`/`px`/`em` (_absolute_) / % (_of parent font size_) / `xx-small`, `x-small`, `medium`, `large`, etc. |
 | font-family | _name of font family_ |
@@ -88,6 +88,7 @@ The following subset of HTML tags/CSS properties are supported:
 | font-style | italics/oblique |
 | height/width | `px`/`em` |
 | list-style-type | (_Only for list items_) `circle`/`disk`/`square`/`custom`[^2] |
+| text-overflow | _Under progress_ |
 
 In order to handle rich text as specified above, fonts need to be managed i.e. different family, weights, sizes, etc. 
 The library internally uses default fonts (for Windows Segoe UI family for proportional and Consolas for monospace).
@@ -100,7 +101,7 @@ However, user can provide their own font provider through `RenderConfig::GetFont
 * Implement support for vertical/horizontal text alignment including baseline alignment (May need to use FreeType backend)
 * Integration example with [Clay layout library](https://github.com/nicbarker/clay?tab=readme-ov-file)
 * Roman numerals for numbered lists
-* Gradient fills for backgrounds
+* Radial gradient fills for backgrounds
 * Tables (`<table>`, `<tr>`, `<th>`, `<td>` tags)
 
 ## Future Goals
@@ -128,6 +129,7 @@ In order to customize certain behavior at build-time, the following macros can b
 | `IM_RICHTEXT_ENABLE_PARSER_LOGS` | Enable printing parsing + layout logs in console in debug builds | Not defined |
 | `IM_RICHTEXT_BLINK_ANIMATION_INTERVAL` | Specify blink animation interval | 500ms |
 | `IM_RICHTEXT_MARQUEE_ANIMATION_INTERVAL` | Specify interval (`1/FPS`) for marquee animation | 18ms |
+| `IM_RICHTEXT_MAX_COLORSTOPS` | Specify maximum color stops in gradients | 8 |
 
 ## Error Reporting
 When `_DEBUG` macro is defined, if a console is present, error messages will be printed along
@@ -151,3 +153,4 @@ can span multiple lines. After that, the foreground i.e. text is drawn (with bac
 [^2]: Custom bullets are also possible, set `RenderConfig::DrawBullet` function pointer and `list-style-type` property to `custom`
 [^3]: Underline text due to `<u>` tag is not baseline-underlined, but underlined beneath the whole text
 [^4]: Set `RenderConfig::HandleHyperlink` function pointer to handle hyperlinks clicked
+[^5]: Only axis aligned gradients are support as `background` property

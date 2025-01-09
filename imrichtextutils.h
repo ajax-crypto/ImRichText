@@ -6,8 +6,8 @@
 
 #include "imgui.h"
 
-#ifndef IMRICHTEXT_MAX_COLORSTOPS
-#define IMRICHTEXT_MAX_COLORSTOPS 8
+#ifndef IM_RICHTEXT_MAX_COLORSTOPS
+#define IM_RICHTEXT_MAX_COLORSTOPS 8
 #endif
 
 namespace ImRichText
@@ -43,7 +43,7 @@ namespace ImRichText
 
     struct ColorGradient
     {
-        ColorStop colorStops[IMRICHTEXT_MAX_COLORSTOPS];
+        ColorStop colorStops[IM_RICHTEXT_MAX_COLORSTOPS];
         int totalStops = 0;
         float angleDegrees = 0.f;
         ImGuiDir dir = ImGuiDir::ImGuiDir_Down;

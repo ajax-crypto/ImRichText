@@ -344,7 +344,7 @@ namespace ImRichText
                         {
                             gradient.colorStops[gradient.totalStops] =
                                 ColorStop{ lastStop.value().first, colorstop.first, colorstop.second };
-                            gradient.totalStops = std::min(gradient.totalStops + 1, IMRICHTEXT_MAX_COLORSTOPS-1);
+                            gradient.totalStops = std::min(gradient.totalStops + 1, IM_RICHTEXT_MAX_COLORSTOPS-1);
                         }
 
                         lastStop = colorstop;
