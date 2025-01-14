@@ -5,7 +5,6 @@
 
 #include <string_view>
 #include <vector>
-#include <initializer_list>
 
 #define IM_RICHTEXT_DEFAULT_FONTFAMILY "default-font-family"
 #define IM_RICHTEXT_MONOSPACE_FONTFAMILY "monospace"
@@ -36,22 +35,8 @@
 
 #define IM_RICHTEXT_NESTED_ITEMCOUNT_STRSZ 64
 
-#ifndef IMGUI_DEFINE_MATH_OPERATORS
-ImVec2 operator+(ImVec2 lhs, ImVec2 rhs) { return ImVec2{ lhs.x + rhs.x, lhs.y + rhs.y }; }
-#endif
-
 namespace ImRichText
 {
-    enum class HorizontalAlignment
-    {
-        Left, Right, Center, Justify
-    };
-
-    enum class VerticalAlignment
-    {
-        Top, Bottom, Center
-    };
-
     enum class TokenType
     {
         Text,
@@ -61,18 +46,43 @@ namespace ImRichText
         Meter
     };
 
+    struct ListItemTokenDescriptor
+    {
+        char NestedListItemIndex[IM_RICHTEXT_NESTED_ITEMCOUNT_STRSZ];
+        int16_t ListDepth = -1;
+        int16_t ListItemIndex = -1;
+    };
+
+    struct TagPropertyDescriptor
+    {
+        std::string_view tooltip = "";
+        std::string_view link = "";
+        float value = 0.f;
+        std::pair<float, float> range = { 0.f, 0.f };
+    };
+
     struct Token
     {
+        TokenType Type = TokenType::Text;
         std::string_view Content = "";
         BoundedBox Bounds;
-        TokenType Type = TokenType::Text;
         FourSidedMeasure Offset;
-        char NestedListItemIndex[IM_RICHTEXT_NESTED_ITEMCOUNT_STRSZ];
+        int16_t ListPropsIdx = -1;
+        int16_t PropertiesIdx = -1;
+        int16_t VisibleTextSize = -1;
+    };
 
-        int ListDepth = -1;
-        int ListItemIndex = -1;
-        int VisibleTextSize = -1;
-        bool AddEllipsis = false;
+    enum FontStyleFlag : int32_t
+    {
+        FontStyleNone = 0,
+        FontStyleNormal = 1,
+        FontStyleBold = 1 << 1,
+        FontStyleItalics = 1 << 2,
+        FontStyleLight = 1 << 3,
+        FontStyleStrikethrough = 1 << 4,
+        FontStyleUnderline = 1 << 5,
+        FontStyleNoWrap = 1 << 6,
+        FontStyleOverflowEllipsis = 1 << 7,
     };
 
     struct FontStyle
@@ -80,67 +90,71 @@ namespace ImRichText
         ImFont* font = nullptr;
         std::string_view family = IM_RICHTEXT_DEFAULT_FONTFAMILY;
         float size = 24.f;
-        bool bold = false;
-        bool italics = false;
-        bool light = false;
-        bool strike = false;
-        bool underline = false;
-        bool wrap = true;
-        bool overflowEllipsis = false;
+        int32_t flags = FontStyleNone;
     };
 
     struct ListStyle
     {
-        ImColor itemColor = IM_COL32_BLACK;
+        uint32_t itemColor = IM_COL32_BLACK;
         BulletType itemStyle = BulletType::FilledCircle;
     };
 
-    enum StyleProperty
+    enum StyleProperty : int64_t
     {
         StyleError = -1,
         NoStyleChange = 0,
         StyleBackground = 1,
-        StyleFgColor = 2,
-        StyleFontSize = 4,
-        StyleFontFamily = 8,
-        StyleFontWeight = 16,
-        StyleFontStyle = 32,
-        StyleHeight = 64,
-        StyleWidth = 128,
-        StyleListBulletType = 256,
-        StyleHAlignment = 512,
-        StyleVAlignment = 1024,
-        StylePaddingTop = 2048,
-        StylePaddingBottom = 4096,
-        StylePaddingLeft = 8192,
-        StylePaddingRight = 16384,
-        StyleBlink = 32768,
-        StyleNoWrap = 65536
+        StyleFgColor = 1 << 1,
+        StyleFontSize = 1 << 2,
+        StyleFontFamily = 1 << 3,
+        StyleFontWeight = 1 << 4,
+        StyleFontStyle = 1 << 5,
+        StyleHeight = 1 << 6,
+        StyleWidth = 1 << 7,
+        StyleListBulletType = 1 << 8,
+        StyleHAlignment = 1 << 9,
+        StyleVAlignment = 1 << 10,
+        StylePaddingTop = 1 << 11,
+        StylePaddingBottom = 1 << 12,
+        StylePaddingLeft = 1 << 13,
+        StylePaddingRight = 1 << 14,
+        StyleBorder = 1 << 15,
+        StyleBorderUniform = 1 << 16,
+        StyleCellSpacing = 1 << 17,
+        StyleBlink = 1 << 18,
+        StyleNoWrap = 1 << 19
+    };
+
+    enum TextAlignment
+    {
+        TextAlignLeft = 1,
+        TextAlignRight = 1 << 1,
+        TextAlignHCenter = 1 << 2,
+        TextAlignTop = 1 << 3,
+        TextAlignBottom = 1 << 4,
+        TextAlignVCenter = 1 << 5,
+        TextAlignJustify = 1 << 6,
+        TextAlignCenter = TextAlignHCenter | TextAlignVCenter,
+        TextAlignLeading = TextAlignLeft | TextAlignVCenter
     };
 
     struct StyleDescriptor
     {
-        int propsSpecified = 0;
-        ImColor fgcolor = IM_COL32_BLACK;
-        ImColor bgcolor = IM_COL32_BLACK_TRANS;
+        int64_t propsSpecified = NoStyleChange;
+        uint32_t fgcolor = IM_COL32_BLACK;
+        uint32_t bgcolor = IM_COL32_BLACK_TRANS;
         float height = 0;
         float width = 0;
-        HorizontalAlignment alignmentH = HorizontalAlignment::Left; // UNUSED
-        VerticalAlignment alignmentV = VerticalAlignment::Center; // UNUSED
         FontStyle font;
         ListStyle list;
         FourSidedMeasure padding;
+        FourSidedBorder border;
+        int alignment = TextAlignment::TextAlignLeading;
         float superscriptOffset = 0.f; // TODO: Move to DrawableLine
         float subscriptOffset = 0.f; // TODO: Move to DrawableLine
         ColorGradient gradient;
-        
-        std::string_view tooltip = "";
-        std::string_view link = "";
-        float value = 0.f;
-        std::pair<float, float> range = { 0.f, 0.f };
+        int32_t backgroundIdx = -1; // If multi-line background, index in Drawables::BackgroundShapes
         bool blink = false;
-
-        int backgroundIdx = -1; // If multi-line background, index in Drawables::BackgroundShapes
     };
 
     // TODO: Can we remove this? Segmentation is not technically required...
@@ -177,7 +191,7 @@ namespace ImRichText
     struct BackgroundShape
     {
         ImVec2 Start, End;
-        ImColor Color = IM_COL32_BLACK_TRANS;
+        uint32_t Color = IM_COL32_BLACK_TRANS;
         ColorGradient Gradient;
     };
 
@@ -217,33 +231,32 @@ namespace ImRichText
 
         std::string_view DefaultFontFamily = IM_RICHTEXT_DEFAULT_FONTFAMILY;
         float   DefaultFontSize = 20;
-        ImColor DefaultFgColor = IM_COL32_BLACK;
-        ImColor DefaultBgColor = IM_COL32_WHITE;
-        ImColor MarkHighlight = ImColor{ 255, 255, 0 };
-        ImColor HyperlinkColor = ImColor{ 0, 50, 255 };
+        uint32_t DefaultFgColor = IM_COL32_BLACK;
+        uint32_t DefaultBgColor = IM_COL32_WHITE;
+        uint32_t MarkHighlight = ToRGBA(255, 255, 0);
+        uint32_t HyperlinkColor = ToRGBA(0, 50, 255);
 
         ImFont* (*GetFont)(std::string_view, float, bool, bool, bool, void*) = nullptr;
         ImVec2  (*GetTextSize)(std::string_view, ImFont*) = nullptr;
-        ImColor (*NamedColor)(const char*, void*) = nullptr;
+        uint32_t (*NamedColor)(const char*, void*) = nullptr;
         void    (*DrawBullet)(ImVec2, ImVec2, const StyleDescriptor&, int, int, void*) = nullptr;
-        void    (*HandleAttribute)(std::string_view, std::string_view, std::string_view, void*) = nullptr;
         void    (*HandleHyperlink)(std::string_view, void*) = nullptr;
         void    (*RequestFrame)(void*) = nullptr;
 
-        float   HFontSizes[6] = { 36, 32, 24, 20, 16, 12 };
-        ImColor HeaderLineColor = ImColor(128, 128, 128, 255);
+        float    HFontSizes[6] = { 36, 32, 24, 20, 16, 12 };
+        uint32_t HeaderLineColor = ToRGBA(128, 128, 128, 255);
 
-        ImColor BlockquoteBar = { 0.25f, 0.25f, 0.25f, 1.0f };
-        ImColor BlockquoteBg = { 0.5f, 0.5f, 0.5f, 1.0f };
+        uint32_t BlockquoteBar = ToRGBA(0.25f, 0.25f, 0.25f);
+        uint32_t BlockquoteBg = ToRGBA(0.5f, 0.5f, 0.5f);
         float   BlockquotePadding = 5.f;
         float   BlockquoteOffset = 15.f;
         float   BlockquoteBarWidth = 5.f;
 
-        ImColor MeterBorderColor = ImColor{ 100, 100, 100 };
-        ImColor MeterBgColor = ImColor{ 200, 200, 200 };
-        ImColor MeterFgColor = ImColor{ 0, 200, 25 };
+        uint32_t MeterBorderColor = ToRGBA(100, 100, 100);
+        uint32_t MeterBgColor = ToRGBA(200, 200, 200);
+        uint32_t MeterFgColor = ToRGBA(0, 200, 25);
         ImVec2  MeterDefaultSize = { 80.f, 16.f };
-        ImColor CodeBlockBg = IM_COL32_BLACK_TRANS;
+        uint32_t CodeBlockBg = IM_COL32_BLACK_TRANS;
         float   CodeBlockPadding = 5.f;
 
         float BulletSizeScale = 2.f;
@@ -255,7 +268,7 @@ namespace ImRichText
         bool IsStrictHTML5 = false;
 
 #ifdef _DEBUG
-        ImColor DebugContents[ContentTypeTotal] = {
+        uint32_t DebugContents[ContentTypeTotal] = {
             IM_COL32_BLACK_TRANS, IM_COL32_BLACK_TRANS, 
             IM_COL32_BLACK_TRANS, IM_COL32_BLACK_TRANS
         };
@@ -267,6 +280,8 @@ namespace ImRichText
         std::vector<DrawableLine>    ForegroundLines;
         std::vector<BackgroundShape> BackgroundShapes;
         std::vector<StyleDescriptor> StyleDescriptors;
+        std::vector<TagPropertyDescriptor>   TagDescriptors;
+        std::vector<ListItemTokenDescriptor> ListItemTokens;
         bool BoundsComputed = false;
     };
 

@@ -126,23 +126,6 @@ namespace ImRichText
 
     static const char* LineSpaces = "                                ";
 
-#ifndef IMGUI_DEFINE_MATH_OPERATORS
-    [[nodiscard]] ImVec2 operator*(ImVec2 lhs, float rhs)
-    {
-        return ImVec2{ lhs.x * rhs, lhs.y * rhs };
-    }
-
-    [[nodiscard]] ImVec2 operator+(ImVec2 lhs, ImVec2 rhs)
-    {
-        return ImVec2{ lhs.x + rhs.x, lhs.y + rhs.y };
-    }
-
-    [[nodiscard]] ImVec2 operator-(ImVec2 lhs, ImVec2 rhs)
-    {
-        return ImVec2{ lhs.x - rhs.x, lhs.y - rhs.y };
-    }
-#endif
-
 #ifdef _DEBUG
     [[nodiscard]] const char* GetTokenTypeString(const Token& token)
     {
@@ -192,16 +175,16 @@ namespace ImRichText
 
             if (idx == 0)
             {
-                if (AreSame(stylePropVal, "bold")) style.font.bold = true;
-                else if (AreSame(stylePropVal, "light")) style.font.light = true;
+                if (AreSame(stylePropVal, "bold")) style.font.flags |= FontStyleBold;
+                else if (AreSame(stylePropVal, "light")) style.font.flags |= FontStyleLight;
                 else ERROR("Invalid font-weight property value... [%.*s]\n",
                     (int)stylePropVal.size(), stylePropVal.data());
             }
             else
             {
                 int weight = ExtractInt(stylePropVal.substr(0u, idx), 400);
-                style.font.bold = weight >= 600;
-                style.font.light = weight < 400;
+                if (weight >= 600) style.font.flags |= FontStyleBold;
+                if (weight < 400) style.font.flags |= FontStyleLight;
             }
 
             prop = StyleFontWeight;
@@ -230,17 +213,17 @@ namespace ImRichText
         }
         else if (AreSame(stylePropName, "alignment") || AreSame(stylePropName, "text-align"))
         {
-            style.alignmentH = AreSame(stylePropVal, "justify") ? HorizontalAlignment::Justify :
-                AreSame(stylePropVal, "right") ? HorizontalAlignment::Right :
-                AreSame(stylePropVal, "center") ? HorizontalAlignment::Center :
-                HorizontalAlignment::Left;
+            style.alignment |= AreSame(stylePropVal, "justify") ? TextAlignJustify :
+                AreSame(stylePropVal, "right") ? TextAlignRight :
+                AreSame(stylePropVal, "center") ? TextAlignHCenter :
+                TextAlignLeft;
             prop = StyleHAlignment;
         }
         else if (AreSame(stylePropName, "vertical-align"))
         {
-            style.alignmentV = AreSame(stylePropVal, "top") ? VerticalAlignment::Top :
-                AreSame(stylePropVal, "bottom") ? VerticalAlignment::Bottom :
-                VerticalAlignment::Center;
+            style.alignment |= AreSame(stylePropVal, "top") ? TextAlignTop :
+                AreSame(stylePropVal, "bottom") ? TextAlignBottom :
+                TextAlignVCenter;
             prop = StyleVAlignment;
         }
         else if (AreSame(stylePropName, "font-family"))
@@ -281,19 +264,25 @@ namespace ImRichText
         }
         else if (AreSame(stylePropName, "white-space"))
         {
-            style.font.wrap = AreSame(stylePropVal, "nowrap");
-            prop = StyleNoWrap;
+            if (AreSame(stylePropVal, "nowrap")) 
+            {
+                style.font.flags |= FontStyleNoWrap;
+                prop = StyleNoWrap;
+            }
         }
         else if (AreSame(stylePropName, "text-overflow"))
         {
-            style.font.overflowEllipsis = AreSame(stylePropVal, "ellipsis");
-            prop = StyleNoWrap;
+            if (AreSame(stylePropVal, "ellipsis"))
+            {
+                style.font.flags |= FontStyleNoWrap | FontStyleOverflowEllipsis;
+                prop = StyleNoWrap;
+            }
         }
         else if (AreSame(stylePropName, "font-style"))
         {
-            if (AreSame(stylePropVal, "normal")) style.font.italics = false;
+            if (AreSame(stylePropVal, "normal")) style.font.flags |= FontStyleNormal;
             else if (AreSame(stylePropVal, "italic") || AreSame(stylePropVal, "oblique"))
-                style.font.italics = true;
+                style.font.flags |= FontStyleItalics;
             else ERROR("Invalid font-style property value [%.*s]\n",
                 (int)stylePropVal.size(), stylePropVal.data());
             prop = StyleFontStyle;
@@ -350,7 +339,8 @@ namespace ImRichText
 
     [[nodiscard]] StyleDescriptor CreateDefaultStyle(const RenderConfig& config)
     {
-        assert(config.GetFont != nullptr);       
+        assert(config.GetFont != nullptr);
+        assert(config.GetTextSize != nullptr);
 
         StyleDescriptor result;
         result.font.family = config.DefaultFontFamily;
@@ -720,7 +710,7 @@ namespace ImRichText
         sz = sz > 0.f ? sz : config.GetTextSize("...", style.font.font).x;
         width -= sz;
 
-        if (!style.font.wrap && style.font.overflowEllipsis && width > 0.f)
+        if ((style.font.flags & FontStyleOverflowEllipsis) != 0 && width > 0.f)
         {
             auto startx = line.Content.left;
 
@@ -1494,13 +1484,13 @@ namespace ImRichText
         config->NamedColor = &GetColor;
         config->EscapeCodes.insert(config->EscapeCodes.end(), std::begin(EscapeCodes),
             std::end(EscapeCodes));
+        config->FontScale = fontScale;
+        config->DefaultFontSize = defaultFontSize;
+        config->MeterDefaultSize = { defaultFontSize * 5.0f, defaultFontSize };
 
 #ifdef IM_RICHTEXT_DEFAULT_FONTS_AVAILABLE
         config->GetFont = &GetFont;
         config->GetTextSize = &GetTextSize;
-        config->FontScale = fontScale;
-        config->DefaultFontSize = defaultFontSize;
-        config->MeterDefaultSize = { defaultFontSize * 5.0f, defaultFontSize };
         if (!skipDefaultFontLoading) LoadDefaultFonts(*config);
 #endif
         return config;
