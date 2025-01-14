@@ -109,6 +109,8 @@ namespace ImRichText
     static std::unordered_map<ImGuiContext*, std::deque<RenderConfig>> RenderConfigs;
     static RenderConfig DefaultRenderConfig;
     static bool DefaultRenderConfigInit = false;
+    static ListItemTokenDescriptor InvalidListItemToken;
+    static TagPropertyDescriptor InvalidTagPropDesc;
 
     static std::vector<std::string> NumbersAsStr;
 #ifdef _DEBUG
@@ -125,23 +127,6 @@ namespace ImRichText
     };
 
     static const char* LineSpaces = "                                ";
-
-#ifndef IMGUI_DEFINE_MATH_OPERATORS
-    [[nodiscard]] ImVec2 operator*(ImVec2 lhs, float rhs)
-    {
-        return ImVec2{ lhs.x * rhs, lhs.y * rhs };
-    }
-
-    [[nodiscard]] ImVec2 operator+(ImVec2 lhs, ImVec2 rhs)
-    {
-        return ImVec2{ lhs.x + rhs.x, lhs.y + rhs.y };
-    }
-
-    [[nodiscard]] ImVec2 operator-(ImVec2 lhs, ImVec2 rhs)
-    {
-        return ImVec2{ lhs.x - rhs.x, lhs.y - rhs.y };
-    }
-#endif
 
 #ifdef _DEBUG
     [[nodiscard]] const char* GetTokenTypeString(const Token& token)
@@ -192,16 +177,16 @@ namespace ImRichText
 
             if (idx == 0)
             {
-                if (AreSame(stylePropVal, "bold")) style.font.bold = true;
-                else if (AreSame(stylePropVal, "light")) style.font.light = true;
+                if (AreSame(stylePropVal, "bold")) style.font.flags |= FontStyleBold;
+                else if (AreSame(stylePropVal, "light")) style.font.flags |= FontStyleLight;
                 else ERROR("Invalid font-weight property value... [%.*s]\n",
                     (int)stylePropVal.size(), stylePropVal.data());
             }
             else
             {
                 int weight = ExtractInt(stylePropVal.substr(0u, idx), 400);
-                style.font.bold = weight >= 600;
-                style.font.light = weight < 400;
+                if (weight >= 600) style.font.flags |= FontStyleBold;
+                if (weight < 400) style.font.flags |= FontStyleLight;
             }
 
             prop = StyleFontWeight;
@@ -230,17 +215,17 @@ namespace ImRichText
         }
         else if (AreSame(stylePropName, "alignment") || AreSame(stylePropName, "text-align"))
         {
-            style.alignmentH = AreSame(stylePropVal, "justify") ? HorizontalAlignment::Justify :
-                AreSame(stylePropVal, "right") ? HorizontalAlignment::Right :
-                AreSame(stylePropVal, "center") ? HorizontalAlignment::Center :
-                HorizontalAlignment::Left;
+            style.alignment |= AreSame(stylePropVal, "justify") ? TextAlignJustify :
+                AreSame(stylePropVal, "right") ? TextAlignRight :
+                AreSame(stylePropVal, "center") ? TextAlignHCenter :
+                TextAlignLeft;
             prop = StyleHAlignment;
         }
         else if (AreSame(stylePropName, "vertical-align"))
         {
-            style.alignmentV = AreSame(stylePropVal, "top") ? VerticalAlignment::Top :
-                AreSame(stylePropVal, "bottom") ? VerticalAlignment::Bottom :
-                VerticalAlignment::Center;
+            style.alignment |= AreSame(stylePropVal, "top") ? TextAlignTop :
+                AreSame(stylePropVal, "bottom") ? TextAlignBottom :
+                TextAlignVCenter;
             prop = StyleVAlignment;
         }
         else if (AreSame(stylePropName, "font-family"))
@@ -281,19 +266,25 @@ namespace ImRichText
         }
         else if (AreSame(stylePropName, "white-space"))
         {
-            style.font.wrap = AreSame(stylePropVal, "nowrap");
-            prop = StyleNoWrap;
+            if (AreSame(stylePropVal, "nowrap")) 
+            {
+                style.font.flags |= FontStyleNoWrap;
+                prop = StyleNoWrap;
+            }
         }
         else if (AreSame(stylePropName, "text-overflow"))
         {
-            style.font.overflowEllipsis = AreSame(stylePropVal, "ellipsis");
-            prop = StyleNoWrap;
+            if (AreSame(stylePropVal, "ellipsis"))
+            {
+                style.font.flags |= FontStyleNoWrap | FontStyleOverflowEllipsis;
+                prop = StyleNoWrap;
+            }
         }
         else if (AreSame(stylePropName, "font-style"))
         {
-            if (AreSame(stylePropVal, "normal")) style.font.italics = false;
+            if (AreSame(stylePropVal, "normal")) style.font.flags |= FontStyleNormal;
             else if (AreSame(stylePropVal, "italic") || AreSame(stylePropVal, "oblique"))
-                style.font.italics = true;
+                style.font.flags |= FontStyleItalics;
             else ERROR("Invalid font-style property value [%.*s]\n",
                 (int)stylePropVal.size(), stylePropVal.data());
             prop = StyleFontStyle;
@@ -350,7 +341,8 @@ namespace ImRichText
 
     [[nodiscard]] StyleDescriptor CreateDefaultStyle(const RenderConfig& config)
     {
-        assert(config.GetFont != nullptr);       
+        assert(config.GetFont != nullptr);
+        assert(config.GetTextSize != nullptr);
 
         StyleDescriptor result;
         result.font.family = config.DefaultFontFamily;
@@ -390,10 +382,10 @@ namespace ImRichText
         return { width, height };
     }
 
-    void AddToken(DrawableLine& line, Token token, int propsChanged, const std::vector<StyleDescriptor>& styles, const RenderConfig& config)
+    void AddToken(DrawableLine& line, Token token, int propsChanged, Drawables& result, const RenderConfig& config)
     {
         auto& segment = line.Segments.back();
-        const auto& style = styles[segment.StyleIdx + 1];
+        const auto& style = result.StyleDescriptors[segment.StyleIdx + 1];
 
         if (token.Type == TokenType::Text)
         {
@@ -425,21 +417,22 @@ namespace ImRichText
                     NumbersAsStr.emplace_back(std::to_string(num));
             }
 
-            std::memset(token.NestedListItemIndex, 0, IM_RICHTEXT_NESTED_ITEMCOUNT_STRSZ);
+            auto& listItem = result.ListItemTokens[token.ListPropsIdx];
+            std::memset(listItem.NestedListItemIndex, 0, IM_RICHTEXT_NESTED_ITEMCOUNT_STRSZ);
             auto currbuf = 0;
 
-            for (auto depth = 0; depth <= token.ListDepth && currbuf < IM_RICHTEXT_NESTED_ITEMCOUNT_STRSZ; ++depth)
+            for (auto depth = 0; depth <= listItem.ListDepth && currbuf < IM_RICHTEXT_NESTED_ITEMCOUNT_STRSZ; ++depth)
             {
                 auto itemcount = ListItemCountByDepths[depth] - 1;
                 auto itemlen = itemcount > 99 ? 3 : itemcount > 9 ? 2 : 1;
-                std::memcpy(token.NestedListItemIndex + currbuf, NumbersAsStr[itemcount].data(), itemlen);
+                std::memcpy(listItem.NestedListItemIndex + currbuf, NumbersAsStr[itemcount].data(), itemlen);
                 currbuf += itemlen;
 
-                token.NestedListItemIndex[currbuf] = '.';
+                listItem.NestedListItemIndex[currbuf] = '.';
                 currbuf += 1;
             }
 
-            std::string_view input{ token.NestedListItemIndex, (size_t)currbuf };
+            std::string_view input{ listItem.NestedListItemIndex, (size_t)currbuf };
             auto sz = config.GetTextSize(input, style.font.font);
             token.Bounds.width = sz.x;
             token.Bounds.height = sz.y;
@@ -720,7 +713,7 @@ namespace ImRichText
         sz = sz > 0.f ? sz : config.GetTextSize("...", style.font.font).x;
         width -= sz;
 
-        if (!style.font.wrap && style.font.overflowEllipsis && width > 0.f)
+        if ((style.font.flags & FontStyleOverflowEllipsis) != 0 && width > 0.f)
         {
             auto startx = line.Content.left;
 
@@ -741,7 +734,7 @@ namespace ImRichText
                                 token.VisibleTextSize -= 1;
                             }
 
-                            token.AddEllipsis = true;
+                            //token.AddEllipsis = true;
                         }
 
                         break;
@@ -766,7 +759,7 @@ namespace ImRichText
         }
         else
         {
-            if (!line.Marquee && config.Bounds.x > 0.f && styles[styleIdx + 1].font.wrap)
+            if (!line.Marquee && config.Bounds.x > 0.f && (styles[styleIdx + 1].font.flags & FontStyleNoWrap) == 0)
                 linesModified = PerformWordWrap(result, tagType, (int)result.size() - 1, listDepth, blockquoteDepth, styles, config);
             else linesModified.push_back((int)result.size() - 1);
             AdjustForSuperSubscripts(linesModified, result, styles, config);
@@ -792,12 +785,12 @@ namespace ImRichText
     }
 
     void GenerateTextToken(DrawableLine& line, std::string_view content,
-        int curridx, int start, const std::vector<StyleDescriptor>& styles, 
+        int curridx, int start, Drawables& drawables, 
         const RenderConfig& config)
     {
         Token token;
         token.Content = content.substr(start, curridx - start);
-        AddToken(line, token, NoStyleChange, styles, config);
+        AddToken(line, token, NoStyleChange, drawables, config);
     }
 
     [[nodiscard]] std::pair<bool, bool> AddEscapeSequences(const std::string_view content,
@@ -848,17 +841,19 @@ namespace ImRichText
         }
     }
 
-    int RecordTagProperties(TagType tagType, std::string_view attribName, std::optional<std::string_view> attribValue, 
-        StyleDescriptor& style, const StyleDescriptor& parentStyle, const RenderConfig& config)
+    std::pair<int, bool> RecordTagProperties(TagType tagType, std::string_view attribName, std::optional<std::string_view> attribValue, 
+        StyleDescriptor& style, TagPropertyDescriptor& tagprops, const StyleDescriptor& parentStyle, 
+        const RenderConfig& config)
     {
         int result = 0;
+        bool nonStyleAttribute = false;
 
         if (AreSame(attribName, "style") && IsStyleSupported(tagType))
         {
             if (!attribValue.has_value())
             {
                 ERROR("Style attribute value not specified...");
-                return false;
+                return { 0, false };
             }
             else
             {
@@ -895,18 +890,25 @@ namespace ImRichText
                 }
             }
         }
-        else if (tagType == TagType::Abbr && AreSame(attribName, "title") && attribValue.has_value())
-            style.tooltip = attribValue.value();
-        else if (tagType == TagType::Hyperlink && AreSame(attribName, "href") && attribValue.has_value())
-            style.link = attribValue.value();
+        else if (tagType == TagType::Abbr && AreSame(attribName, "title") && attribValue.has_value()) 
+        {
+            tagprops.tooltip = attribValue.value();
+            nonStyleAttribute = true;
+        }
+        else if (tagType == TagType::Hyperlink && AreSame(attribName, "href") && attribValue.has_value()) 
+        {
+            tagprops.link = attribValue.value();
+            nonStyleAttribute = true;
+        }
         else if (tagType == TagType::Meter)
         {
-            if (AreSame(attribName, "value") && attribValue.has_value()) style.value = ExtractInt(attribValue.value(), 0);
-            if (AreSame(attribName, "min") && attribValue.has_value()) style.range.first = ExtractInt(attribValue.value(), 0);
-            if (AreSame(attribName, "max") && attribValue.has_value()) style.range.second = ExtractInt(attribValue.value(), 0);
+            if (AreSame(attribName, "value") && attribValue.has_value()) tagprops.value = ExtractInt(attribValue.value(), 0);
+            if (AreSame(attribName, "min") && attribValue.has_value()) tagprops.range.first = ExtractInt(attribValue.value(), 0);
+            if (AreSame(attribName, "max") && attribValue.has_value()) tagprops.range.second = ExtractInt(attribValue.value(), 0);
+            nonStyleAttribute = true;
         }
 
-        return result;
+        return { result, nonStyleAttribute };
     }
 
     int CreateNextStyle(std::vector<StyleDescriptor>& styles)
@@ -968,7 +970,7 @@ namespace ImRichText
         if (tagType == TagType::Header)
         {
             style.font.size = config.HFontSizes[currTag[1] - '1'] * config.FontScale;
-            style.font.bold = true;
+            style.font.flags |= FontStyleBold;
             style.propsSpecified = style.propsSpecified | StyleFontStyle | StyleFontSize;
         }
         else if (tagType == TagType::RawText || tagType == TagType::CodeBlock)
@@ -983,12 +985,12 @@ namespace ImRichText
         }
         else if (tagType == TagType::Italics)
         {
-            style.font.italics = true;
+            style.font.flags |= FontStyleItalics;
             style.propsSpecified = style.propsSpecified | StyleFontStyle;
         }
         else if (tagType == TagType::Bold)
         {
-            style.font.bold = true;
+            style.font.flags |= FontStyleBold;
             style.propsSpecified = style.propsSpecified | StyleFontStyle;
         }
         else if (tagType == TagType::Mark)
@@ -1013,17 +1015,17 @@ namespace ImRichText
         }
         else if (tagType == TagType::Underline)
         {
-            style.font.underline = true;
+            style.font.flags |= FontStyleUnderline;
             style.propsSpecified = style.propsSpecified | StyleFontStyle;
         }
         else if (tagType == TagType::Strikethrough)
         {
-            style.font.strike = true;
+            style.font.flags |= FontStyleStrikethrough;
             style.propsSpecified = style.propsSpecified | StyleFontStyle;
         }
         else if (tagType == TagType::Hyperlink)
         {
-            if ((style.propsSpecified & StyleFontStyle) == 0) style.font.underline = true;
+            if ((style.propsSpecified & StyleFontStyle) == 0) style.font.flags |= FontStyleUnderline;
             if ((style.propsSpecified & StyleFgColor) == 0) style.fgcolor = config.HyperlinkColor;
             style.propsSpecified = style.propsSpecified | StyleFontStyle | StyleFgColor;
         }
@@ -1041,8 +1043,11 @@ namespace ImRichText
         
         if (style.propsSpecified != NoStyleChange)
         {
+            auto isbold = style.font.flags & FontStyleBold;
+            auto isitalics = style.font.flags & FontStyleItalics;
+            auto islight = style.font.flags & FontStyleLight;
             style.font.font = config.GetFont(style.font.family, style.font.size,
-                style.font.bold, style.font.italics, style.font.light, config.UserData);
+                isbold, isitalics, islight, config.UserData);
         }
     }
 
@@ -1050,7 +1055,7 @@ namespace ImRichText
     inline void DrawDebugRect(DebugContentType type, ImVec2 startpos, ImVec2 endpos, const RenderConfig& config)
     {
         auto drawList = ImGui::GetForegroundDrawList();
-        if (config.DebugContents[type].Value != ImColor{ IM_COL32_BLACK_TRANS }.Value) 
+        if (config.DebugContents[type] != IM_COL32_BLACK_TRANS) 
             drawList->AddRect(startpos, endpos, config.DebugContents[type]);
     }
 
@@ -1117,19 +1122,28 @@ namespace ImRichText
     }
 
     void DrawBackground(ImDrawList* drawList, ImVec2 startpos, ImVec2 endpos,
-        const ColorGradient& gradient, ImColor color, const RenderConfig& config)
+        const ColorGradient& gradient, uint32_t color, const RenderConfig& config)
     {
         if (gradient.totalStops != 0)
-            (!gradient.reverseOrder) ?
+            (gradient.dir == ImGuiDir_Down || gradient.dir == ImGuiDir_Left) ?
             DrawLinearGradient(drawList, startpos, endpos, gradient.angleDegrees, gradient.dir,
                 std::begin(gradient.colorStops), std::begin(gradient.colorStops) + gradient.totalStops) :
             DrawLinearGradient(drawList, startpos, endpos, gradient.angleDegrees, gradient.dir,
                 std::rbegin(gradient.colorStops), std::rbegin(gradient.colorStops) + gradient.totalStops);
-        else if (color.Value != config.DefaultBgColor.Value && color.Value != ImColor{ IM_COL32_BLACK_TRANS }.Value)
+        else if (color != config.DefaultBgColor && color != IM_COL32_BLACK_TRANS)
             drawList->AddRectFilled(startpos, endpos, color);
     }
 
-    bool DrawOverlay(ImVec2 startpos, ImVec2 endpos, const Token& token, const StyleDescriptor& style)
+    std::tuple<int, int, int> DecomposeToRGBChannels(uint32_t color)
+    {
+        auto mask = (uint32_t)-1;
+        return std::make_tuple((int)(color & (mask >> 24)), 
+            (int)(color & ((mask >> 16) & (mask << 8))) >> 8,
+            (int)(color & ((mask >> 8) & (mask << 16))) >> 16);
+    }
+
+    bool DrawOverlay(ImVec2 startpos, ImVec2 endpos, const Token& token, 
+        const StyleDescriptor& style, const TagPropertyDescriptor& tagprops)
     {
         const auto& io = ImGui::GetCurrentContext()->IO;
         if (ImRect{ startpos, endpos }.Contains(io.MousePos) && ShowOverlay)
@@ -1169,12 +1183,8 @@ namespace ImRichText
 
             char buffer[1024 + 2048] = { 0 };
             auto yesorno = [](bool val) { return val ? "Yes" : "No"; };
-            auto fr = (int)(style.fgcolor.Value.x * 255.f);
-            auto fg = (int)(style.fgcolor.Value.y * 255.f);
-            auto fb = (int)(style.fgcolor.Value.z * 255.f);
-            auto br = (int)(style.bgcolor.Value.x * 255.f);
-            auto bg = (int)(style.bgcolor.Value.y * 255.f);
-            auto bb = (int)(style.bgcolor.Value.z * 255.f);
+            auto [fr, fg, fb] = DecomposeToRGBChannels(style.fgcolor);
+            auto [br, bg, bb] = DecomposeToRGBChannels(style.bgcolor);
 
             currpos = std::snprintf(buffer, 1023 + 2048, "Position: (%.2f, %.2f)\nBounds: (%.2f, %.2f)\n", 
                 startpos.x, startpos.y, token.Bounds.width, token.Bounds.height);
@@ -1196,12 +1206,8 @@ namespace ImRichText
 
                     for (auto idx = 0; idx < style.gradient.totalStops; ++idx)
                     {
-                        auto r1 = (int)(style.gradient.colorStops[idx].from.Value.x * 255.f);
-                        auto g1 = (int)(style.gradient.colorStops[idx].from.Value.y * 255.f);
-                        auto b1 = (int)(style.gradient.colorStops[idx].from.Value.z * 255.f);
-                        auto r2 = (int)(style.gradient.colorStops[idx].to.Value.x * 255.f);
-                        auto g2 = (int)(style.gradient.colorStops[idx].to.Value.y * 255.f);
-                        auto b2 = (int)(style.gradient.colorStops[idx].to.Value.z * 255.f);
+                        auto [r1, g1, b1] = DecomposeToRGBChannels(style.gradient.colorStops[idx].from);
+                        auto [r2, g2, b2] = DecomposeToRGBChannels(style.gradient.colorStops[idx].to);
                         currpos += std::snprintf(buffer + currpos, 1023 + 2048 - currpos, "From (%d, %d, %d) To (%d, %d, %d) at %.2f\n",
                             r1, g1, b1, r2, g2, b2, style.gradient.colorStops[idx].pos);
                     }
@@ -1210,19 +1216,21 @@ namespace ImRichText
 
             currpos += std::snprintf(buffer + currpos, 1023 + 2048 - currpos,
                 "\nHeight: %.2fpx\nWidth: %.2fpx\nTooltip: %.*s\nLink: %.*s\nBlink: %s\n",
-                style.width, style.height, (int)style.tooltip.size(), style.tooltip.data(),
-                (int)style.link.size(), style.link.data(), yesorno(style.blink));
+                style.width, style.height, (int)tagprops.tooltip.size(), tagprops.tooltip.data(),
+                (int)tagprops.link.size(), tagprops.link.data(), yesorno(style.blink));
 
             if (token.Type == TokenType::Text)
             {
                 std::snprintf(buffer + currpos, 1023, "\n\nFont.family: %.*s\nFont.size: %.2fpx\nFont.bold: %s\nFont.italics: %f\nFont.underline: %s\n"
                     "Font.strike: %s\nFont.wrap: %s", (int)style.font.family.size(), style.font.family.data(), style.font.size,
-                    yesorno(style.font.bold), yesorno(style.font.italics), yesorno(style.font.underline), yesorno(style.font.strike),
-                    yesorno(style.font.wrap));
+                    yesorno(style.font.flags & FontStyleBold), yesorno(style.font.flags & FontStyleItalics), 
+                    yesorno(style.font.flags & FontStyleUnderline), yesorno(style.font.flags & FontStyleStrikethrough),
+                    yesorno(!(style.font.flags & FontStyleNoWrap)));
             }
             else if (token.Type == TokenType::Meter)
             {
-                std::snprintf(buffer + currpos, 1023, "\n\nRange: (%.2f, %.2f)\nValue: %.2f", style.range.first, style.range.second, style.value);
+                std::snprintf(buffer + currpos, 1023, "\n\nRange: (%.2f, %.2f)\nValue: %.2f", 
+                    tagprops.range.first, tagprops.range.second, tagprops.value);
             }
 
             auto font = GetOverlayFont();
@@ -1240,7 +1248,8 @@ namespace ImRichText
     }
 
     bool DrawToken(ImDrawList* drawList, int lineidx, const Token& token, ImVec2 initpos,
-        ImVec2 bounds, const StyleDescriptor& style, const RenderConfig& config, 
+        ImVec2 bounds, const StyleDescriptor& style, const TagPropertyDescriptor& tagprops, 
+        const ListItemTokenDescriptor& listItem, const RenderConfig& config, 
         TooltipData& tooltip, AnimationData& animation)
     {
         auto startpos = token.Bounds.start(initpos);
@@ -1260,8 +1269,8 @@ namespace ImRichText
                 if (style.list.itemStyle == BulletType::Custom)
                 {
                     if (config.DrawBullet != nullptr) {
-                        config.DrawBullet(startpos, endpos, style, token.ListItemIndex,
-                            token.ListDepth, config.UserData);
+                        config.DrawBullet(startpos, endpos, style, listItem.ListItemIndex,
+                            listItem.ListDepth, config.UserData);
                     }
                     else DrawBullet(drawList, initpos, token.Bounds, BulletType::FilledCircle, style.fgcolor, bulletsz);
                 }
@@ -1269,14 +1278,14 @@ namespace ImRichText
             }
             else if (token.Type == TokenType::ListItemNumbered)
             {
-                drawList->AddText(startpos, style.fgcolor, token.NestedListItemIndex);
+                drawList->AddText(startpos, style.fgcolor, listItem.NestedListItemIndex);
             }
             else if (token.Type == TokenType::Meter)
             {
                 auto border = ImVec2{ 1.f, 1.f };
                 auto borderRadius = (endpos.y - startpos.y) * 0.5f;
-                auto diff = style.range.second - style.range.first;
-                auto progress = (style.value / diff) * token.Bounds.width;
+                auto diff = tagprops.range.second - tagprops.range.first;
+                auto progress = (tagprops.value / diff) * token.Bounds.width;
 
                 drawList->AddRectFilled(startpos, endpos, style.bgcolor, borderRadius, ImDrawFlags_RoundCornersAll);
                 drawList->AddRect(startpos, endpos, config.MeterBorderColor, borderRadius, ImDrawFlags_RoundCornersAll);
@@ -1289,12 +1298,12 @@ namespace ImRichText
                 auto halfh = token.Bounds.height * 0.5f;
                 drawList->AddText(startpos, style.fgcolor, token.Content.data(), textend);
 
-                if (style.font.strike) drawList->AddLine(startpos + ImVec2{ 0.f, halfh }, endpos + ImVec2{ 0.f, -halfh }, style.fgcolor);
-                if (style.font.underline) drawList->AddLine(startpos + ImVec2{ 0.f, token.Bounds.height }, endpos, style.fgcolor);
+                if (style.font.flags & FontStyleStrikethrough) drawList->AddLine(startpos + ImVec2{ 0.f, halfh }, endpos + ImVec2{ 0.f, -halfh }, style.fgcolor);
+                if (style.font.flags & FontStyleUnderline) drawList->AddLine(startpos + ImVec2{ 0.f, token.Bounds.height }, endpos, style.fgcolor);
 
-                if (!style.tooltip.empty())
+                if (!tagprops.tooltip.empty())
                 {
-                    if (!style.font.underline)
+                    if (!(style.font.flags & FontStyleUnderline))
                     {
                         // TODO: Refactor this out
                         auto posx = startpos.x;
@@ -1309,16 +1318,16 @@ namespace ImRichText
                     if (ImRect{ startpos, endpos }.Contains(mousepos))
                     {
                         tooltip.pos = mousepos;
-                        tooltip.content = style.tooltip;
+                        tooltip.content = tagprops.tooltip;
                     }
                 }
-                else if (!style.link.empty())
+                else if (!tagprops.link.empty())
                 {
                     if (ImRect{ startpos, endpos }.Contains(ImGui::GetIO().MousePos))
                     {
                         ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
                         if (ImGui::GetIO().MouseReleased[0] && config.HandleHyperlink)
-                            config.HandleHyperlink(style.link, config.UserData);
+                            config.HandleHyperlink(tagprops.link, config.UserData);
                     }
                     else
                         ImGui::SetMouseCursor(ImGuiMouseCursor_Arrow);
@@ -1326,19 +1335,19 @@ namespace ImRichText
             }
         }
 
-        if (DrawOverlay(startpos, endpos, token, style)) DrawDebugRect(ContentTypeToken, startpos, endpos, config);
+        if (DrawOverlay(startpos, endpos, token, style, tagprops)) DrawDebugRect(ContentTypeToken, startpos, endpos, config);
         if ((token.Bounds.left + token.Bounds.width) > (bounds.x + initpos.x)) return false;
         return true;
     }
 
     bool DrawSegment(ImDrawList* drawList, int lineidx, const SegmentData& segment,
-        ImVec2 initpos, ImVec2 bounds, const std::vector<StyleDescriptor>& styles, const RenderConfig& config,
+        ImVec2 initpos, ImVec2 bounds, const Drawables& result, const RenderConfig& config,
         TooltipData& tooltip, AnimationData& animation)
     {
         if (segment.Tokens.empty()) return true;
 
         auto popFont = false;
-        const auto& style = styles[segment.StyleIdx + 1];
+        const auto& style = result.StyleDescriptors[segment.StyleIdx + 1];
 
         if (style.font.font != nullptr)
         {
@@ -1354,8 +1363,12 @@ namespace ImRichText
 
         for (const auto& token : segment.Tokens)
         {
+            const auto& listItem = token.ListPropsIdx == -1 ? InvalidListItemToken :
+                result.ListItemTokens[token.ListPropsIdx];
+            const auto& tagprops = token.PropertiesIdx == -1 ? InvalidTagPropDesc :
+                result.TagDescriptors[token.PropertiesIdx];
             if (drawTokens && !DrawToken(drawList, lineidx, token, initpos, bounds, style,
-                config, tooltip, animation))
+                tagprops, listItem, config, tooltip, animation))
             {
                 drawTokens = false; 
                 break;
@@ -1369,7 +1382,7 @@ namespace ImRichText
     }
 
     void DrawForegroundLayer(ImDrawList* drawList, ImVec2 initpos, ImVec2 bounds, 
-        const std::vector<DrawableLine>& lines, const std::vector<StyleDescriptor>& styles,
+        const std::vector<DrawableLine>& lines, const Drawables& result,
         const RenderConfig& config, TooltipData& tooltip, AnimationData& animation)
     {
         int listCountByDepth[IM_RICHTEXT_MAX_LISTDEPTH];
@@ -1383,7 +1396,7 @@ namespace ImRichText
             {
                 auto linestart = initpos;
                 if (lines[lineidx].Marquee) linestart.x += animation.xoffsets[lineidx];
-                if (!DrawSegment(drawList, lineidx, segment, linestart, bounds, styles, config, tooltip, animation))
+                if (!DrawSegment(drawList, lineidx, segment, linestart, bounds, result, config, tooltip, animation))
                     break;
             }
             
@@ -1441,7 +1454,7 @@ namespace ImRichText
         drawList->AddRectFilled(pos, endpos, config->DefaultBgColor);
 
         DrawBackgroundLayer(drawList, pos, bounds, drawables.BackgroundShapes, *config);
-        DrawForegroundLayer(drawList, pos, bounds, drawables.ForegroundLines, drawables.StyleDescriptors, *config, tooltip, animation);
+        DrawForegroundLayer(drawList, pos, bounds, drawables.ForegroundLines, drawables, *config, tooltip, animation);
         DrawTooltip(drawList, tooltip, *config);
 
         if (!config->IsStrictHTML5 && (currFrameTime - animation.lastBlinkTime > IM_RICHTEXT_BLINK_ANIMATION_INTERVAL))
@@ -1494,13 +1507,13 @@ namespace ImRichText
         config->NamedColor = &GetColor;
         config->EscapeCodes.insert(config->EscapeCodes.end(), std::begin(EscapeCodes),
             std::end(EscapeCodes));
+        config->FontScale = fontScale;
+        config->DefaultFontSize = defaultFontSize;
+        config->MeterDefaultSize = { defaultFontSize * 5.0f, defaultFontSize };
 
 #ifdef IM_RICHTEXT_DEFAULT_FONTS_AVAILABLE
         config->GetFont = &GetFont;
         config->GetTextSize = &GetTextSize;
-        config->FontScale = fontScale;
-        config->DefaultFontSize = defaultFontSize;
-        config->MeterDefaultSize = { defaultFontSize * 5.0f, defaultFontSize };
         if (!skipDefaultFontLoading) LoadDefaultFonts(*config);
 #endif
         return config;
@@ -1546,10 +1559,12 @@ namespace ImRichText
 
         DrawableLine currline;
         StyleDescriptor tempstyle;
+        TagPropertyDescriptor tagPropDesc;
+
         int styleIdx = -1;
         int listDepth = -1, blockquoteDepth = -1;
         int subscriptLevel = 0, superscriptLevel = 0;
-        bool currentListIsNumbered = false;
+        bool currentListIsNumbered = false, tagHasAttributes = false;
         float maxWidth = 0.f;
         TagType tagType = TagType::Unknown;
         
@@ -1583,11 +1598,11 @@ namespace ImRichText
             {
                 for (const auto& bound : BlockquoteStack[depth].bounds)
                 {
-                    if (config.BlockquoteBarWidth > 1.f && config.DefaultBgColor.Value != config.BlockquoteBar.Value)
+                    if (config.BlockquoteBarWidth > 1.f && config.DefaultBgColor != config.BlockquoteBar)
                         result.BackgroundShapes.emplace_back(BackgroundShape{ bound.first, ImVec2{ config.BlockquoteBarWidth, bound.second.y },
                             config.BlockquoteBar });
 
-                    if (config.DefaultBgColor.Value != config.BlockquoteBg.Value)
+                    if (config.DefaultBgColor != config.BlockquoteBg)
                         result.BackgroundShapes.emplace_back(BackgroundShape{ ImVec2{ bound.first.x + config.BlockquoteBarWidth, bound.first.y },
                             bound.second, config.BlockquoteBg });
                 }
@@ -1664,7 +1679,8 @@ namespace ImRichText
         {
             LOG("Reading attribute: %.*s\n", (int)name.size(), name.data());
             const auto& parentStyle = Style(CurrentStackPos - 1);
-            tempstyle.propsSpecified = RecordTagProperties(tagType, name, value, tempstyle, parentStyle, config);
+            std::tie(tempstyle.propsSpecified, tagHasAttributes) = RecordTagProperties(
+                tagType, name, value, tempstyle, tagPropDesc, parentStyle, config);
             return true;
         }
 
@@ -1674,6 +1690,13 @@ namespace ImRichText
             auto hasUniqueStyle = CreateNewStyle();
             auto segmentAdded = hasUniqueStyle;
             auto& currentStyle = Style(CurrentStackPos);
+            int16_t tagPropIdx = -1;
+
+            if (tagHasAttributes)
+            {
+                tagPropIdx = (int16_t)result.TagDescriptors.size();
+                result.TagDescriptors.emplace_back(tagPropDesc);
+            }
 
             if (tagType == TagType::List)
             {
@@ -1688,7 +1711,7 @@ namespace ImRichText
                     currline = MoveToNextLine(tagType, listDepth, blockquoteDepth, styleIdx, currline, result.ForegroundLines, result.StyleDescriptors, config, true);
                 maxWidth = std::max(maxWidth, result.ForegroundLines.empty() ? 0.f : result.ForegroundLines.back().Content.width);
 
-                if (tagType == TagType::Paragraph && config.ParagraphStop > 0 && config.GetTextSize)
+                if (tagType == TagType::Paragraph && config.ParagraphStop > 0)
                     currline.Offset.left += config.GetTextSize(std::string_view{ LineSpaces,
                         (std::size_t)std::min(config.ParagraphStop, IM_RICHTEXT_MAXTABSTOP) }, currentStyle.font.font).x;
                 else if (tagType == TagType::ListItem)
@@ -1696,11 +1719,14 @@ namespace ImRichText
                     ListItemCountByDepths[listDepth]++;
 
                     Token token;
+                    auto& listItem = result.ListItemTokens.emplace_back();
                     token.Type = !currentListIsNumbered ? TokenType::ListItemBullet :
                         TokenType::ListItemNumbered;
-                    token.ListDepth = listDepth;
-                    token.ListItemIndex = ListItemCountByDepths[listDepth];
-                    AddToken(currline, token, currentStyle.propsSpecified, result.StyleDescriptors, config);
+                    listItem.ListDepth = listDepth;
+                    listItem.ListItemIndex = ListItemCountByDepths[listDepth];
+                    token.ListPropsIdx = (int16_t)(result.ListItemTokens.size() - 1u);
+
+                    AddToken(currline, token, currentStyle.propsSpecified, result, config);
                     AddSegment(currline, styleIdx, result.StyleDescriptors, config);
                     segmentAdded = true;
                 }
@@ -1719,13 +1745,14 @@ namespace ImRichText
                 Token token;
                 token.Type = TokenType::Text;
                 token.Content = "\"";
-                AddToken(currline, token, currentStyle.propsSpecified, result.StyleDescriptors, config);
+                AddToken(currline, token, currentStyle.propsSpecified, result, config);
             }
             else if (tagType == TagType::Meter)
             {
                 Token token;
                 token.Type = TokenType::Meter;
-                AddToken(currline, token, currentStyle.propsSpecified, result.StyleDescriptors, config);
+                token.PropertiesIdx = tagPropIdx;
+                AddToken(currline, token, currentStyle.propsSpecified, result, config);
             }
 
             if (currline.Segments.empty())
@@ -1760,19 +1787,19 @@ namespace ImRichText
             {
                 if (content[curridx] == '\n')
                 {
-                    GenerateTextToken(currline, content, curridx, start, result.StyleDescriptors, config);
+                    GenerateTextToken(currline, content, curridx, start, result, config);
                     while (curridx < (int)content.size() && content[curridx] == '\n') curridx++;
                     start = curridx;
                 }
                 else if (content[curridx] == '\t')
                 {
-                    GenerateTextToken(currline, content, curridx, start, result.StyleDescriptors, config);
+                    GenerateTextToken(currline, content, curridx, start, result, config);
                     while (curridx < (int)content.size() && content[curridx] == '\t') curridx++;
                     start = curridx;
                 }
                 else if (content[curridx] == config.EscapeSeqStart)
                 {
-                    GenerateTextToken(currline, content, curridx, start, result.StyleDescriptors, config);
+                    GenerateTextToken(currline, content, curridx, start, result, config);
 
                     curridx++;
                     auto [hasEscape, isNewLine] = AddEscapeSequences(content, curridx, config.EscapeCodes,
@@ -1791,7 +1818,7 @@ namespace ImRichText
                 {
                     curridx++;
 
-                    if (curridx - start > 0) GenerateTextToken(currline, content, curridx, start, result.StyleDescriptors, config);
+                    if (curridx - start > 0) GenerateTextToken(currline, content, curridx, start, result, config);
                     curridx = SkipSpace(content, curridx);
                     start = curridx;
                     continue;
@@ -1800,7 +1827,7 @@ namespace ImRichText
                 curridx++;
             }
 
-            if (curridx > start) GenerateTextToken(currline, content, curridx, start, result.StyleDescriptors, config);
+            if (curridx > start) GenerateTextToken(currline, content, curridx, start, result, config);
             return true;
         }
 
@@ -1815,14 +1842,14 @@ namespace ImRichText
                 {
                     if (!subscriptLevel && !superscriptLevel)
                     {
-                        GenerateTextToken(currline, content, curridx, start, result.StyleDescriptors, config);
+                        GenerateTextToken(currline, content, curridx, start, result, config);
                         currline = MoveToNextLine(tagType, listDepth, blockquoteDepth, styleIdx, currline, result.ForegroundLines, result.StyleDescriptors, config, true);
                         maxWidth = std::max(maxWidth, result.ForegroundLines.back().Content.width);
                         start = curridx;
                     }
                     else
                     {
-                        GenerateTextToken(currline, content, curridx, start, result.StyleDescriptors, config);
+                        GenerateTextToken(currline, content, curridx, start, result, config);
                         start = curridx;
                     }
                 }
@@ -1830,7 +1857,7 @@ namespace ImRichText
                 ++curridx;
             }
 
-            if (curridx > start) GenerateTextToken(currline, content, curridx, start, result.StyleDescriptors, config);
+            if (curridx > start) GenerateTextToken(currline, content, curridx, start, result, config);
             return true;
         }
 
@@ -1892,7 +1919,7 @@ namespace ImRichText
 
                     Token token;
                     token.Type = TokenType::HorizontalRule;
-                    AddToken(currline, token, NoStyleChange, result.StyleDescriptors, config);
+                    AddToken(currline, token, NoStyleChange, result, config);
 
                     // Move to next line for other content
                     currline = MoveToNextLine(tagType, listDepth, blockquoteDepth, styleIdx, currline, result.ForegroundLines, result.StyleDescriptors, config, false);
@@ -1910,7 +1937,7 @@ namespace ImRichText
 
                 Token token;
                 token.Type = TokenType::HorizontalRule;
-                AddToken(currline, token, NoStyleChange, result.StyleDescriptors, config);
+                AddToken(currline, token, NoStyleChange, result, config);
 
                 currline = MoveToNextLine(tagType, listDepth, blockquoteDepth, styleIdx, currline, result.ForegroundLines, result.StyleDescriptors, config, true);
                 maxWidth = std::max(maxWidth, result.ForegroundLines.back().Content.width);
@@ -1920,7 +1947,7 @@ namespace ImRichText
                 Token token;
                 token.Type = TokenType::Text;
                 token.Content = "\"";
-                AddToken(currline, token, NoStyleChange, result.StyleDescriptors, config);
+                AddToken(currline, token, NoStyleChange, result, config);
             }
             else if (tagType != TagType::Unknown)
             {
@@ -1944,6 +1971,8 @@ namespace ImRichText
             if (selfTerminatingTag) TagStack[CurrentStackPos + 1] = StackData{};
             currTag = CurrentStackPos == -1 ? "" : TagStack[CurrentStackPos].tag;
             tagType = TagType::Unknown;
+            tagHasAttributes = false;
+            tagPropDesc = TagPropertyDescriptor{};
             return true;
         }
 
@@ -2103,7 +2132,7 @@ namespace ImRichText
 
             if (config != drawdata.config || config->Scale != drawdata.scale || 
                 config->FontScale != drawdata.fontScale || 
-                config->DefaultBgColor.Value != drawdata.bgcolor.Value || drawdata.contentChanged)
+                config->DefaultBgColor != drawdata.bgcolor || drawdata.contentChanged)
             {
                 drawdata.contentChanged = false;
                 drawdata.config = config;
