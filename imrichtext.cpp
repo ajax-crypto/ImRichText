@@ -27,6 +27,7 @@
     SetConsoleTextAttribute(h, FOREGROUND_RED | FOREGROUND_INTENSITY); \
     std::fprintf(stderr, FMT, __VA_ARGS__); \
     SetConsoleTextAttribute(h, cbinfo.wAttributes); }
+#undef DrawText
 #else
 #define ERROR(FMT, ...) std::fprintf(stderr, "\x1B[31m" FMT "\x1B[0m", __VA_ARGS__)
 #endif
@@ -1087,62 +1088,250 @@ namespace ImRichText
         }
     }
 
+    struct ImGuiRenderer final : public IRenderer
+    {
+        ImFont* (*GetFont)(std::string_view, float, bool, bool, bool, void*) = nullptr;
+
+        ImGuiRenderer(ImFont* (*gf)(std::string_view, float, bool, bool, bool, void*))
+            : GetFont{ gf } {}
+
+        void DrawLine(ImVec2 startpos, ImVec2 endpos, uint32_t color, float thickness)
+        {
+            ((ImDrawList*)UserData)->AddLine(startpos, endpos, color, thickness);
+        }
+
+        void DrawPolyline(ImVec2* points, int sz, uint32_t color, float thickness)
+        {
+            ((ImDrawList*)UserData)->AddPolyline(points, sz, color, 0, thickness);
+        }
+
+        void DrawTriangle(ImVec2 pos1, ImVec2 pos2, ImVec2 pos3, uint32_t color, bool filled, bool thickness)
+        {
+            filled ? ((ImDrawList*)UserData)->AddTriangleFilled(pos1, pos2, pos3, color) :
+                ((ImDrawList*)UserData)->AddTriangle(pos1, pos2, pos3, color, thickness);
+        }
+
+        void DrawRect(ImVec2 startpos, ImVec2 endpos, uint32_t color, bool filled, float thickness, float radius, int corners)
+        {
+            auto drawflags = 0;
+
+            if (corners & TopLeftCorner) drawflags |= ImDrawFlags_RoundCornersTopLeft;
+            if (corners & TopRightCorner) drawflags |= ImDrawFlags_RoundCornersTopRight;
+            if (corners & BottomRightCorner) drawflags |= ImDrawFlags_RoundCornersBottomRight;
+            if (corners & BottomLeftCorner) drawflags |= ImDrawFlags_RoundCornersBottomLeft;
+
+            filled ? ((ImDrawList*)UserData)->AddRectFilled(startpos, endpos, color, radius, drawflags) :
+                ((ImDrawList*)UserData)->AddRect(startpos, endpos, color, radius, drawflags, thickness);
+        }
+
+        void DrawRectGradient(ImVec2 startpos, ImVec2 endpos, uint32_t topleftcolor, uint32_t toprightcolor, uint32_t bottomrightcolor, uint32_t bottomleftcolor)
+        {
+            ((ImDrawList*)UserData)->AddRectFilledMultiColor(startpos, endpos, topleftcolor, toprightcolor, bottomrightcolor, bottomleftcolor);
+        }
+
+        void DrawCircle(ImVec2 center, float radius, uint32_t color, bool filled, bool thickness)
+        {
+            filled ? ((ImDrawList*)UserData)->AddCircleFilled(center, radius, color) :
+                ((ImDrawList*)UserData)->AddCircle(center, radius, color, 0, thickness);
+        }
+
+        void DrawPolygon(ImVec2* points, int sz, uint32_t color, bool filled, float thickness)
+        {
+            filled ? ((ImDrawList*)UserData)->AddConvexPolyFilled(points, sz, color) :
+                ((ImDrawList*)UserData)->AddPolyline(points, sz, color, ImDrawFlags_Closed, thickness);
+        }
+
+        void DrawPolyGradient(ImVec2* points, uint32_t* colors, int sz)
+        {
+            auto drawList = ((ImDrawList*)UserData);
+            const ImVec2 uv = drawList->_Data->TexUvWhitePixel;
+
+            if (drawList->Flags & ImDrawListFlags_AntiAliasedFill)
+            {
+                // Anti-aliased Fill
+                const float AA_SIZE = 1.0f;
+                const int idx_count = (sz - 2) * 3 + sz * 6;
+                const int vtx_count = (sz * 2);
+                drawList->PrimReserve(idx_count, vtx_count);
+
+                // Add indexes for fill
+                unsigned int vtx_inner_idx = drawList->_VtxCurrentIdx;
+                unsigned int vtx_outer_idx = drawList->_VtxCurrentIdx + 1;
+                for (int i = 2; i < sz; i++)
+                {
+                    drawList->_IdxWritePtr[0] = (ImDrawIdx)(vtx_inner_idx);
+                    drawList->_IdxWritePtr[1] = (ImDrawIdx)(vtx_inner_idx + ((i - 1) << 1));
+                    drawList->_IdxWritePtr[2] = (ImDrawIdx)(vtx_inner_idx + (i << 1));
+                    drawList->_IdxWritePtr += 3;
+                }
+
+                // Compute normals
+                ImVec2* temp_normals = (ImVec2*)alloca(sz * sizeof(ImVec2));
+                for (int i0 = sz - 1, i1 = 0; i1 < sz; i0 = i1++)
+                {
+                    const ImVec2& p0 = points[i0];
+                    const ImVec2& p1 = points[i1];
+                    ImVec2 diff = p1 - p0;
+                    diff *= ImInvLength(diff, 1.0f);
+                    temp_normals[i0].x = diff.y;
+                    temp_normals[i0].y = -diff.x;
+                }
+
+                for (int i0 = sz - 1, i1 = 0; i1 < sz; i0 = i1++)
+                {
+                    // Average normals
+                    const ImVec2& n0 = temp_normals[i0];
+                    const ImVec2& n1 = temp_normals[i1];
+                    ImVec2 dm = (n0 + n1) * 0.5f;
+                    float dmr2 = dm.x * dm.x + dm.y * dm.y;
+                    if (dmr2 > 0.000001f)
+                    {
+                        float scale = 1.0f / dmr2;
+                        if (scale > 100.0f) scale = 100.0f;
+                        dm *= scale;
+                    }
+                    dm *= AA_SIZE * 0.5f;
+
+                    // Add vertices
+                    drawList->_VtxWritePtr[0].pos = (points[i1] - dm);
+                    drawList->_VtxWritePtr[0].uv = uv; drawList->_VtxWritePtr[0].col = colors[i1];        // Inner
+                    drawList->_VtxWritePtr[1].pos = (points[i1] + dm);
+                    drawList->_VtxWritePtr[1].uv = uv; drawList->_VtxWritePtr[1].col = colors[i1] & ~IM_COL32_A_MASK;  // Outer
+                    drawList->_VtxWritePtr += 2;
+
+                    // Add indexes for fringes
+                    drawList->_IdxWritePtr[0] = (ImDrawIdx)(vtx_inner_idx + (i1 << 1));
+                    drawList->_IdxWritePtr[1] = (ImDrawIdx)(vtx_inner_idx + (i0 << 1));
+                    drawList->_IdxWritePtr[2] = (ImDrawIdx)(vtx_outer_idx + (i0 << 1));
+                    drawList->_IdxWritePtr[3] = (ImDrawIdx)(vtx_outer_idx + (i0 << 1));
+                    drawList->_IdxWritePtr[4] = (ImDrawIdx)(vtx_outer_idx + (i1 << 1));
+                    drawList->_IdxWritePtr[5] = (ImDrawIdx)(vtx_inner_idx + (i1 << 1));
+                    drawList->_IdxWritePtr += 6;
+                }
+
+                drawList->_VtxCurrentIdx += (ImDrawIdx)vtx_count;
+            }
+            else
+            {
+                // Non Anti-aliased Fill
+                const int idx_count = (sz - 2) * 3;
+                const int vtx_count = sz;
+                drawList->PrimReserve(idx_count, vtx_count);
+                for (int i = 0; i < vtx_count; i++)
+                {
+                    drawList->_VtxWritePtr[0].pos = points[i];
+                    drawList->_VtxWritePtr[0].uv = uv;
+                    drawList->_VtxWritePtr[0].col = colors[i];
+                    drawList->_VtxWritePtr++;
+                }
+                for (int i = 2; i < sz; i++)
+                {
+                    drawList->_IdxWritePtr[0] = (ImDrawIdx)(drawList->_VtxCurrentIdx);
+                    drawList->_IdxWritePtr[1] = (ImDrawIdx)(drawList->_VtxCurrentIdx + i - 1);
+                    drawList->_IdxWritePtr[2] = (ImDrawIdx)(drawList->_VtxCurrentIdx + i);
+                    drawList->_IdxWritePtr += 3;
+                }
+
+                drawList->_VtxCurrentIdx += (ImDrawIdx)vtx_count;
+            }
+        }
+
+        void DrawText(std::string_view text, ImVec2 pos, uint32_t color)
+        {
+            ((ImDrawList*)UserData)->AddText(pos, color, text.data(), text.data() + text.size());
+        }
+
+        void DrawText(std::string_view text, std::string_view family, ImVec2 pos, float sz, uint32_t color, bool bold, bool italics, bool light)
+        {
+            auto popFont = false;
+            auto font = GetFont(family, sz, bold, italics, light, nullptr);
+
+            if (font != nullptr) {
+                ImGui::PushFont(font); popFont = true;
+            }
+
+            ((ImDrawList*)UserData)->AddText(pos, color, text.data(), text.data() + text.size());
+            if (popFont) ImGui::PopFont();
+        }
+    };
+
+    struct ImGuiGLFWPlatform final : public IPlatform
+    {
+        ImVec2 GetCurrentMousePos()
+        {
+            return ImGui::GetIO().MousePos;
+        }
+
+        bool IsMouseClicked()
+        {
+            return ImGui::GetIO().MouseReleased[0];
+        }
+
+        void HandleHyperlink(std::string_view)
+        {
+        }
+
+        void RequestFrame()
+        {
+        }
+
+        void HandleHover(bool hovered)
+        {
+            hovered ? ImGui::SetMouseCursor(ImGuiMouseCursor_Hand) :
+                ImGui::SetMouseCursor(ImGuiMouseCursor_Arrow);
+        }
+    };
+
 #ifdef _DEBUG
     inline void DrawDebugRect(DebugContentType type, ImVec2 startpos, ImVec2 endpos, const RenderConfig& config)
     {
-        auto drawList = ImGui::GetForegroundDrawList();
         if (config.DebugContents[type] != IM_COL32_BLACK_TRANS) 
-            drawList->AddRect(startpos, endpos, config.DebugContents[type]);
+            config.OverlayRenderer->DrawRect(startpos, endpos, config.DebugContents[type], false);
     }
 
-    inline void DrawDebugRect(ImColor color, ImVec2 startpos, ImVec2 endpos)
+    inline void DrawDebugRect(ImColor color, ImVec2 startpos, ImVec2 endpos, const RenderConfig& config)
     {
-        auto drawList = ImGui::GetForegroundDrawList();
-        drawList->AddRect(startpos, endpos, color);
+        config.OverlayRenderer->DrawRect(startpos, endpos, color, false);
     }
 #else
 #define DrawDebugRect(...)
 #endif
 
     template <typename ItrT>
-    void DrawLinearGradient(ImDrawList* drawList, ImVec2 initpos, ImVec2 endpos, float angle, ImGuiDir dir, ItrT start, ItrT end)
+    void DrawLinearGradient(ImVec2 initpos, ImVec2 endpos, float angle, ImGuiDir dir, ItrT start, ItrT end, const RenderConfig& config)
     {
         auto width = endpos.x - initpos.x;
         auto height = endpos.y - initpos.y;
 
         if (dir == ImGuiDir::ImGuiDir_Left)
         {
-            if (angle != 0.f)
+            // TODO: Add support for non-axis aligned gradients
+            /*ImVec2 points[4];
+            ImU32 colors[4];
+
+            for (auto it = start; it != end; ++it)
             {
-                ImVec2 points[4];
-                ImU32 colors[4];
+                auto extent = width * it->pos;
+                auto m = std::tanf(angle);
 
-                for (auto it = start; it != end; ++it)
-                {
-                    auto extent = width * it->pos;
-                    auto m = std::tanf(angle);
+                points[0] = initpos;
+                points[1] = points[0] + ImVec2{ extent, 0.f };
+                points[2] = initpos - ImVec2{ m * initpos.y, height };
+                points[3] = points[2] + ImVec2{ extent, 0.f };
 
-                    points[0] = initpos;
-                    points[1] = points[0] + ImVec2{ extent, 0.f };
-                    points[2] = initpos - ImVec2{ m * initpos.y, height };
-                    points[3] = points[2] + ImVec2{ extent, 0.f };
+                colors[0] = colors[3] = it->from;
+                colors[1] = colors[2] = it->to;
 
-                    colors[0] = colors[3] = it->from;
-                    colors[1] = colors[2] = it->to;
+                DrawPolyFilledMultiColor(drawList, points, colors, 4);
+                initpos.x += extent;
+            }*/
 
-                    DrawPolyFilledMultiColor(drawList, points, colors, 4);
-                    initpos.x += extent;
-                }
-            }
-            else
+            for (auto it = start; it != end; ++it)
             {
-                for (auto it = start; it != end; ++it)
-                {
-                    auto extent = width * it->pos;
-                    drawList->AddRectFilledMultiColor(initpos, initpos + ImVec2{ extent, height },
-                        it->from, it->to, it->to, it->from);
-                    initpos.x += extent;
-                }
+                auto extent = width * it->pos;
+                config.Renderer->DrawRectGradient(initpos, initpos + ImVec2{ extent, height },
+                    it->from, it->to, it->to, it->from);
+                initpos.x += extent;
             }
         }
         else if (dir == ImGuiDir::ImGuiDir_Down)
@@ -1150,24 +1339,24 @@ namespace ImRichText
             for (auto it = start; it != end; ++it)
             {
                 auto extent = height * it->pos;
-                drawList->AddRectFilledMultiColor(initpos, initpos + ImVec2{ width, extent },
+                config.Renderer->DrawRectGradient(initpos, initpos + ImVec2{ width, extent },
                     it->from, it->from, it->to, it->to);
                 initpos.y += extent;
             }
         }
     }
 
-    void DrawBackground(ImDrawList* drawList, ImVec2 startpos, ImVec2 endpos,
+    void DrawBackground(ImVec2 startpos, ImVec2 endpos,
         const ColorGradient& gradient, uint32_t color, const RenderConfig& config)
     {
         if (gradient.totalStops != 0)
             (gradient.dir == ImGuiDir_Down || gradient.dir == ImGuiDir_Left) ?
-            DrawLinearGradient(drawList, startpos, endpos, gradient.angleDegrees, gradient.dir,
-                std::begin(gradient.colorStops), std::begin(gradient.colorStops) + gradient.totalStops) :
-            DrawLinearGradient(drawList, startpos, endpos, gradient.angleDegrees, gradient.dir,
-                std::rbegin(gradient.colorStops), std::rbegin(gradient.colorStops) + gradient.totalStops);
+            DrawLinearGradient(startpos, endpos, gradient.angleDegrees, gradient.dir,
+                std::begin(gradient.colorStops), std::begin(gradient.colorStops) + gradient.totalStops, config) :
+            DrawLinearGradient(startpos, endpos, gradient.angleDegrees, gradient.dir,
+                std::rbegin(gradient.colorStops), std::rbegin(gradient.colorStops) + gradient.totalStops, config);
         else if (color != config.DefaultBgColor && color != IM_COL32_BLACK_TRANS)
-            drawList->AddRectFilled(startpos, endpos, color);
+            config.Renderer->DrawRect(startpos, endpos, color, true);
     }
 
     std::tuple<int, int, int> DecomposeToRGBChannels(uint32_t color)
@@ -1283,7 +1472,7 @@ namespace ImRichText
         return false;
     }
 
-    bool DrawToken(ImDrawList* drawList, int lineidx, const Token& token, ImVec2 initpos,
+    bool DrawToken(int lineidx, const Token& token, ImVec2 initpos,
         ImVec2 bounds, const StyleDescriptor& style, const TagPropertyDescriptor& tagprops, 
         const ListItemTokenDescriptor& listItem, const RenderConfig& config, 
         TooltipData& tooltip, AnimationData& animation)
@@ -1295,7 +1484,7 @@ namespace ImRichText
         {
             if (token.Type == TokenType::HorizontalRule)
             {
-                drawList->AddRectFilled(startpos, endpos, style.fgcolor);
+                config.Renderer->DrawRect(startpos, endpos, style.fgcolor, true);
             }
             else if (token.Type == TokenType::ListItemBullet)
             {
@@ -1303,18 +1492,12 @@ namespace ImRichText
                 auto bulletsz = (style.font.size) / bulletscale;
 
                 if (style.list.itemStyle == BulletType::Custom)
-                {
-                    if (config.DrawBullet != nullptr) {
-                        config.DrawBullet(startpos, endpos, style, listItem.ListItemIndex,
-                            listItem.ListDepth, config.UserData);
-                    }
-                    else DrawBullet(drawList, initpos, token.Bounds, BulletType::FilledCircle, style.fgcolor, bulletsz);
-                }
-                else DrawBullet(drawList, initpos, token.Bounds, style.list.itemStyle, style.fgcolor, bulletsz);
+                    config.Renderer->DrawBullet(startpos, endpos, style.fgcolor, listItem.ListItemIndex, listItem.ListDepth);
+                else config.Renderer->DrawDefaultBullet(style.list.itemStyle, initpos, token.Bounds, style.fgcolor, bulletsz);
             }
             else if (token.Type == TokenType::ListItemNumbered)
             {
-                drawList->AddText(startpos, style.fgcolor, listItem.NestedListItemIndex);
+                config.Renderer->DrawText(listItem.NestedListItemIndex, startpos, style.fgcolor);
             }
             else if (token.Type == TokenType::Meter)
             {
@@ -1323,19 +1506,19 @@ namespace ImRichText
                 auto diff = tagprops.range.second - tagprops.range.first;
                 auto progress = (tagprops.value / diff) * token.Bounds.width;
 
-                drawList->AddRectFilled(startpos, endpos, style.bgcolor, borderRadius, ImDrawFlags_RoundCornersAll);
-                drawList->AddRect(startpos, endpos, config.MeterBorderColor, borderRadius, ImDrawFlags_RoundCornersAll);
-                drawList->AddRectFilled(startpos + border, startpos - border + ImVec2{ progress, token.Bounds.height },
-                    style.fgcolor, borderRadius, ImDrawFlags_RoundCornersBottomLeft | ImDrawFlags_RoundCornersTopLeft);
+                config.Renderer->DrawRect(startpos, endpos, style.bgcolor, true, 1.f, borderRadius, AllCorners);
+                config.Renderer->DrawRect(startpos, endpos, config.MeterBorderColor, false, 1.f, borderRadius, AllCorners);
+                config.Renderer->DrawRect(startpos + border, startpos - border + ImVec2{ progress, token.Bounds.height },
+                    style.fgcolor, true, 1.f, borderRadius, TopLeftCorner | BottomLeftCorner);
             }
             else
             {
                 auto textend = token.Content.data() + token.VisibleTextSize;
                 auto halfh = token.Bounds.height * 0.5f;
-                drawList->AddText(startpos, style.fgcolor, token.Content.data(), textend);
+                config.Renderer->DrawText(token.Content, startpos, style.fgcolor);
 
-                if (style.font.flags & FontStyleStrikethrough) drawList->AddLine(startpos + ImVec2{ 0.f, halfh }, endpos + ImVec2{ 0.f, -halfh }, style.fgcolor);
-                if (style.font.flags & FontStyleUnderline) drawList->AddLine(startpos + ImVec2{ 0.f, token.Bounds.height }, endpos, style.fgcolor);
+                if (style.font.flags & FontStyleStrikethrough) config.Renderer->DrawLine(startpos + ImVec2{ 0.f, halfh }, endpos + ImVec2{ 0.f, -halfh }, style.fgcolor);
+                if (style.font.flags & FontStyleUnderline) config.Renderer->DrawLine(startpos + ImVec2{ 0.f, token.Bounds.height }, endpos, style.fgcolor);
 
                 if (!tagprops.tooltip.empty())
                 {
@@ -1345,7 +1528,7 @@ namespace ImRichText
                         auto posx = startpos.x;
                         while (posx < endpos.x)
                         {
-                            drawList->AddCircleFilled(ImVec2{ posx, endpos.y }, 1.f, style.fgcolor);
+                            config.Renderer->DrawCircle(ImVec2{ posx, endpos.y }, 1.f, style.fgcolor, true);
                             posx += 3.f;
                         }
                     }
@@ -1358,15 +1541,16 @@ namespace ImRichText
                     }
                 }
                 else if (!tagprops.link.empty())
-                {
-                    if (ImRect{ startpos, endpos }.Contains(ImGui::GetIO().MousePos))
+                { 
+                    auto pos = config.Platform->GetCurrentMousePos();
+                    if (ImRect{ startpos, endpos }.Contains(pos))
                     {
-                        ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
-                        if (ImGui::GetIO().MouseReleased[0] && config.HandleHyperlink)
-                            config.HandleHyperlink(tagprops.link, config.UserData);
+                        config.Platform->HandleHover(true);
+                        if (config.Platform->IsMouseClicked())
+                            config.Platform->HandleHyperlink(tagprops.link);
                     }
                     else
-                        ImGui::SetMouseCursor(ImGuiMouseCursor_Arrow);
+                        config.Platform->HandleHover(false);
                 }
             }
         }
@@ -1376,7 +1560,7 @@ namespace ImRichText
         return true;
     }
 
-    bool DrawSegment(ImDrawList* drawList, int lineidx, const SegmentData& segment,
+    bool DrawSegment(int lineidx, const SegmentData& segment,
         ImVec2 initpos, ImVec2 bounds, const Drawables& result, const RenderConfig& config,
         TooltipData& tooltip, AnimationData& animation)
     {
@@ -1395,7 +1579,7 @@ namespace ImRichText
         auto startpos = segment.Bounds.start(initpos), endpos = segment.Bounds.end(initpos);
 
         if ((style.blink && animation.isVisible) || !style.blink)
-            DrawBackground(drawList, startpos, endpos, style.gradient, style.bgcolor, config);
+            DrawBackground(startpos, endpos, style.gradient, style.bgcolor, config);
 
         for (const auto& token : segment.Tokens)
         {
@@ -1403,7 +1587,7 @@ namespace ImRichText
                 result.ListItemTokens[token.ListPropsIdx];
             const auto& tagprops = token.PropertiesIdx == -1 ? InvalidTagPropDesc :
                 result.TagDescriptors[token.PropertiesIdx];
-            if (drawTokens && !DrawToken(drawList, lineidx, token, initpos, bounds, style,
+            if (drawTokens && !DrawToken(lineidx, token, initpos, bounds, style,
                 tagprops, listItem, config, tooltip, animation))
             {
                 drawTokens = false; 
@@ -1415,31 +1599,24 @@ namespace ImRichText
         if ((style.propsSpecified & StyleBorderUniform) != 0 &&
             style.border.top.thickness > 0.f && style.border.top.color != style.bgcolor)
         {
-            auto drawflags = 0;
-            if ((style.border.rounding & TopLeftCorner) != 0) drawflags = ImDrawFlags_RoundCornersTopLeft;
-            if ((style.border.rounding & TopRightCorner) != 0) drawflags = ImDrawFlags_RoundCornersTopRight;
-            if ((style.border.rounding & BottomRightCorner) != 0) drawflags = ImDrawFlags_RoundCornersBottomRight;
-            if ((style.border.rounding & BottomLeftCorner) != 0) drawflags = ImDrawFlags_RoundCornersBottomLeft;
-            drawList->AddRect(startpos, endpos, style.border.top.color, style.border.radius, drawflags, style.border.top.thickness);
+            config.Renderer->DrawRect(startpos, endpos, style.border.top.color, false, style.border.top.thickness, 
+                style.border.radius, style.border.rounding);
         }
         else
         {
             auto width = endpos.x - startpos.x, height = endpos.y - startpos.y;
 
             if (style.border.top.thickness > 0.f && style.border.top.color != style.bgcolor)
-                drawList->AddRect(startpos, startpos + ImVec2{ width, 0.f }, style.border.top.color, 0.f, 
-                    0, style.border.top.thickness);
+                config.Renderer->DrawRect(startpos, startpos + ImVec2{ width, 0.f }, style.border.top.color, false, style.border.top.thickness);
             if (style.border.right.thickness > 0.f && style.border.right.color != style.bgcolor)
-                drawList->AddRect(startpos + ImVec2{ width - style.border.right.thickness, 0.f }, endpos - 
+                config.Renderer->DrawRect(startpos + ImVec2{ width - style.border.right.thickness, 0.f }, endpos -
                     ImVec2{ style.border.right.thickness, 0.f },
-                    style.border.right.color, 0.f, 0, style.border.right.thickness);
+                    style.border.right.color, false, style.border.right.thickness);
             if (style.border.left.thickness > 0.f && style.border.left.color != style.bgcolor)
-                drawList->AddRect(startpos, startpos + ImVec2{ 0.f, height }, style.border.left.color, 0.f,
-                    0, style.border.left.thickness);
+                config.Renderer->DrawRect(startpos, startpos + ImVec2{ 0.f, height }, style.border.left.color, false, style.border.left.thickness);
             if (style.border.bottom.thickness > 0.f && style.border.bottom.color != style.bgcolor)
-                drawList->AddRect(startpos + ImVec2{ 0.f, height - style.border.bottom.thickness }, endpos - 
-                    ImVec2{ 0.f, style.border.bottom.thickness }, style.border.bottom.color, 0.f,
-                    0, style.border.bottom.thickness);
+                config.Renderer->DrawRect(startpos + ImVec2{ 0.f, height - style.border.bottom.thickness }, endpos -
+                    ImVec2{ 0.f, style.border.bottom.thickness }, style.border.bottom.color, false, style.border.bottom.thickness);
         }
 
         DrawDebugRect(ContentTypeSegment, startpos, endpos, config);
@@ -1448,7 +1625,7 @@ namespace ImRichText
         return drawTokens;
     }
 
-    void DrawForegroundLayer(ImDrawList* drawList, ImVec2 initpos, ImVec2 bounds, 
+    void DrawForegroundLayer(ImVec2 initpos, ImVec2 bounds, 
         const std::vector<DrawableLine>& lines, const Drawables& result,
         const RenderConfig& config, TooltipData& tooltip, AnimationData& animation)
     {
@@ -1463,7 +1640,7 @@ namespace ImRichText
             {
                 auto linestart = initpos;
                 if (lines[lineidx].Marquee) linestart.x += animation.xoffsets[lineidx];
-                if (!DrawSegment(drawList, lineidx, segment, linestart, bounds, result, config, tooltip, animation))
+                if (!DrawSegment(lineidx, segment, linestart, bounds, result, config, tooltip, animation))
                     break;
             }
             
@@ -1476,19 +1653,19 @@ namespace ImRichText
         }
     }
 
-    void DrawBackgroundLayer(ImDrawList* drawList, ImVec2 initpos, ImVec2 bounds, 
+    void DrawBackgroundLayer(ImVec2 initpos, ImVec2 bounds, 
         const std::vector<BackgroundShape>& shapes, const RenderConfig& config)
     {
         for (const auto& shape : shapes)
         {
-            DrawBackground(drawList, shape.Start + initpos, shape.End + initpos,
+            DrawBackground(shape.Start + initpos, shape.End + initpos,
                 shape.Gradient, shape.Color, config);
             DrawDebugRect(ContentTypeBg, shape.Start + initpos, shape.End + initpos, config);
             if (shape.End.y > (bounds.y + initpos.y)) break;
         }
     }
 
-    void DrawTooltip(ImDrawList* drawList, const TooltipData& tooltip, const RenderConfig& config)
+    void DrawTooltip(const TooltipData& tooltip, const RenderConfig& config)
     {
         if (!tooltip.content.empty())
         {
@@ -1504,8 +1681,23 @@ namespace ImRichText
         using namespace std::chrono;
 
         config = GetRenderConfig(config);
+
+#ifndef IM_RICHTEXT_NO_IMGUI
+        ImGuiRenderer renderer{ config->GetFont };
+        
+        ImGuiGLFWPlatform platform;
+        config->Renderer = &renderer;
+        config->Platform = &platform;
+        config->Renderer->UserData = ImGui::GetCurrentWindow()->DrawList;
+
+#ifdef _DEBUG
+        ImGuiRenderer overlay{ config->GetFont };
+        config->OverlayRenderer = &overlay;
+        config->OverlayRenderer->UserData = ImGui::GetForegroundDrawList();
+#endif
+#endif
+        
         auto endpos = pos + bounds;
-        auto drawList = ImGui::GetCurrentWindow()->DrawList;
         TooltipData tooltip;
         auto& animation = AnimationMap[richText];
         
@@ -1518,17 +1710,17 @@ namespace ImRichText
         auto currFrameTime = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
 
         ImGui::PushClipRect(pos, endpos, true);
-        drawList->AddRectFilled(pos, endpos, config->DefaultBgColor);
+        config->Renderer->DrawRect(pos, endpos, config->DefaultBgColor, true);
 
-        DrawBackgroundLayer(drawList, pos, bounds, drawables.BackgroundShapes, *config);
-        DrawForegroundLayer(drawList, pos, bounds, drawables.ForegroundLines, drawables, *config, tooltip, animation);
-        DrawTooltip(drawList, tooltip, *config);
+        DrawBackgroundLayer(pos, bounds, drawables.BackgroundShapes, *config);
+        DrawForegroundLayer(pos, bounds, drawables.ForegroundLines, drawables, *config, tooltip, animation);
+        DrawTooltip(tooltip, *config);
 
         if (!config->IsStrictHTML5 && (currFrameTime - animation.lastBlinkTime > IM_RICHTEXT_BLINK_ANIMATION_INTERVAL))
         {
             animation.isVisible = !animation.isVisible;
             animation.lastBlinkTime = currFrameTime;
-            if (config->RequestFrame) config->RequestFrame(config->UserData);
+            config->Platform->RequestFrame();
         }
 
         if (currFrameTime - animation.lastMarqueeTime > IM_RICHTEXT_MARQUEE_ANIMATION_INTERVAL)
@@ -1541,7 +1733,7 @@ namespace ImRichText
                 if (animation.xoffsets[lineidx] >= linewidth)
                     animation.xoffsets[lineidx] = -linewidth;
 
-                if (config->RequestFrame) config->RequestFrame(config->UserData);
+                config->Platform->RequestFrame();
             }
 
             animation.lastMarqueeTime = currFrameTime;
@@ -1578,10 +1770,12 @@ namespace ImRichText
         config->DefaultFontSize = defaultFontSize;
         config->MeterDefaultSize = { defaultFontSize * 5.0f, defaultFontSize };
 
+#ifndef IM_RICHTEXT_NO_IMGUI
 #ifdef IM_RICHTEXT_DEFAULT_FONTS_AVAILABLE
         config->GetFont = &GetFont;
         config->GetTextSize = &GetTextSize;
         if (!skipDefaultFontLoading) LoadDefaultFonts(*config);
+#endif
 #endif
         return config;
     }
