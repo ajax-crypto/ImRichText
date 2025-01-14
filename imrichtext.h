@@ -119,10 +119,11 @@ namespace ImRichText
         StylePaddingLeft = 1 << 13,
         StylePaddingRight = 1 << 14,
         StyleBorder = 1 << 15,
-        StyleBorderUniform = 1 << 16,
-        StyleCellSpacing = 1 << 17,
-        StyleBlink = 1 << 18,
-        StyleNoWrap = 1 << 19
+        StyleBorderRadius = 1 << 16,
+        StyleBorderUniform = 1 << 17,
+        StyleCellSpacing = 1 << 18,
+        StyleBlink = 1 << 19,
+        StyleNoWrap = 1 << 20
     };
 
     enum TextAlignment
@@ -149,7 +150,7 @@ namespace ImRichText
         ListStyle list;
         FourSidedMeasure padding;
         FourSidedBorder border;
-        int alignment = TextAlignment::TextAlignLeading;
+        int alignment = TextAlignment::TextAlignLeading; // TODO: Implement text alignment
         float superscriptOffset = 0.f; // TODO: Move to DrawableLine
         float subscriptOffset = 0.f; // TODO: Move to DrawableLine
         ColorGradient gradient;

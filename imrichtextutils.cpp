@@ -573,6 +573,27 @@ namespace ImRichText
         return it != Colors.end() ? it->second : uint32_t{ IM_COL32_BLACK };
     }
 
+    Border ExtractBorder(std::string_view input, float ems, float percent, 
+        uint32_t(*NamedColor)(const char*, void*), void* userData)
+    {
+        Border result;
+
+        auto idx = WholeWord(input);
+        result.thickness = ExtractFloatWithUnit(input.substr(0, idx), 1.f, ems, percent, 1.f);
+        
+        auto idx2 = WholeWord(input, idx + 1);
+        auto type = input.substr(idx + 1, idx2);
+        if (AreSame(type, "solid")) result.lineType = LineType::Solid;
+        else if (AreSame(type, "dashed")) result.lineType = LineType::Dashed;
+        else if (AreSame(type, "dotted")) result.lineType = LineType::Dotted;
+
+        auto idx3 = WholeWord(input, idx2 + 1);
+        auto color = input.substr(idx2 + 1, idx3);
+        result.color = ExtractColor(color, NamedColor, userData);
+
+        return result;
+    }
+
 #ifndef IM_RICHTEXT_NO_IMGUI
     void DrawPolyFilledMultiColor(ImDrawList* drawList, const ImVec2* points, const ImU32* col, const int points_count)
     {

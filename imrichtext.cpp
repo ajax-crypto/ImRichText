@@ -280,6 +280,42 @@ namespace ImRichText
                 prop = StyleNoWrap;
             }
         }
+        else if (AreSame(stylePropName, "border"))
+        {
+            style.border.top = style.border.bottom = style.border.left = style.border.right = ExtractBorder(stylePropVal,
+                config.DefaultFontSize * config.FontScale, parentStyle.height, config.NamedColor, config.UserData);
+            prop = StyleBorder | StyleBorderUniform;
+        }
+        else if (AreSame(stylePropName, "border-top"))
+        {
+            style.border.top = ExtractBorder(stylePropVal, config.DefaultFontSize * config.FontScale, 
+                parentStyle.height, config.NamedColor, config.UserData);
+            prop = StyleBorder;
+        }
+        else if (AreSame(stylePropName, "border-left"))
+        {
+            style.border.left = ExtractBorder(stylePropVal, config.DefaultFontSize * config.FontScale,
+                parentStyle.height, config.NamedColor, config.UserData);
+            prop = StyleBorder;
+        }
+        else if (AreSame(stylePropName, "border-right"))
+        {
+            style.border.right = ExtractBorder(stylePropVal, config.DefaultFontSize * config.FontScale,
+                parentStyle.height, config.NamedColor, config.UserData);
+            prop = StyleBorder;
+        }
+        else if (AreSame(stylePropName, "border-bottom"))
+        {
+            style.border.bottom = ExtractBorder(stylePropVal, config.DefaultFontSize * config.FontScale,
+                parentStyle.height, config.NamedColor, config.UserData);
+            prop = StyleBorder;
+        }
+        else if (AreSame(stylePropName, "border-radius"))
+        {
+            style.border.radius = ExtractFloatWithUnit(stylePropVal, 0.f, config.DefaultFontSize * config.FontScale,
+                parentStyle.height, 1.f);
+            prop = StyleBorder;
+        }
         else if (AreSame(stylePropName, "font-style"))
         {
             if (AreSame(stylePropVal, "normal")) style.font.flags |= FontStyleNormal;
@@ -365,7 +401,7 @@ namespace ImRichText
             width += token.Bounds.width + token.Offset.h();
         }
 
-        return { width + style.padding.h(), height + style.padding.v() };
+        return { width + style.padding.h() + style.border.h(), height + style.padding.v() + style.border.v() };
     }
 
     [[nodiscard]] ImVec2 GetLineSize(const DrawableLine& line, const std::vector<StyleDescriptor>& styles, const RenderConfig& config)
@@ -680,13 +716,13 @@ namespace ImRichText
                 segment.Bounds.left = currx; // This will align left, TODO: Handle other alignments
                 const auto& style = styles[segment.StyleIdx + 1];
 
-                currx += style.padding.left;
+                currx += style.padding.left + style.border.left.thickness;
 
                 for (auto tokidx = 0; tokidx < (int)segment.Tokens.size(); ++tokidx)
                 {
                     auto& token = segment.Tokens[tokidx];
                     token.Bounds.top = segment.Bounds.top + style.padding.top +
-                        style.superscriptOffset + style.subscriptOffset +
+                        style.superscriptOffset + style.subscriptOffset + style.border.top.thickness +
                         ((segment.Bounds.height - token.Bounds.height) * 0.5f);
 
                     // TODO: Fix bullet positioning w.r.t. first text block (baseline aligned?)
@@ -696,7 +732,7 @@ namespace ImRichText
                     currx += token.Bounds.width + token.Offset.h();
                 }
 
-                currx += style.padding.right;
+                currx += style.padding.right + style.border.right.thickness;
             }
 
             HIGHLIGHT("\nCreated line #%d at (%f, %f) of size (%f, %f) with %d segments", index,
@@ -1373,6 +1409,37 @@ namespace ImRichText
                 drawTokens = false; 
                 break;
             }
+        }
+
+        // TODO: Take into account line type as well
+        if ((style.propsSpecified & StyleBorderUniform) != 0 &&
+            style.border.top.thickness > 0.f && style.border.top.color != style.bgcolor)
+        {
+            auto drawflags = 0;
+            if ((style.border.rounding & TopLeftCorner) != 0) drawflags = ImDrawFlags_RoundCornersTopLeft;
+            if ((style.border.rounding & TopRightCorner) != 0) drawflags = ImDrawFlags_RoundCornersTopRight;
+            if ((style.border.rounding & BottomRightCorner) != 0) drawflags = ImDrawFlags_RoundCornersBottomRight;
+            if ((style.border.rounding & BottomLeftCorner) != 0) drawflags = ImDrawFlags_RoundCornersBottomLeft;
+            drawList->AddRect(startpos, endpos, style.border.top.color, style.border.radius, drawflags, style.border.top.thickness);
+        }
+        else
+        {
+            auto width = endpos.x - startpos.x, height = endpos.y - startpos.y;
+
+            if (style.border.top.thickness > 0.f && style.border.top.color != style.bgcolor)
+                drawList->AddRect(startpos, startpos + ImVec2{ width, 0.f }, style.border.top.color, 0.f, 
+                    0, style.border.top.thickness);
+            if (style.border.right.thickness > 0.f && style.border.right.color != style.bgcolor)
+                drawList->AddRect(startpos + ImVec2{ width - style.border.right.thickness, 0.f }, endpos - 
+                    ImVec2{ style.border.right.thickness, 0.f },
+                    style.border.right.color, 0.f, 0, style.border.right.thickness);
+            if (style.border.left.thickness > 0.f && style.border.left.color != style.bgcolor)
+                drawList->AddRect(startpos, startpos + ImVec2{ 0.f, height }, style.border.left.color, 0.f,
+                    0, style.border.left.thickness);
+            if (style.border.bottom.thickness > 0.f && style.border.bottom.color != style.bgcolor)
+                drawList->AddRect(startpos + ImVec2{ 0.f, height - style.border.bottom.thickness }, endpos - 
+                    ImVec2{ 0.f, style.border.bottom.thickness }, style.border.bottom.color, 0.f,
+                    0, style.border.bottom.thickness);
         }
 
         DrawDebugRect(ContentTypeSegment, startpos, endpos, config);
