@@ -18,6 +18,16 @@ struct ImVec2
     float x = 0.f, y = 0.f;
 };
 
+enum ImGuiDir : int
+{
+    ImGuiDir_None = -1,
+    ImGuiDir_Left = 0,
+    ImGuiDir_Right = 1,
+    ImGuiDir_Up = 2,
+    ImGuiDir_Down = 3,
+    ImGuiDir_COUNT
+};
+
 #endif
 
 #if !defined(IMGUI_DEFINE_MATH_OPERATORS) || defined(IM_RICHTEXT_NO_IMGUI)
@@ -106,12 +116,23 @@ namespace ImRichText
     {
         uint32_t color = IM_COL32_BLACK_TRANS;
         float thickness = 0.f;
-        LineType lineType = LineType::Solid;
+        LineType lineType = LineType::Solid; // Unused for rendering
+    };
+
+    enum BoxCorner
+    {
+        TopLeftCorner = 1,
+        TopRightCorner = 2,
+        BottomRightCorner = 4,
+        BottomLeftCorner = 8,
+        AllCorners = TopLeftCorner | TopRightCorner | BottomRightCorner | BottomLeftCorner
     };
 
     struct FourSidedBorder
     {
         Border top, left, bottom, right;
+        float radius = 0.f;
+        int rounding = BoxCorner::AllCorners;
 
         float h() const { return left.thickness + right.thickness; }
         float v() const { return top.thickness + bottom.thickness; }
@@ -137,6 +158,9 @@ namespace ImRichText
     [[nodiscard]] uint32_t ExtractColor(std::string_view stylePropVal, uint32_t(*NamedColor)(const char*, void*), void* userData);
     [[nodiscard]] ColorGradient ExtractLinearGradient(std::string_view input, uint32_t(*NamedColor)(const char*, void*), void* userData);
     [[nodiscard]] uint32_t GetColor(const char* name, void*);
+
+    [[nodiscard]] Border ExtractBorder(std::string_view input, float ems, float percent, 
+        uint32_t(*NamedColor)(const char*, void*), void* userData);
 
 #ifndef IM_RICHTEXT_NO_IMGUI
     void DrawPolyFilledMultiColor(ImDrawList* drawList, const ImVec2* points, const ImU32* col, const int points_count);

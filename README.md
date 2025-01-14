@@ -88,6 +88,8 @@ The following subset of HTML tags/CSS properties are supported:
 | font-style | italics/oblique |
 | height/width | `px`/`em` |
 | list-style-type | (_Only for list items_) `circle`/`disk`/`square`/`custom`[^2] |
+| border/border-top/etc. | `2px solid gray`[^6] |
+| border-radius | `px`/`em` |
 | text-overflow | _Under progress_ |
 
 In order to handle rich text as specified above, fonts need to be managed i.e. different family, weights, sizes, etc. 
@@ -97,7 +99,8 @@ However, user can provide their own font provider through `RenderConfig::GetFont
 ## Immediate Goals
 * Word wrapping support
 * Maybe add `<center>` and `<font>` tags? (These are deprecated in HTML5)
-* Add support for `margin` and possibly `border` (_although the utility of border is debatable_)
+* Add support for `margin`
+* Add support for line style (solid, dotted, dashed) for `border`
 * Implement support for vertical/horizontal text alignment including baseline alignment (May need to use FreeType backend)
 * Integration example with [Clay layout library](https://github.com/nicbarker/clay?tab=readme-ov-file)
 * Roman numerals for numbered lists
@@ -154,3 +157,4 @@ can span multiple lines. After that, the foreground i.e. text is drawn (with bac
 [^3]: Underline text due to `<u>` tag is not baseline-underlined, but underlined beneath the whole text
 [^4]: Set `RenderConfig::HandleHyperlink` function pointer to handle hyperlinks clicked
 [^5]: Only axis aligned gradients are support as `background` property
+[^6]: Border line type is parsed but not used for rendering
