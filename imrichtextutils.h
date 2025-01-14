@@ -2,12 +2,28 @@
 
 #include <string_view>
 #include <optional>
-#include <vector>
 
 #include "imgui.h"
 
 #ifndef IM_RICHTEXT_MAX_COLORSTOPS
-#define IM_RICHTEXT_MAX_COLORSTOPS 8
+#define IM_RICHTEXT_MAX_COLORSTOPS 4
+#endif
+
+#ifdef IM_RICHTEXT_NO_IMGUI
+#define IM_COL32_BLACK       ImRichText::ToRGBA(0, 0, 0, 255)
+#define IM_COL32_BLACK_TRANS ImRichText::ToRGBA(0, 0, 0, 0)
+
+struct ImVec2
+{
+    float x = 0.f, y = 0.f;
+};
+
+#endif
+
+#if !defined(IMGUI_DEFINE_MATH_OPERATORS) || defined(IM_RICHTEXT_NO_IMGUI)
+[[nodiscard]] ImVec2 operator+(ImVec2 lhs, ImVec2 rhs) { return ImVec2{ lhs.x + rhs.x, lhs.y + rhs.y }; }
+[[nodiscard]] ImVec2 operator*(ImVec2 lhs, float rhs) { return ImVec2{ lhs.x * rhs, lhs.y * rhs }; }
+[[nodiscard]] ImVec2 operator-(ImVec2 lhs, ImVec2 rhs) { return ImVec2{ lhs.x - rhs.x, lhs.y - rhs.y }; }
 #endif
 
 namespace ImRichText
@@ -37,7 +53,7 @@ namespace ImRichText
 
     struct ColorStop
     {
-        ImColor from, to;
+        uint32_t from, to;
         float pos = -1.f;
     };
 
@@ -47,8 +63,6 @@ namespace ImRichText
         int totalStops = 0;
         float angleDegrees = 0.f;
         ImGuiDir dir = ImGuiDir::ImGuiDir_Down;
-        bool reverseOrder = false;
-        bool repeating = false;
     };
 
     enum class BulletType
@@ -60,7 +74,7 @@ namespace ImRichText
         Triangle,
         Arrow,
         CheckMark,
-        CheckBox,
+        CheckBox, // Needs fixing
         Concentric,
         Custom
     };
@@ -83,9 +97,24 @@ namespace ImRichText
         float v() const { return top + bottom; }
     };
 
-    enum LineType
+    enum class LineType
     {
-        Dashed, Dotted, DashDot
+        Solid, Dashed, Dotted, DashDot
+    };
+
+    struct Border
+    {
+        uint32_t color = IM_COL32_BLACK_TRANS;
+        float thickness = 0.f;
+        LineType lineType = LineType::Solid;
+    };
+
+    struct FourSidedBorder
+    {
+        Border top, left, bottom, right;
+
+        float h() const { return left.thickness + right.thickness; }
+        float v() const { return top.thickness + bottom.thickness; }
     };
 
     // Generic string helpers, case-insensitive matches
@@ -102,12 +131,17 @@ namespace ImRichText
     [[nodiscard]] int ExtractIntFromHex(std::string_view input, int defaultVal);
     [[nodiscard]] IntOrFloat ExtractNumber(std::string_view input, float defaultVal);
     [[nodiscard]] float ExtractFloatWithUnit(std::string_view input, float defaultVal, float ems, float parent, float scale);
-    [[nodiscard]] ImColor ExtractColor(std::string_view stylePropVal, ImColor(*NamedColor)(const char*, void*), void* userData);
-    [[nodiscard]] ColorGradient ExtractLinearGradient(std::string_view input, ImColor(*NamedColor)(const char*, void*), void* userData);
 
-    [[nodiscard]] ImColor GetColor(const char* name, void*);
+    [[nodiscard]] uint32_t ToRGBA(int r, int g, int b, int a = 255);
+    [[nodiscard]] uint32_t ToRGBA(float r, float g, float b, float a = 1.f);
+    [[nodiscard]] uint32_t ExtractColor(std::string_view stylePropVal, uint32_t(*NamedColor)(const char*, void*), void* userData);
+    [[nodiscard]] ColorGradient ExtractLinearGradient(std::string_view input, uint32_t(*NamedColor)(const char*, void*), void* userData);
+    [[nodiscard]] uint32_t GetColor(const char* name, void*);
+
+#ifndef IM_RICHTEXT_NO_IMGUI
     void DrawPolyFilledMultiColor(ImDrawList* drawList, const ImVec2* points, const ImU32* col, const int points_count);
-    void DrawBullet(ImDrawList* drawList, ImVec2 initpos, const BoundedBox& box, BulletType type, ImColor color, float size);
+    void DrawBullet(ImDrawList* drawList, ImVec2 initpos, const BoundedBox& box, BulletType type, uint32_t color, float size);
+#endif
 
     // Parse rich text and invoke appropriate visitor methods
     void ParseRichText(const char* text, const char* textend, char TagStart, char TagEnd, ITagVisitor& visitor);
