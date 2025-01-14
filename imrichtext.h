@@ -237,12 +237,16 @@ namespace ImRichText
         uint32_t MarkHighlight = ToRGBA(255, 255, 0);
         uint32_t HyperlinkColor = ToRGBA(0, 50, 255);
 
-        ImFont* (*GetFont)(std::string_view, float, bool, bool, bool, void*) = nullptr;
-        ImVec2  (*GetTextSize)(std::string_view, ImFont*) = nullptr;
+        ImFont*  (*GetFont)(std::string_view, float, bool, bool, bool, void*) = nullptr;
+        ImVec2   (*GetTextSize)(std::string_view, ImFont*) = nullptr;
         uint32_t (*NamedColor)(const char*, void*) = nullptr;
-        void    (*DrawBullet)(ImVec2, ImVec2, const StyleDescriptor&, int, int, void*) = nullptr;
-        void    (*HandleHyperlink)(std::string_view, void*) = nullptr;
-        void    (*RequestFrame)(void*) = nullptr;
+
+        IPlatform* Platform = nullptr;
+        IRenderer* Renderer = nullptr;
+
+#ifdef _DEBUG
+        IRenderer* OverlayRenderer = nullptr;
+#endif
 
         float    HFontSizes[6] = { 36, 32, 24, 20, 16, 12 };
         uint32_t HeaderLineColor = ToRGBA(128, 128, 128, 255);

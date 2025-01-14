@@ -593,192 +593,6 @@ namespace ImRichText
 
         return result;
     }
-
-#ifndef IM_RICHTEXT_NO_IMGUI
-    void DrawPolyFilledMultiColor(ImDrawList* drawList, const ImVec2* points, const ImU32* col, const int points_count)
-    {
-        const ImVec2 uv = drawList->_Data->TexUvWhitePixel;
-
-        if (drawList->Flags & ImDrawListFlags_AntiAliasedFill)
-        {
-            // Anti-aliased Fill
-            const float AA_SIZE = 1.0f;
-            const int idx_count = (points_count - 2) * 3 + points_count * 6;
-            const int vtx_count = (points_count * 2);
-            drawList->PrimReserve(idx_count, vtx_count);
-
-            // Add indexes for fill
-            unsigned int vtx_inner_idx = drawList->_VtxCurrentIdx;
-            unsigned int vtx_outer_idx = drawList->_VtxCurrentIdx + 1;
-            for (int i = 2; i < points_count; i++)
-            {
-                drawList->_IdxWritePtr[0] = (ImDrawIdx)(vtx_inner_idx); 
-                drawList->_IdxWritePtr[1] = (ImDrawIdx)(vtx_inner_idx + ((i - 1) << 1)); 
-                drawList->_IdxWritePtr[2] = (ImDrawIdx)(vtx_inner_idx + (i << 1));
-                drawList->_IdxWritePtr += 3;
-            }
-
-            // Compute normals
-            ImVec2* temp_normals = (ImVec2*)alloca(points_count * sizeof(ImVec2));
-            for (int i0 = points_count - 1, i1 = 0; i1 < points_count; i0 = i1++)
-            {
-                const ImVec2& p0 = points[i0];
-                const ImVec2& p1 = points[i1];
-                ImVec2 diff = p1 - p0;
-                diff *= ImInvLength(diff, 1.0f);
-                temp_normals[i0].x = diff.y;
-                temp_normals[i0].y = -diff.x;
-            }
-
-            for (int i0 = points_count - 1, i1 = 0; i1 < points_count; i0 = i1++)
-            {
-                // Average normals
-                const ImVec2& n0 = temp_normals[i0];
-                const ImVec2& n1 = temp_normals[i1];
-                ImVec2 dm = (n0 + n1) * 0.5f;
-                float dmr2 = dm.x * dm.x + dm.y * dm.y;
-                if (dmr2 > 0.000001f)
-                {
-                    float scale = 1.0f / dmr2;
-                    if (scale > 100.0f) scale = 100.0f;
-                    dm *= scale;
-                }
-                dm *= AA_SIZE * 0.5f;
-
-                // Add vertices
-                drawList->_VtxWritePtr[0].pos = (points[i1] - dm); 
-                drawList->_VtxWritePtr[0].uv = uv; drawList->_VtxWritePtr[0].col = col[i1];        // Inner
-                drawList->_VtxWritePtr[1].pos = (points[i1] + dm); 
-                drawList->_VtxWritePtr[1].uv = uv; drawList->_VtxWritePtr[1].col = col[i1] & ~IM_COL32_A_MASK;  // Outer
-                drawList->_VtxWritePtr += 2;
-
-                // Add indexes for fringes
-                drawList->_IdxWritePtr[0] = (ImDrawIdx)(vtx_inner_idx + (i1 << 1)); 
-                drawList->_IdxWritePtr[1] = (ImDrawIdx)(vtx_inner_idx + (i0 << 1)); 
-                drawList->_IdxWritePtr[2] = (ImDrawIdx)(vtx_outer_idx + (i0 << 1));
-                drawList->_IdxWritePtr[3] = (ImDrawIdx)(vtx_outer_idx + (i0 << 1)); 
-                drawList->_IdxWritePtr[4] = (ImDrawIdx)(vtx_outer_idx + (i1 << 1)); 
-                drawList->_IdxWritePtr[5] = (ImDrawIdx)(vtx_inner_idx + (i1 << 1));
-                drawList->_IdxWritePtr += 6;
-            }
-
-            drawList->_VtxCurrentIdx += (ImDrawIdx)vtx_count;
-        }
-        else
-        {
-            // Non Anti-aliased Fill
-            const int idx_count = (points_count - 2) * 3;
-            const int vtx_count = points_count;
-            drawList->PrimReserve(idx_count, vtx_count);
-            for (int i = 0; i < vtx_count; i++)
-            {
-                drawList->_VtxWritePtr[0].pos = points[i]; 
-                drawList->_VtxWritePtr[0].uv = uv; 
-                drawList->_VtxWritePtr[0].col = col[i];
-                drawList->_VtxWritePtr++;
-            }
-            for (int i = 2; i < points_count; i++)
-            {
-                drawList->_IdxWritePtr[0] = (ImDrawIdx)(drawList->_VtxCurrentIdx);
-                drawList->_IdxWritePtr[1] = (ImDrawIdx)(drawList->_VtxCurrentIdx + i - 1); 
-                drawList->_IdxWritePtr[2] = (ImDrawIdx)(drawList->_VtxCurrentIdx + i);
-                drawList->_IdxWritePtr += 3;
-            }
-
-            drawList->_VtxCurrentIdx += (ImDrawIdx)vtx_count;
-        }
-    }
-
-    void DrawBullet(ImDrawList* drawList, ImVec2 initpos, const BoundedBox& bounds, BulletType type, uint32_t color, float bulletsz)
-    {
-        switch (type)
-        {
-        case BulletType::Circle: {
-            ImVec2 center = bounds.center(initpos);
-            drawList->AddCircle(center, bulletsz * 0.5f, color);
-            break;
-        }
-
-        case BulletType::Disk: {
-            ImVec2 center = bounds.center(initpos);
-            drawList->AddCircleFilled(center, bulletsz * 0.5f, color);
-            break;
-        }
-
-        case BulletType::Square: {
-            drawList->AddRectFilled(bounds.start(initpos), bounds.end(initpos), color);
-            break;
-        }
-
-        case BulletType::Concentric: {
-            ImVec2 center = bounds.center(initpos);
-            drawList->AddCircle(center, bulletsz * 0.5f, color);
-            drawList->AddCircleFilled(center, bulletsz * 0.4f, color);
-            break;
-        }
-
-        case BulletType::Triangle: {
-            auto startpos = bounds.start(initpos);
-            auto offset = bulletsz * 0.25f;
-            ImVec2 a{ startpos.x, startpos.y },
-                b{ startpos.x + bulletsz, startpos.y + (bulletsz * 0.5f) },
-                c{ startpos.x, startpos.y + bulletsz };
-            drawList->AddTriangleFilled(a, b, c, color);
-            break;
-        }
-
-        case BulletType::Arrow: {
-            auto startpos = bounds.start(initpos);
-            auto bsz2 = bulletsz * 0.5f;
-            auto bsz3 = bulletsz * 0.33333f;
-            auto bsz6 = bsz3 * 0.5f;
-            auto bsz38 = bulletsz * 0.375f;
-            ImVec2 points[7];
-            points[0] = { startpos.x, startpos.y + bsz38 };
-            points[1] = { startpos.x + bsz2, startpos.y + bsz38 };
-            points[2] = { startpos.x + bsz2, startpos.y + bsz6 };
-            points[3] = { startpos.x + bulletsz, startpos.y + bsz2 };
-            points[4] = { startpos.x + bsz2, startpos.y + bulletsz - bsz6 };
-            points[5] = { startpos.x + bsz2, startpos.y + bulletsz - bsz38 };
-            points[6] = { startpos.x, startpos.y + bulletsz - bsz38 };
-            drawList->AddRectFilled(points[0], points[5], color);
-            drawList->AddTriangleFilled(points[2], points[3], points[4], color);
-            break;
-        }
-
-        case BulletType::CheckMark: {
-            auto startpos = bounds.start(initpos);
-            auto bsz3 = (bulletsz * 0.25f);
-            auto thickness = bulletsz * 0.2f;
-            ImVec2 points[3];
-            points[0] = { startpos.x, startpos.y + (2.5f * bsz3) };
-            points[1] = { startpos.x + (bulletsz * 0.3333f), startpos.y + bulletsz };
-            points[2] = { startpos.x + bulletsz, startpos.y + bsz3 };
-            drawList->AddPolyline(points, 3, color, 0, thickness);
-            break;
-        }
-
-        // TODO: Fix this
-        case BulletType::CheckBox: {
-            auto startpos = bounds.start(initpos);
-            auto checkpos = ImVec2{ startpos.x + (bulletsz * 0.25f), startpos.y + (bulletsz * 0.25f) };
-            bulletsz *= 0.75f;
-            auto bsz3 = (bulletsz * 0.25f);
-            auto thickness = bulletsz * 0.25f;
-            ImVec2 points[3];
-            points[0] = { checkpos.x, checkpos.y + (2.5f * bsz3) };
-            points[1] = { checkpos.x + (bulletsz * 0.3333f), checkpos.y + bulletsz };
-            points[2] = { checkpos.x + bulletsz, checkpos.y + bsz3 };
-            drawList->AddPolyline(points, 3, color, 0, thickness);
-            drawList->AddRect(startpos, bounds.end(initpos), color, thickness);
-            break;
-        }
-
-        default:
-            break;
-        }
-    }
-#endif
     
     std::pair<std::string_view, bool> ExtractTag(const char* text, int end, char TagEnd,
         int& idx, bool& tagStart)
@@ -954,5 +768,95 @@ namespace ImRichText
         }
 
         visitor.Finalize();
+    }
+
+    void IRenderer::DrawDefaultBullet(BulletType type, ImVec2 initpos, const BoundedBox& bounds, uint32_t color, float bulletsz)
+    {
+        switch (type)
+        {
+        case BulletType::Circle: {
+            ImVec2 center = bounds.center(initpos);
+            DrawCircle(center, bulletsz * 0.5f, color, false);
+            break;
+        }
+
+        case BulletType::Disk: {
+            ImVec2 center = bounds.center(initpos);
+            DrawCircle(center, bulletsz * 0.5f, color, true);
+            break;
+        }
+
+        case BulletType::Square: {
+            DrawRect(bounds.start(initpos), bounds.end(initpos), color, true);
+            break;
+        }
+
+        case BulletType::Concentric: {
+            ImVec2 center = bounds.center(initpos);
+            DrawCircle(center, bulletsz * 0.5f, color, false);
+            DrawCircle(center, bulletsz * 0.4f, color, true);
+            break;
+        }
+
+        case BulletType::Triangle: {
+            auto startpos = bounds.start(initpos);
+            auto offset = bulletsz * 0.25f;
+            ImVec2 a{ startpos.x, startpos.y },
+                b{ startpos.x + bulletsz, startpos.y + (bulletsz * 0.5f) },
+                c{ startpos.x, startpos.y + bulletsz };
+            DrawTriangle(a, b, c, color, true);
+            break;
+        }
+
+        case BulletType::Arrow: {
+            auto startpos = bounds.start(initpos);
+            auto bsz2 = bulletsz * 0.5f;
+            auto bsz3 = bulletsz * 0.33333f;
+            auto bsz6 = bsz3 * 0.5f;
+            auto bsz38 = bulletsz * 0.375f;
+            ImVec2 points[7];
+            points[0] = { startpos.x, startpos.y + bsz38 };
+            points[1] = { startpos.x + bsz2, startpos.y + bsz38 };
+            points[2] = { startpos.x + bsz2, startpos.y + bsz6 };
+            points[3] = { startpos.x + bulletsz, startpos.y + bsz2 };
+            points[4] = { startpos.x + bsz2, startpos.y + bulletsz - bsz6 };
+            points[5] = { startpos.x + bsz2, startpos.y + bulletsz - bsz38 };
+            points[6] = { startpos.x, startpos.y + bulletsz - bsz38 };
+            DrawRect(points[0], points[5], color, true);
+            DrawTriangle(points[2], points[3], points[4], color, true);
+            break;
+        }
+
+        case BulletType::CheckMark: {
+            auto startpos = bounds.start(initpos);
+            auto bsz3 = (bulletsz * 0.25f);
+            auto thickness = bulletsz * 0.2f;
+            ImVec2 points[3];
+            points[0] = { startpos.x, startpos.y + (2.5f * bsz3) };
+            points[1] = { startpos.x + (bulletsz * 0.3333f), startpos.y + bulletsz };
+            points[2] = { startpos.x + bulletsz, startpos.y + bsz3 };
+            DrawPolyline(points, 3, color, thickness);
+            break;
+        }
+
+        // TODO: Fix this
+        case BulletType::CheckBox: {
+            auto startpos = bounds.start(initpos);
+            auto checkpos = ImVec2{ startpos.x + (bulletsz * 0.25f), startpos.y + (bulletsz * 0.25f) };
+            bulletsz *= 0.75f;
+            auto bsz3 = (bulletsz * 0.25f);
+            auto thickness = bulletsz * 0.25f;
+            ImVec2 points[3];
+            points[0] = { checkpos.x, checkpos.y + (2.5f * bsz3) };
+            points[1] = { checkpos.x + (bulletsz * 0.3333f), checkpos.y + bulletsz };
+            points[2] = { checkpos.x + bulletsz, checkpos.y + bsz3 };
+            DrawPolyline(points, 3, color, thickness);
+            DrawRect(startpos, bounds.end(initpos), color, false, thickness);
+            break;
+        }
+
+        default:
+            break;
+        }
     }
 }

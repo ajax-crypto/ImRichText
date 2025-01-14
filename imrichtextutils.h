@@ -38,43 +38,6 @@ enum ImGuiDir : int
 
 namespace ImRichText
 {
-    // Implement this interface to hndle parsed rich text
-    struct ITagVisitor
-    {
-        virtual bool TagStart(std::string_view tag) = 0;
-        virtual bool Attribute(std::string_view name, std::optional<std::string_view> value) = 0;
-        virtual bool TagStartDone() = 0;
-        virtual bool Content(std::string_view content) = 0;
-        virtual bool PreFormattedContent(std::string_view content) = 0;
-        virtual bool TagEnd(std::string_view tag, bool selfTerminating) = 0;
-        virtual void Finalize() = 0;
-
-        virtual void Error(std::string_view tag) = 0;
-
-        virtual bool IsSelfTerminating(std::string_view tag) const = 0;
-        virtual bool IsPreformattedContent(std::string_view tag) const = 0;
-    };
-
-    struct IntOrFloat
-    {
-        float value = 0.f;
-        bool isFloat = false;
-    };
-
-    struct ColorStop
-    {
-        uint32_t from, to;
-        float pos = -1.f;
-    };
-
-    struct ColorGradient
-    {
-        ColorStop colorStops[IM_RICHTEXT_MAX_COLORSTOPS];
-        int totalStops = 0;
-        float angleDegrees = 0.f;
-        ImGuiDir dir = ImGuiDir::ImGuiDir_Down;
-    };
-
     enum class BulletType
     {
         Circle,
@@ -97,6 +60,73 @@ namespace ImRichText
         ImVec2 start(ImVec2 origin) const { return ImVec2{ left, top } + origin; }
         ImVec2 end(ImVec2 origin) const { return ImVec2{ left + width, top + height } + origin; }
         ImVec2 center(ImVec2 origin) const { return ImVec2{ left + (0.5f * width), top + (0.5f * height) } + origin; }
+    };
+
+    // Implement this to draw primitives in your favorite graphics API
+    struct IRenderer
+    {
+        void* UserData = nullptr;
+
+        virtual void DrawLine(ImVec2 startpos, ImVec2 endpos, uint32_t color, float thickness = 1.f) = 0;
+        virtual void DrawPolyline(ImVec2* points, int sz, uint32_t color, float thickness) = 0;
+        virtual void DrawTriangle(ImVec2 pos1, ImVec2 pos2, ImVec2 pos3, uint32_t color, bool filled, bool thickness = 1.f) = 0;
+        virtual void DrawRect(ImVec2 startpos, ImVec2 endpos, uint32_t color, bool filled, float thickness = 1.f, float radius = 0.f, int corners = 0) = 0;
+        virtual void DrawRectGradient(ImVec2 startpos, ImVec2 endpos, uint32_t topleftcolor, uint32_t toprightcolor, uint32_t bottomrightcolor, uint32_t bottomleftcolor) = 0;
+        virtual void DrawPolygon(ImVec2* points, int sz, uint32_t color, bool filled, float thickness = 1.f) = 0;
+        virtual void DrawPolyGradient(ImVec2* points, uint32_t* colors, int sz) = 0;
+        virtual void DrawCircle(ImVec2 center, float radius, uint32_t color, bool filled, bool thickness = 1.f) = 0;
+        virtual void DrawBullet(ImVec2 startpos, ImVec2 endpos, uint32_t color, int index, int depth) {};
+        virtual void DrawText(std::string_view text, ImVec2 pos, uint32_t color) = 0;
+        virtual void DrawText(std::string_view text, std::string_view family, ImVec2 pos, float sz, uint32_t color, bool bold = false, bool italics = false, bool light = false) = 0;
+    
+        void DrawDefaultBullet(BulletType type, ImVec2 initpos, const BoundedBox& bounds, uint32_t color, float bulletsz);
+    };
+
+    // Implement this interface to handle parsed rich text
+    struct ITagVisitor
+    {
+        virtual bool TagStart(std::string_view tag) = 0;
+        virtual bool Attribute(std::string_view name, std::optional<std::string_view> value) = 0;
+        virtual bool TagStartDone() = 0;
+        virtual bool Content(std::string_view content) = 0;
+        virtual bool PreFormattedContent(std::string_view content) = 0;
+        virtual bool TagEnd(std::string_view tag, bool selfTerminating) = 0;
+        virtual void Finalize() = 0;
+
+        virtual void Error(std::string_view tag) = 0;
+
+        virtual bool IsSelfTerminating(std::string_view tag) const = 0;
+        virtual bool IsPreformattedContent(std::string_view tag) const = 0;
+    };
+
+    struct IPlatform
+    {
+        virtual ImVec2 GetCurrentMousePos() = 0;
+        virtual bool IsMouseClicked() = 0;
+
+        virtual void HandleHyperlink(std::string_view) = 0;
+        virtual void RequestFrame() = 0;
+        virtual void HandleHover(bool) = 0;
+    };
+
+    struct IntOrFloat
+    {
+        float value = 0.f;
+        bool isFloat = false;
+    };
+
+    struct ColorStop
+    {
+        uint32_t from, to;
+        float pos = -1.f;
+    };
+
+    struct ColorGradient
+    {
+        ColorStop colorStops[IM_RICHTEXT_MAX_COLORSTOPS];
+        int totalStops = 0;
+        float angleDegrees = 0.f;
+        ImGuiDir dir = ImGuiDir::ImGuiDir_Down;
     };
 
     struct FourSidedMeasure
@@ -161,11 +191,6 @@ namespace ImRichText
 
     [[nodiscard]] Border ExtractBorder(std::string_view input, float ems, float percent, 
         uint32_t(*NamedColor)(const char*, void*), void* userData);
-
-#ifndef IM_RICHTEXT_NO_IMGUI
-    void DrawPolyFilledMultiColor(ImDrawList* drawList, const ImVec2* points, const ImU32* col, const int points_count);
-    void DrawBullet(ImDrawList* drawList, ImVec2 initpos, const BoundedBox& box, BulletType type, uint32_t color, float size);
-#endif
 
     // Parse rich text and invoke appropriate visitor methods
     void ParseRichText(const char* text, const char* textend, char TagStart, char TagEnd, ITagVisitor& visitor);
