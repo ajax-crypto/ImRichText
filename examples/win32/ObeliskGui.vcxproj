@@ -72,12 +72,12 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <IncludePath>inc;..\..\..\;..\..\..\freetype2\include;..\..\..\glfw-3.4.bin.WIN64\include;$(IncludePath)</IncludePath>
-    <LibraryPath>lib\;..\..\..\glfw-3.4.bin.WIN64\lib-vc2022\;$(LibraryPath)</LibraryPath>
+    <IncludePath>inc;..\..\..\;..\..\..\freetype2\include;..\..\..\glfw-3.4.bin.WIN64\include;..\..\..\blend2d\src;$(IncludePath)</IncludePath>
+    <LibraryPath>lib\;..\..\..\blend2d\build\RelWithDebInfo;..\..\..\glfw-3.4.bin.WIN64\lib-vc2022\;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <IncludePath>..\..\..\freetype2\include;inc;..\..\..\;..\..\..\glfw-3.4.bin.WIN64\include;$(IncludePath)</IncludePath>
-    <LibraryPath>lib\;..\..\..\glfw-3.4.bin.WIN64\lib-vc2022\;$(LibraryPath)</LibraryPath>
+    <LibraryPath>lib\;..\..\..\blend2d\build\RelWithDebInfo;..\..\..\glfw-3.4.bin.WIN64\lib-vc2022\;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -111,7 +111,7 @@
     <ClCompile>
       <WarningLevel>TurnOffAllWarnings</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_DEBUG;_CONSOLE;IM_RICHTEXT_ENABLE_PARSER_LOGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_DEBUG;_CONSOLE;IM_RICHTEXT_ENABLE_PARSER_LOGS;IM_RICHTEXT_TARGET_IMGUI;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <DisableLanguageExtensions>false</DisableLanguageExtensions>
@@ -123,7 +123,7 @@
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>freetype.lib;opengl32.lib;glfw3_mt.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>freetype.lib;opengl32.lib;glfw3_mt.lib;blend2d.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -145,12 +145,13 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>freetype.lib;opengl32.lib;glfw3_mt.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>freetype.lib;opengl32.lib;glfw3_mt.lib;blend2d.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="..\..\imrichtext.cpp" />
     <ClCompile Include="..\..\imrichtextfont.cpp" />
+    <ClCompile Include="..\..\imrichtextimpl.cpp" />
     <ClCompile Include="..\..\imrichtextutils.cpp" />
     <ClCompile Include="inc\misc\freetype\imgui_freetype.cpp" />
     <ClCompile Include="ObeliskGui.cpp" />
@@ -165,6 +166,7 @@
   <ItemGroup>
     <ClInclude Include="..\..\imrichtext.h" />
     <ClInclude Include="..\..\imrichtextfont.h" />
+    <ClInclude Include="..\..\imrichtextimpl.h" />
     <ClInclude Include="..\..\imrichtextutils.h" />
     <ClInclude Include="inc\GLFW\glfw3.h" />
     <ClInclude Include="inc\GLFW\glfw3native.h" />

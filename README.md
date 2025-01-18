@@ -5,7 +5,7 @@
 *NOTE* : *This is not a general purpose HTML/CSS renderer, only the specified tags/properties below are targeted*
 ---
 
-Implementation of Rich Text Rendering for [ImGui](https://github.com/ocornut/imgui) (**ASCII text only**) akin to Qt support for it. Use it as follows:
+Implementation of Rich Text Rendering for **ASCII text only** akin to Qt support for it. Use it as follows:
 ```c++
 // Do not cache anything
 std::string rtf = "<blink>This is blinking</blink>"
@@ -22,8 +22,22 @@ auto id = ImRichText::CreateRichText("2<sup>2</sup> equals 4  <hr style=\"height
     "<span style='background: teal; color: white;'>White on Teal</span><br/>"
     "<mark>This is highlighted! <small>This is small...</small></mark>");
 
-auto config = ImRichText::GetDefaultConfig({ -1.f, -1.f }, 24.f, 1.5f);
-config->Scale = 2.f;
+ImRichText::DefaultConfigParams params;
+params.Bounds = { -1.f, -1.f };
+params.defaultFontSize = 24.f;
+auto config = ImRichText::GetDefaultConfig(params);
+
+#ifdef IM_RICHTEXT_TARGET_IMGUI
+ImRichText::ImGuiRenderer renderer{ *config };
+ImRichText::ImGuiGLFWPlatform platform;
+
+config->Renderer = &renderer;
+config->Platform = &platform;
+#elif defined(IM_RICHTEXT_TARGET_BLEND2D)
+Blend2DRenderer renderer{ context };
+config->Renderer = &renderer;
+#endif
+
 config->ListItemBullet = ImRichText::BulletType::Arrow;
 ImRichText::PushConfig(*config);
 
@@ -133,6 +147,8 @@ In order to customize certain behavior at build-time, the following macros can b
 | `IM_RICHTEXT_BLINK_ANIMATION_INTERVAL` | Specify blink animation interval | 500ms |
 | `IM_RICHTEXT_MARQUEE_ANIMATION_INTERVAL` | Specify interval (`1/FPS`) for marquee animation | 18ms |
 | `IM_RICHTEXT_MAX_COLORSTOPS` | Specify maximum color stops in gradients | 8 |
+| `IM_RICHTEXT_TARGET_IMGUI` | Specify if target is ImGui | undefined |
+| `IM_RICHTEXT_TARGET_BLEND2D` | Specify if target is Blend2D | undefined |
 
 ## Error Reporting
 When `_DEBUG` macro is defined, if a console is present, error messages will be printed along
@@ -143,14 +159,55 @@ Since it is work in progress, no contributions are accepted at the moment. Once 
 will be accepted! In the meantime, feel free to browse the source...
 
 ## About the Implementation
-The current implementation intentionally forgoes the creation of any form of AST (Abstract Syntax Tree) or
-a well-defined phase of tokenization for lexical analysis. In order to keep the codebase simple and not 
-ending up creating a HTML/CSS engine, the scope the arbitrarily cutdown. 
-The algorithm simply breaks down the rich text specified into lines, and each line into segments. Each segment 
-is defined as multiple blocks of text containing the same style i.e. background/foreground/font properties, etc.
-A "block of text" is simply a run of glyphs without any "space"/"blank" characters in between. Once rich text is 
-broken down to lines, it is rendered in two phases i.e. first the background is drawn i.e. blockquote background 
-can span multiple lines. After that, the foreground i.e. text is drawn (with background/foreground colors).
+The following interfaces are available to port it to any graphics API desired:
+
+```c++
+struct IRenderer
+{
+    void* UserData = nullptr;
+
+    virtual void SetClipRect(ImVec2 startpos, ImVec2 endpos) = 0;
+    virtual void ResetClipRect() = 0;
+
+    virtual void DrawLine(ImVec2 startpos, ImVec2 endpos, uint32_t color, float thickness = 1.f) = 0;
+    virtual void DrawPolyline(ImVec2* points, int sz, uint32_t color, float thickness) = 0;
+    virtual void DrawTriangle(ImVec2 pos1, ImVec2 pos2, ImVec2 pos3, uint32_t color, bool filled, bool thickness = 1.f) = 0;
+    virtual void DrawRect(ImVec2 startpos, ImVec2 endpos, uint32_t color, bool filled, float thickness = 1.f, float radius = 0.f, int corners = 0) = 0;
+    virtual void DrawRectGradient(ImVec2 startpos, ImVec2 endpos, uint32_t topleftcolor, uint32_t toprightcolor, uint32_t bottomrightcolor, uint32_t bottomleftcolor) = 0;
+    virtual void DrawPolygon(ImVec2* points, int sz, uint32_t color, bool filled, float thickness = 1.f) = 0;
+    virtual void DrawPolyGradient(ImVec2* points, uint32_t* colors, int sz) = 0;
+    virtual void DrawCircle(ImVec2 center, float radius, uint32_t color, bool filled, bool thickness = 1.f) = 0;
+    virtual void DrawRadialGradient(ImVec2 center, float radius, uint32_t in, uint32_t out) = 0;
+    virtual void DrawBullet(ImVec2 startpos, ImVec2 endpos, uint32_t color, int index, int depth) {};
+    
+    virtual bool SetCurrentFont(std::string_view family, float sz, FontType type) { return false; };
+    virtual bool SetCurrentFont(void* fontptr) { return false; };
+    virtual void ResetFont() {};
+    virtual ImVec2 GetTextSize(std::string_view text, void* fontptr) = 0;
+    virtual void DrawText(std::string_view text, ImVec2 pos, uint32_t color) = 0;
+    virtual void DrawText(std::string_view text, std::string_view family, ImVec2 pos, float sz, uint32_t color, FontType type) = 0;
+    virtual void DrawTooltip(ImVec2 pos, std::string_view text) = 0;
+
+    void DrawDefaultBullet(BulletType type, ImVec2 initpos, const BoundedBox& bounds, uint32_t color, float bulletsz);
+};
+```
+
+For platform integration (to handle clicks/hover events), the following interface is available:
+
+```c++
+struct IPlatform
+{
+    virtual ImVec2 GetCurrentMousePos() = 0;
+    virtual bool IsMouseClicked() = 0;
+
+    virtual void HandleHyperlink(std::string_view) = 0;
+    virtual void RequestFrame() = 0;
+    virtual void HandleHover(bool) = 0;
+};
+```
+
+Default implementations are provided for [ImGui](https://github.com/ocornut/imgui) and [Blend2D](https://github.com/blend2d/blend2d) (_Under progress_)
+Platform integration is optional with a default implementation provided for ImGui + GLFW (available in examples directory)
 
 [^1]: Nested subscript/superscript is untested at the moment
 [^2]: Custom bullets are also possible, set `RenderConfig::DrawBullet` function pointer and `list-style-type` property to `custom`
