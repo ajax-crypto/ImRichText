@@ -1,7 +1,10 @@
 #pragma once
 
+#ifdef IM_RICHTEXT_TARGET_IMGUI
 #include "imgui.h"
+#endif
 #include "imrichtextutils.h"
+#include "imrichtextimpl.h"
 
 #include <string_view>
 #include <vector>
@@ -87,7 +90,11 @@ namespace ImRichText
 
     struct FontStyle
     {
+#ifdef IM_RICHTEXT_TARGET_IMGUI
         ImFont* font = nullptr;
+#elif defined(IM_RICHTEXT_TARGET_BLEND2D)
+        BLFont* font = nullptr;
+#endif
         std::string_view family = IM_RICHTEXT_DEFAULT_FONTFAMILY;
         float size = 24.f;
         int32_t flags = FontStyleNone;
@@ -194,6 +201,7 @@ namespace ImRichText
         ImVec2 Start, End;
         uint32_t Color = IM_COL32_BLACK_TRANS;
         ColorGradient Gradient;
+        FourSidedBorder Border;
     };
 
 #ifdef _DEBUG
@@ -220,9 +228,9 @@ namespace ImRichText
         std::string_view CommentEnd = "--"; // UNUSED
         std::vector<std::pair<std::string_view, std::string_view>> EscapeCodes;
 
-        float LineGap = 5;
+        float  LineGap = 5;
         ImVec2 Bounds;
-        bool WordWrap = false;
+        bool   WordWrap = false;
 
         int   ParagraphStop = 4;
         int   TabStop = 4;
@@ -231,16 +239,13 @@ namespace ImRichText
         BulletType ListItemBullet = BulletType::FilledCircle;
 
         std::string_view DefaultFontFamily = IM_RICHTEXT_DEFAULT_FONTFAMILY;
-        float   DefaultFontSize = 20;
+        float    DefaultFontSize = 20;
         uint32_t DefaultFgColor = IM_COL32_BLACK;
         uint32_t DefaultBgColor = IM_COL32_WHITE;
         uint32_t MarkHighlight = ToRGBA(255, 255, 0);
         uint32_t HyperlinkColor = ToRGBA(0, 50, 255);
 
-        ImFont*  (*GetFont)(std::string_view, float, bool, bool, bool, void*) = nullptr;
-        ImVec2   (*GetTextSize)(std::string_view, ImFont*) = nullptr;
         uint32_t (*NamedColor)(const char*, void*) = nullptr;
-
         IPlatform* Platform = nullptr;
         IRenderer* Renderer = nullptr;
 
@@ -253,16 +258,16 @@ namespace ImRichText
 
         uint32_t BlockquoteBar = ToRGBA(0.25f, 0.25f, 0.25f);
         uint32_t BlockquoteBg = ToRGBA(0.5f, 0.5f, 0.5f);
-        float   BlockquotePadding = 5.f;
-        float   BlockquoteOffset = 15.f;
-        float   BlockquoteBarWidth = 5.f;
+        float    BlockquotePadding = 5.f;
+        float    BlockquoteOffset = 15.f;
+        float    BlockquoteBarWidth = 5.f;
 
         uint32_t MeterBorderColor = ToRGBA(100, 100, 100);
         uint32_t MeterBgColor = ToRGBA(200, 200, 200);
         uint32_t MeterFgColor = ToRGBA(0, 200, 25);
-        ImVec2  MeterDefaultSize = { 80.f, 16.f };
+        ImVec2   MeterDefaultSize = { 80.f, 16.f };
         uint32_t CodeBlockBg = IM_COL32_BLACK_TRANS;
-        float   CodeBlockPadding = 5.f;
+        float    CodeBlockPadding = 5.f;
 
         float BulletSizeScale = 2.f;
         float ScaleSuperscript = 0.62f;
@@ -290,25 +295,45 @@ namespace ImRichText
         bool BoundsComputed = false;
     };
 
+    struct DefaultConfigParams
+    {
+        ImVec2 Bounds = { -1.f, -1.f };
+        float defaultFontSize = 24.f;
+        float fontScale = 1.f;
+        bool skipDefaultFontLoading = false;
+    };
+
     // RenderConfig related functions. In order to render rich text, such configs should be pushed/popped as desired 
-    [[nodiscard]] RenderConfig* GetDefaultConfig(ImVec2 Bounds = { -1.f, -1.f }, float defaultFontSize = 24.f, 
-        float fontScale = 1.f, bool skipDefaultFontLoading = false);
+    [[nodiscard]] RenderConfig* GetDefaultConfig(const DefaultConfigParams& params);
+
+#ifdef IM_RICHTEXT_TARGET_IMGUI
     [[nodiscard]] RenderConfig* GetCurrentConfig();
     void PushConfig(const RenderConfig& config);
     void PopConfig();
+#elif defined(IM_RICHTEXT_TARGET_BLEND2D)
+    [[nodiscard]] RenderConfig* GetCurrentConfig(BLContext& context);
+    void PushConfig(const RenderConfig& config, BLContext& context);
+    void PopConfig(BLContext& context);
+#endif
 
     // Get list of drawables from rich text
     [[nodiscard]] Drawables GetDrawables(const char* text, const char* textend, const RenderConfig& config);
     [[nodiscard]] ImVec2 GetBounds(const Drawables& drawables, ImVec2 bounds);
-
-    // Render rich text without any drawable caching
-    bool Show(const char* text, const char* end = nullptr);
 
     // Create cacheable rich text content
     [[nodiscard]] std::size_t CreateRichText(const char* text, const char* end = nullptr);
     bool UpdateRichText(std::size_t id, const char* text, const char* end = nullptr);
     bool RemoveRichText(std::size_t id);
     void ClearAllRichTexts();
+
+#ifdef IM_RICHTEXT_TARGET_IMGUI
+    bool Show(ImVec2 pos, const char* text, const char* end = nullptr);
+    bool Show(ImVec2 pos, std::size_t richTextId);
+    bool Show(const char* text, const char* end = nullptr);
     bool Show(std::size_t richTextId);
     bool ToggleOverlay();
+#elif defined(IM_RICHTEXT_TARGET_BLEND2D)
+    bool Show(BLContext& context, ImVec2 pos, const char* text, const char* end = nullptr);
+    bool Show(BLContext& context, ImVec2 pos, std::size_t richTextId);
+#endif
 }

@@ -1,5 +1,4 @@
 #include "imrichtextutils.h"
-#include "imgui_internal.h"
 
 #include <cctype>
 #include <unordered_map>
@@ -185,8 +184,8 @@ namespace ImRichText
         return ToRGBA((int)(r * 255.f), (int)(g * 255.f), (int)(b * 255.f), (int)(a * 255.f));
     }
 
-#ifdef IM_RICHTEXT_NO_IMGUI
-    ColorConvertHSVtoRGB(float h, float s, float v, float& out_r, float& out_g, float& out_b)
+#ifndef IM_RICHTEXT_TARGET_IMGUI
+    static void ColorConvertHSVtoRGB(float h, float s, float v, float& out_r, float& out_g, float& out_b)
     {
         if (s == 0.0f)
         {
@@ -579,6 +578,8 @@ namespace ImRichText
         Border result;
 
         auto idx = WholeWord(input);
+
+        if (AreSame(input.substr(0, idx), "none")) return result;
         result.thickness = ExtractFloatWithUnit(input.substr(0, idx), 1.f, ems, percent, 1.f);
         
         auto idx2 = WholeWord(input, idx + 1);

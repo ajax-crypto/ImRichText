@@ -1,9 +1,12 @@
 #include "ImRichText.h"
 #if __has_include("imrichtextfont.h")
-#define IM_RICHTEXT_DEFAULT_FONTS_AVAILABLE
 #include "imrichtextfont.h"
 #endif
+#ifdef IM_RICHTEXT_TARGET_IMGUI
 #include "imgui_internal.h"
+//#elif defined(IM_RIXHTEXT_TARGET_BLEND2D)
+#include <blend2d.h>
+#endif
 #include "imrichtextutils.h"
 #include <unordered_map>
 #include <cstring>
@@ -13,6 +16,8 @@
 #include <string>
 #include <chrono>
 #include <deque>
+
+#include <map>
 
 #ifdef _DEBUG
 #include <cstdio>
@@ -107,17 +112,23 @@ namespace ImRichText
     static int ListItemCountByDepths[IM_RICHTEXT_MAX_LISTDEPTH];
     static BlockquoteDrawData BlockquoteStack[IM_RICHTEXT_MAXDEPTH];
 
+#ifdef IM_RICHTEXT_TARGET_IMGUI
     static std::unordered_map<ImGuiContext*, std::deque<RenderConfig>> RenderConfigs;
+#elif defined(IM_RICHTEXT_TARGET_BLEND2D)
+    static std::unordered_map<BLContext*, std::deque<RenderConfig>> RenderConfigs;
+#endif
     static RenderConfig DefaultRenderConfig;
     static bool DefaultRenderConfigInit = false;
     static ListItemTokenDescriptor InvalidListItemToken;
     static TagPropertyDescriptor InvalidTagPropDesc;
 
     static std::vector<std::string> NumbersAsStr;
+#ifdef IM_RICHTEXT_TARGET_IMGUI
 #ifdef _DEBUG
     static bool ShowOverlay = true;
 #else
     static bool ShowOverlay = false;
+#endif
 #endif
 
     static const std::pair<std::string_view, std::string_view> EscapeCodes[10] = {
@@ -345,46 +356,35 @@ namespace ImRichText
         return prop;
     }
 
+#ifdef IM_RICHTEXT_TARGET_IMGUI
     [[nodiscard]] RenderConfig* GetRenderConfig(RenderConfig* config = nullptr)
     {
         if (config == nullptr)
         {
             auto ctx = ImGui::GetCurrentContext();
             auto it = RenderConfigs.find(ctx);
-
-            if (it == RenderConfigs.end())
-            {
-                if (!DefaultRenderConfigInit)
-                {
-                    LOG("Default config not available, forgot to push RenderConfig?");
-                    GetDefaultConfig({ 200.f, 200.f }, 24.f);
-                }
-
-                config = &DefaultRenderConfig;
-            }
-            else config = &(it->second.back());
+            assert(it != RenderConfigs.end());
+            config = &(it->second.back());
         }
 
         return config;
     }
-
-    [[nodiscard]] ImVec2 GetTextSize(std::string_view content, ImFont* font)
+#elif defined(IM_RICHTEXT_TARGET_BLEND2D)
+    [[nodiscard]] RenderConfig* GetRenderConfig(BLContext& ctx, RenderConfig* config = nullptr)
     {
-        ImGui::PushFont(font);
-        auto sz = ImGui::CalcTextSize(content.data(), content.data() + content.size());
-        ImGui::PopFont();
-        return sz;
+        if (config != nullptr) return config;
+        auto it = RenderConfigs.find(&ctx);
+        assert(it != RenderConfigs.end());
+        return &(it->second.back());
     }
+#endif
 
     [[nodiscard]] StyleDescriptor CreateDefaultStyle(const RenderConfig& config)
     {
-        assert(config.GetFont != nullptr);
-        assert(config.GetTextSize != nullptr);
-
         StyleDescriptor result;
         result.font.family = config.DefaultFontFamily;
         result.font.size = config.DefaultFontSize * config.FontScale;
-        result.font.font = config.GetFont(result.font.family, result.font.size, false, false, false, config.UserData);
+        result.font.font = GetFont(result.font.family, result.font.size, FT_Normal, config.UserData);
         result.fgcolor = config.DefaultFgColor;
         result.bgcolor = config.DefaultBgColor;
         result.list.itemStyle = config.ListItemBullet;
@@ -426,7 +426,7 @@ namespace ImRichText
 
         if (token.Type == TokenType::Text)
         {
-            auto sz = config.GetTextSize(token.Content, style.font.font);
+            auto sz = config.Renderer->GetTextSize(token.Content, style.font.font);
             token.VisibleTextSize = (int)token.Content.size();
             token.Bounds.width = sz.x;
             token.Bounds.height = sz.y;
@@ -470,7 +470,7 @@ namespace ImRichText
             }
 
             std::string_view input{ listItem.NestedListItemIndex, (size_t)currbuf };
-            auto sz = config.GetTextSize(input, style.font.font);
+            auto sz = config.Renderer->GetTextSize(input, style.font.font);
             token.Bounds.width = sz.x;
             token.Bounds.height = sz.y;
         }
@@ -533,7 +533,7 @@ namespace ImRichText
         const std::vector<StyleDescriptor>& styles, const RenderConfig& config)
     {
         std::vector<int> result;
-        if (!lines[index].HasText || !config.WordWrap || !config.GetTextSize)
+        if (!lines[index].HasText || !config.WordWrap)
         {
             result.push_back((int)lines.size() - 1);
             return result;
@@ -552,7 +552,7 @@ namespace ImRichText
             {
                 if (token.Type == TokenType::Text)
                 {
-                    auto sz = config.GetTextSize(token.Content, style.font.font);
+                    auto sz = config.Renderer->GetTextSize(token.Content, style.font.font);
 
                     if (currentx + sz.x > availwidth)
                     {
@@ -747,7 +747,7 @@ namespace ImRichText
         auto width = config.Bounds.x;
         width = (style.propsSpecified & StyleWidth) != 0 ? std::min(width, style.width) : width;
         auto sz = style.font.font->EllipsisWidth;
-        sz = sz > 0.f ? sz : config.GetTextSize("...", style.font.font).x;
+        sz = sz > 0.f ? sz : config.Renderer->GetTextSize("...", style.font.font).x;
         width -= sz;
 
         if ((style.font.flags & FontStyleOverflowEllipsis) != 0 && width > 0.f)
@@ -767,7 +767,7 @@ namespace ImRichText
                             while (startx > width)
                             {
                                 auto partial = token.Content.substr(token.VisibleTextSize - 2);
-                                startx -= config.GetTextSize(partial, style.font.font).x;
+                                startx -= config.Renderer->GetTextSize(partial, style.font.font).x;
                                 token.VisibleTextSize -= 1;
                             }
 
@@ -1002,8 +1002,6 @@ namespace ImRichText
         StyleDescriptor& style, const StyleDescriptor& parentStyle,
         DrawableLine& line, const RenderConfig& config)
     {
-        assert(config.GetFont != nullptr);
-
         if (tagType == TagType::Header)
         {
             style.font.size = config.HFontSizes[currTag[1] - '1'] * config.FontScale;
@@ -1080,209 +1078,19 @@ namespace ImRichText
         
         if (style.propsSpecified != NoStyleChange)
         {
-            auto isbold = style.font.flags & FontStyleBold;
-            auto isitalics = style.font.flags & FontStyleItalics;
-            auto islight = style.font.flags & FontStyleLight;
-            style.font.font = config.GetFont(style.font.family, style.font.size,
-                isbold, isitalics, islight, config.UserData);
+            FontType fstyle = FT_Normal;
+            if ((style.font.flags & FontStyleBold) != 0 && 
+                (style.font.flags & FontStyleItalics) != 0) fstyle = FT_BoldItalics;
+            else if ((style.font.flags & FontStyleBold) != 0) fstyle = FT_Bold;
+            else if ((style.font.flags & FontStyleItalics) != 0) fstyle = FT_Italics;
+            else if ((style.font.flags & FontStyleLight) != 0) fstyle = FT_Light;
+            style.font.font = GetFont(style.font.family, style.font.size,
+                fstyle, config.UserData);
         }
     }
 
-    struct ImGuiRenderer final : public IRenderer
-    {
-        ImFont* (*GetFont)(std::string_view, float, bool, bool, bool, void*) = nullptr;
 
-        ImGuiRenderer(ImFont* (*gf)(std::string_view, float, bool, bool, bool, void*))
-            : GetFont{ gf } {}
-
-        void DrawLine(ImVec2 startpos, ImVec2 endpos, uint32_t color, float thickness)
-        {
-            ((ImDrawList*)UserData)->AddLine(startpos, endpos, color, thickness);
-        }
-
-        void DrawPolyline(ImVec2* points, int sz, uint32_t color, float thickness)
-        {
-            ((ImDrawList*)UserData)->AddPolyline(points, sz, color, 0, thickness);
-        }
-
-        void DrawTriangle(ImVec2 pos1, ImVec2 pos2, ImVec2 pos3, uint32_t color, bool filled, bool thickness)
-        {
-            filled ? ((ImDrawList*)UserData)->AddTriangleFilled(pos1, pos2, pos3, color) :
-                ((ImDrawList*)UserData)->AddTriangle(pos1, pos2, pos3, color, thickness);
-        }
-
-        void DrawRect(ImVec2 startpos, ImVec2 endpos, uint32_t color, bool filled, float thickness, float radius, int corners)
-        {
-            auto drawflags = 0;
-
-            if (corners & TopLeftCorner) drawflags |= ImDrawFlags_RoundCornersTopLeft;
-            if (corners & TopRightCorner) drawflags |= ImDrawFlags_RoundCornersTopRight;
-            if (corners & BottomRightCorner) drawflags |= ImDrawFlags_RoundCornersBottomRight;
-            if (corners & BottomLeftCorner) drawflags |= ImDrawFlags_RoundCornersBottomLeft;
-
-            filled ? ((ImDrawList*)UserData)->AddRectFilled(startpos, endpos, color, radius, drawflags) :
-                ((ImDrawList*)UserData)->AddRect(startpos, endpos, color, radius, drawflags, thickness);
-        }
-
-        void DrawRectGradient(ImVec2 startpos, ImVec2 endpos, uint32_t topleftcolor, uint32_t toprightcolor, uint32_t bottomrightcolor, uint32_t bottomleftcolor)
-        {
-            ((ImDrawList*)UserData)->AddRectFilledMultiColor(startpos, endpos, topleftcolor, toprightcolor, bottomrightcolor, bottomleftcolor);
-        }
-
-        void DrawCircle(ImVec2 center, float radius, uint32_t color, bool filled, bool thickness)
-        {
-            filled ? ((ImDrawList*)UserData)->AddCircleFilled(center, radius, color) :
-                ((ImDrawList*)UserData)->AddCircle(center, radius, color, 0, thickness);
-        }
-
-        void DrawPolygon(ImVec2* points, int sz, uint32_t color, bool filled, float thickness)
-        {
-            filled ? ((ImDrawList*)UserData)->AddConvexPolyFilled(points, sz, color) :
-                ((ImDrawList*)UserData)->AddPolyline(points, sz, color, ImDrawFlags_Closed, thickness);
-        }
-
-        void DrawPolyGradient(ImVec2* points, uint32_t* colors, int sz)
-        {
-            auto drawList = ((ImDrawList*)UserData);
-            const ImVec2 uv = drawList->_Data->TexUvWhitePixel;
-
-            if (drawList->Flags & ImDrawListFlags_AntiAliasedFill)
-            {
-                // Anti-aliased Fill
-                const float AA_SIZE = 1.0f;
-                const int idx_count = (sz - 2) * 3 + sz * 6;
-                const int vtx_count = (sz * 2);
-                drawList->PrimReserve(idx_count, vtx_count);
-
-                // Add indexes for fill
-                unsigned int vtx_inner_idx = drawList->_VtxCurrentIdx;
-                unsigned int vtx_outer_idx = drawList->_VtxCurrentIdx + 1;
-                for (int i = 2; i < sz; i++)
-                {
-                    drawList->_IdxWritePtr[0] = (ImDrawIdx)(vtx_inner_idx);
-                    drawList->_IdxWritePtr[1] = (ImDrawIdx)(vtx_inner_idx + ((i - 1) << 1));
-                    drawList->_IdxWritePtr[2] = (ImDrawIdx)(vtx_inner_idx + (i << 1));
-                    drawList->_IdxWritePtr += 3;
-                }
-
-                // Compute normals
-                ImVec2* temp_normals = (ImVec2*)alloca(sz * sizeof(ImVec2));
-                for (int i0 = sz - 1, i1 = 0; i1 < sz; i0 = i1++)
-                {
-                    const ImVec2& p0 = points[i0];
-                    const ImVec2& p1 = points[i1];
-                    ImVec2 diff = p1 - p0;
-                    diff *= ImInvLength(diff, 1.0f);
-                    temp_normals[i0].x = diff.y;
-                    temp_normals[i0].y = -diff.x;
-                }
-
-                for (int i0 = sz - 1, i1 = 0; i1 < sz; i0 = i1++)
-                {
-                    // Average normals
-                    const ImVec2& n0 = temp_normals[i0];
-                    const ImVec2& n1 = temp_normals[i1];
-                    ImVec2 dm = (n0 + n1) * 0.5f;
-                    float dmr2 = dm.x * dm.x + dm.y * dm.y;
-                    if (dmr2 > 0.000001f)
-                    {
-                        float scale = 1.0f / dmr2;
-                        if (scale > 100.0f) scale = 100.0f;
-                        dm *= scale;
-                    }
-                    dm *= AA_SIZE * 0.5f;
-
-                    // Add vertices
-                    drawList->_VtxWritePtr[0].pos = (points[i1] - dm);
-                    drawList->_VtxWritePtr[0].uv = uv; drawList->_VtxWritePtr[0].col = colors[i1];        // Inner
-                    drawList->_VtxWritePtr[1].pos = (points[i1] + dm);
-                    drawList->_VtxWritePtr[1].uv = uv; drawList->_VtxWritePtr[1].col = colors[i1] & ~IM_COL32_A_MASK;  // Outer
-                    drawList->_VtxWritePtr += 2;
-
-                    // Add indexes for fringes
-                    drawList->_IdxWritePtr[0] = (ImDrawIdx)(vtx_inner_idx + (i1 << 1));
-                    drawList->_IdxWritePtr[1] = (ImDrawIdx)(vtx_inner_idx + (i0 << 1));
-                    drawList->_IdxWritePtr[2] = (ImDrawIdx)(vtx_outer_idx + (i0 << 1));
-                    drawList->_IdxWritePtr[3] = (ImDrawIdx)(vtx_outer_idx + (i0 << 1));
-                    drawList->_IdxWritePtr[4] = (ImDrawIdx)(vtx_outer_idx + (i1 << 1));
-                    drawList->_IdxWritePtr[5] = (ImDrawIdx)(vtx_inner_idx + (i1 << 1));
-                    drawList->_IdxWritePtr += 6;
-                }
-
-                drawList->_VtxCurrentIdx += (ImDrawIdx)vtx_count;
-            }
-            else
-            {
-                // Non Anti-aliased Fill
-                const int idx_count = (sz - 2) * 3;
-                const int vtx_count = sz;
-                drawList->PrimReserve(idx_count, vtx_count);
-                for (int i = 0; i < vtx_count; i++)
-                {
-                    drawList->_VtxWritePtr[0].pos = points[i];
-                    drawList->_VtxWritePtr[0].uv = uv;
-                    drawList->_VtxWritePtr[0].col = colors[i];
-                    drawList->_VtxWritePtr++;
-                }
-                for (int i = 2; i < sz; i++)
-                {
-                    drawList->_IdxWritePtr[0] = (ImDrawIdx)(drawList->_VtxCurrentIdx);
-                    drawList->_IdxWritePtr[1] = (ImDrawIdx)(drawList->_VtxCurrentIdx + i - 1);
-                    drawList->_IdxWritePtr[2] = (ImDrawIdx)(drawList->_VtxCurrentIdx + i);
-                    drawList->_IdxWritePtr += 3;
-                }
-
-                drawList->_VtxCurrentIdx += (ImDrawIdx)vtx_count;
-            }
-        }
-
-        void DrawText(std::string_view text, ImVec2 pos, uint32_t color)
-        {
-            ((ImDrawList*)UserData)->AddText(pos, color, text.data(), text.data() + text.size());
-        }
-
-        void DrawText(std::string_view text, std::string_view family, ImVec2 pos, float sz, uint32_t color, bool bold, bool italics, bool light)
-        {
-            auto popFont = false;
-            auto font = GetFont(family, sz, bold, italics, light, nullptr);
-
-            if (font != nullptr) {
-                ImGui::PushFont(font); popFont = true;
-            }
-
-            ((ImDrawList*)UserData)->AddText(pos, color, text.data(), text.data() + text.size());
-            if (popFont) ImGui::PopFont();
-        }
-    };
-
-    struct ImGuiGLFWPlatform final : public IPlatform
-    {
-        ImVec2 GetCurrentMousePos()
-        {
-            return ImGui::GetIO().MousePos;
-        }
-
-        bool IsMouseClicked()
-        {
-            return ImGui::GetIO().MouseReleased[0];
-        }
-
-        void HandleHyperlink(std::string_view)
-        {
-        }
-
-        void RequestFrame()
-        {
-        }
-
-        void HandleHover(bool hovered)
-        {
-            hovered ? ImGui::SetMouseCursor(ImGuiMouseCursor_Hand) :
-                ImGui::SetMouseCursor(ImGuiMouseCursor_Arrow);
-        }
-    };
-
-#ifdef _DEBUG
+#if defined(_DEBUG) && defined(IM_RICHTEXT_TARGET_IMGUI)
     inline void DrawDebugRect(DebugContentType type, ImVec2 startpos, ImVec2 endpos, const RenderConfig& config)
     {
         if (config.DebugContents[type] != IM_COL32_BLACK_TRANS) 
@@ -1367,6 +1175,7 @@ namespace ImRichText
             (int)(color & ((mask >> 8) & (mask << 16))) >> 16);
     }
 
+#ifdef IM_RICHTEXT_TARGET_IMGUI
     bool DrawOverlay(ImVec2 startpos, ImVec2 endpos, const Token& token, 
         const StyleDescriptor& style, const TagPropertyDescriptor& tagprops)
     {
@@ -1471,6 +1280,7 @@ namespace ImRichText
 
         return false;
     }
+#endif
 
     bool DrawToken(int lineidx, const Token& token, ImVec2 initpos,
         ImVec2 bounds, const StyleDescriptor& style, const TagPropertyDescriptor& tagprops, 
@@ -1540,7 +1350,7 @@ namespace ImRichText
                         tooltip.content = tagprops.tooltip;
                     }
                 }
-                else if (!tagprops.link.empty())
+                else if (!tagprops.link.empty() && (config.Platform != nullptr))
                 { 
                     auto pos = config.Platform->GetCurrentMousePos();
                     if (ImRect{ startpos, endpos }.Contains(pos))
@@ -1555,9 +1365,38 @@ namespace ImRichText
             }
         }
 
-        if (DrawOverlay(startpos, endpos, token, style, tagprops)) DrawDebugRect(ContentTypeToken, startpos, endpos, config);
+#ifdef IM_RICHTEXT_TARGET_IMGUI
+        if (DrawOverlay(startpos, endpos, token, style, tagprops)) 
+#endif
+            DrawDebugRect(ContentTypeToken, startpos, endpos, config);
         if ((token.Bounds.left + token.Bounds.width) > (bounds.x + initpos.x)) return false;
         return true;
+    }
+
+    void DrawBorderRect(const FourSidedBorder& border, ImVec2 startpos, ImVec2 endpos, bool isUniform, 
+        uint32_t bgcolor, const RenderConfig& config)
+    {
+        if (isUniform && border.top.thickness > 0.f && border.top.color != bgcolor)
+        {
+            config.Renderer->DrawRect(startpos, endpos, border.top.color, false, border.top.thickness,
+                border.radius, border.rounding);
+        }
+        else
+        {
+            auto width = endpos.x - startpos.x, height = endpos.y - startpos.y;
+
+            if (border.top.thickness > 0.f && border.top.color != bgcolor)
+                config.Renderer->DrawRect(startpos, startpos + ImVec2{ width, 0.f }, border.top.color, false, border.top.thickness);
+            if (border.right.thickness > 0.f && border.right.color != bgcolor)
+                config.Renderer->DrawRect(startpos + ImVec2{ width - border.right.thickness, 0.f }, endpos -
+                    ImVec2{ border.right.thickness, 0.f },
+                    border.right.color, false, border.right.thickness);
+            if (border.left.thickness > 0.f && border.left.color != bgcolor)
+                config.Renderer->DrawRect(startpos, startpos + ImVec2{ 0.f, height }, border.left.color, false, border.left.thickness);
+            if (border.bottom.thickness > 0.f && border.bottom.color != bgcolor)
+                config.Renderer->DrawRect(startpos + ImVec2{ 0.f, height - border.bottom.thickness }, endpos -
+                    ImVec2{ 0.f, border.bottom.thickness }, border.bottom.color, false, border.bottom.thickness);
+        }
     }
 
     bool DrawSegment(int lineidx, const SegmentData& segment,
@@ -1565,14 +1404,12 @@ namespace ImRichText
         TooltipData& tooltip, AnimationData& animation)
     {
         if (segment.Tokens.empty()) return true;
-
-        auto popFont = false;
         const auto& style = result.StyleDescriptors[segment.StyleIdx + 1];
+        auto popFont = false;
 
         if (style.font.font != nullptr)
         {
-            ImGui::PushFont(style.font.font);
-            popFont = true;
+            popFont = config.Renderer->SetCurrentFont(style.font.font);
         }
 
         auto drawTokens = true;
@@ -1596,32 +1433,12 @@ namespace ImRichText
         }
 
         // TODO: Take into account line type as well
-        if ((style.propsSpecified & StyleBorderUniform) != 0 &&
-            style.border.top.thickness > 0.f && style.border.top.color != style.bgcolor)
-        {
-            config.Renderer->DrawRect(startpos, endpos, style.border.top.color, false, style.border.top.thickness, 
-                style.border.radius, style.border.rounding);
-        }
-        else
-        {
-            auto width = endpos.x - startpos.x, height = endpos.y - startpos.y;
-
-            if (style.border.top.thickness > 0.f && style.border.top.color != style.bgcolor)
-                config.Renderer->DrawRect(startpos, startpos + ImVec2{ width, 0.f }, style.border.top.color, false, style.border.top.thickness);
-            if (style.border.right.thickness > 0.f && style.border.right.color != style.bgcolor)
-                config.Renderer->DrawRect(startpos + ImVec2{ width - style.border.right.thickness, 0.f }, endpos -
-                    ImVec2{ style.border.right.thickness, 0.f },
-                    style.border.right.color, false, style.border.right.thickness);
-            if (style.border.left.thickness > 0.f && style.border.left.color != style.bgcolor)
-                config.Renderer->DrawRect(startpos, startpos + ImVec2{ 0.f, height }, style.border.left.color, false, style.border.left.thickness);
-            if (style.border.bottom.thickness > 0.f && style.border.bottom.color != style.bgcolor)
-                config.Renderer->DrawRect(startpos + ImVec2{ 0.f, height - style.border.bottom.thickness }, endpos -
-                    ImVec2{ 0.f, style.border.bottom.thickness }, style.border.bottom.color, false, style.border.bottom.thickness);
-        }
+        if (style.backgroundIdx == -1)
+            DrawBorderRect(style.border, startpos, endpos, style.propsSpecified & StyleBorderUniform,
+                style.bgcolor, config);
 
         DrawDebugRect(ContentTypeSegment, startpos, endpos, config);
-
-        if (popFont) ImGui::PopFont();
+        if (popFont) config.Renderer->ResetFont();
         return drawTokens;
     }
 
@@ -1658,45 +1475,35 @@ namespace ImRichText
     {
         for (const auto& shape : shapes)
         {
-            DrawBackground(shape.Start + initpos, shape.End + initpos,
-                shape.Gradient, shape.Color, config);
-            DrawDebugRect(ContentTypeBg, shape.Start + initpos, shape.End + initpos, config);
+            auto startpos = shape.Start + initpos;
+            auto endpos = shape.End + initpos;
+            DrawBackground(startpos, endpos, shape.Gradient, shape.Color, config);
+            DrawDebugRect(ContentTypeBg, startpos, endpos, config);
+            DrawBorderRect(shape.Border, startpos, endpos, false, shape.Color, config);
             if (shape.End.y > (bounds.y + initpos.y)) break;
         }
     }
 
-    void DrawTooltip(const TooltipData& tooltip, const RenderConfig& config)
-    {
-        if (!tooltip.content.empty())
-        {
-            auto font = config.GetFont(config.DefaultFontFamily, config.DefaultFontSize, false, false, false, config.UserData);
-            ImGui::PushFont(font);
-            ImGui::SetTooltip("%.*s", (int)tooltip.content.size(), tooltip.content.data());
-            ImGui::PopFont();
-        }
-    }
-
-    void Draw(std::string_view richText, const Drawables& drawables, ImVec2 pos, ImVec2 bounds, RenderConfig* config)
+    void Draw(
+#ifdef IM_RICHTEXT_TARGET_BLEND2D
+        BLContext& context,
+#endif
+        std::string_view richText, const Drawables& drawables, ImVec2 pos, ImVec2 bounds, RenderConfig* config)
     {
         using namespace std::chrono;
 
-        config = GetRenderConfig(config);
+        config = GetRenderConfig(
+#ifdef IM_RICHTEXT_TARGET_BLEND2D
+            context,
+#endif
+            config);
 
-#ifndef IM_RICHTEXT_NO_IMGUI
-        ImGuiRenderer renderer{ config->GetFont };
-        
-        ImGuiGLFWPlatform platform;
-        config->Renderer = &renderer;
-        config->Platform = &platform;
-        config->Renderer->UserData = ImGui::GetCurrentWindow()->DrawList;
-
-#ifdef _DEBUG
-        ImGuiRenderer overlay{ config->GetFont };
+#if defined(_DEBUG) && defined(IM_RICHTEXT_TARGET_IMGUI)
+        ImRichText::ImGuiRenderer overlay{ *config };
         config->OverlayRenderer = &overlay;
         config->OverlayRenderer->UserData = ImGui::GetForegroundDrawList();
 #endif
-#endif
-        
+
         auto endpos = pos + bounds;
         TooltipData tooltip;
         auto& animation = AnimationMap[richText];
@@ -1709,98 +1516,130 @@ namespace ImRichText
 
         auto currFrameTime = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
 
-        ImGui::PushClipRect(pos, endpos, true);
+        config->Renderer->SetClipRect(pos, endpos);
         config->Renderer->DrawRect(pos, endpos, config->DefaultBgColor, true);
 
         DrawBackgroundLayer(pos, bounds, drawables.BackgroundShapes, *config);
         DrawForegroundLayer(pos, bounds, drawables.ForegroundLines, drawables, *config, tooltip, animation);
-        DrawTooltip(tooltip, *config);
+        config->Renderer->DrawTooltip(tooltip.pos, tooltip.content);
 
-        if (!config->IsStrictHTML5 && (currFrameTime - animation.lastBlinkTime > IM_RICHTEXT_BLINK_ANIMATION_INTERVAL))
+        if (config->Platform != nullptr)
         {
-            animation.isVisible = !animation.isVisible;
-            animation.lastBlinkTime = currFrameTime;
-            config->Platform->RequestFrame();
-        }
-
-        if (currFrameTime - animation.lastMarqueeTime > IM_RICHTEXT_MARQUEE_ANIMATION_INTERVAL)
-        {
-            for (auto lineidx = 0; lineidx < (int)animation.xoffsets.size(); ++lineidx)
+            if (!config->IsStrictHTML5 && (currFrameTime - animation.lastBlinkTime > IM_RICHTEXT_BLINK_ANIMATION_INTERVAL))
             {
-                animation.xoffsets[lineidx] += 1.f;
-                auto linewidth = drawables.ForegroundLines[lineidx].width();
-
-                if (animation.xoffsets[lineidx] >= linewidth)
-                    animation.xoffsets[lineidx] = -linewidth;
-
+                animation.isVisible = !animation.isVisible;
+                animation.lastBlinkTime = currFrameTime;
                 config->Platform->RequestFrame();
             }
 
-            animation.lastMarqueeTime = currFrameTime;
+            if (currFrameTime - animation.lastMarqueeTime > IM_RICHTEXT_MARQUEE_ANIMATION_INTERVAL)
+            {
+                for (auto lineidx = 0; lineidx < (int)animation.xoffsets.size(); ++lineidx)
+                {
+                    animation.xoffsets[lineidx] += 1.f;
+                    auto linewidth = drawables.ForegroundLines[lineidx].width();
+
+                    if (animation.xoffsets[lineidx] >= linewidth)
+                        animation.xoffsets[lineidx] = -linewidth;
+
+                    config->Platform->RequestFrame();
+                }
+
+                animation.lastMarqueeTime = currFrameTime;
+            }
         }
 
-        ImGui::PopClipRect();
+        config->Renderer->ResetClipRect();
     }
 
-    bool ShowDrawables(std::string_view content, Drawables& drawables, ImVec2 bounds, RenderConfig* config)
+    bool ShowDrawables(
+#ifdef IM_RICHTEXT_TARGET_BLEND2D
+        BLContext& context,
+#endif
+        ImVec2 pos, std::string_view content, Drawables& drawables, ImVec2 bounds, RenderConfig* config)
     {
+#ifdef IM_RICHTEXT_TARGET_IMGUI
         ImGuiWindow* window = ImGui::GetCurrentWindow();
         if (window->SkipItems)
             return false;
 
         const auto& style = ImGui::GetCurrentContext()->Style;
         auto id = window->GetID(content.data(), content.data() + content.size());
-        auto pos = window->DC.CursorPos;
         ImGui::ItemSize(bounds);
         ImGui::ItemAdd(ImRect{ pos, pos + bounds }, id);
-        Draw(content, drawables, pos + style.FramePadding, bounds, config);
+#endif
+        Draw(
+#ifdef IM_RICHTEXT_TARGET_BLEND2D
+            context,
+#endif
+            content, drawables, pos + style.FramePadding, bounds, config);
         return true;
     }
 
-    RenderConfig* GetDefaultConfig(ImVec2 Bounds, float defaultFontSize, float fontScale, bool skipDefaultFontLoading)
+    RenderConfig* GetDefaultConfig(const DefaultConfigParams& params)
     {
         DefaultRenderConfigInit = true;
 
         auto config = &DefaultRenderConfig;
-        config->Bounds = Bounds;
+        config->Bounds = params.Bounds;
         config->NamedColor = &GetColor;
         config->EscapeCodes.insert(config->EscapeCodes.end(), std::begin(EscapeCodes),
             std::end(EscapeCodes));
-        config->FontScale = fontScale;
-        config->DefaultFontSize = defaultFontSize;
-        config->MeterDefaultSize = { defaultFontSize * 5.0f, defaultFontSize };
+        config->FontScale = params.fontScale;
+        config->DefaultFontSize = params.defaultFontSize;
+        config->MeterDefaultSize = { params.defaultFontSize * 5.0f, params.defaultFontSize };
 
-#ifndef IM_RICHTEXT_NO_IMGUI
 #ifdef IM_RICHTEXT_DEFAULT_FONTS_AVAILABLE
-        config->GetFont = &GetFont;
-        config->GetTextSize = &GetTextSize;
-        if (!skipDefaultFontLoading) LoadDefaultFonts(*config);
-#endif
+        if (!params.skipDefaultFontLoading) LoadDefaultFonts(*config);
 #endif
         return config;
     }
 
-    RenderConfig* GetCurrentConfig()
+    RenderConfig* GetCurrentConfig(
+#ifdef IM_RICHTEXT_TARGET_BLEND2D
+        BLContext& context
+#endif
+    )
     {
+#ifdef IM_RICHTEXT_TARGET_IMGUI
         auto ctx = ImGui::GetCurrentContext();
         auto it = RenderConfigs.find(ctx);
+#elif defined(IM_RICHTEXT_TARGET_BLEND2D)
+        auto it = RenderConfigs.find(&context);
+#endif
         return it != RenderConfigs.end() ? &(it->second.back()) : &DefaultRenderConfig;
     }
 
-    void PushConfig(const RenderConfig& config)
+    void PushConfig(const RenderConfig& config
+#ifdef IM_RICHTEXT_TARGET_BLEND2D
+        , BLContext& context
+#endif
+    )
     {
+#ifdef IM_RICHTEXT_TARGET_IMGUI
         auto ctx = ImGui::GetCurrentContext();
         RenderConfigs[ctx].push_back(config);
+#elif defined(IM_RICHTEXT_TARGET_BLEND2D)
+        RenderConfigs[&context].push_back(config);
+#endif
     }
 
-    void PopConfig()
+    void PopConfig(
+#ifdef IM_RICHTEXT_TARGET_BLEND2D
+        BLContext& context
+#endif
+    )
     {
+#ifdef IM_RICHTEXT_TARGET_IMGUI
         auto ctx = ImGui::GetCurrentContext();
         auto it = RenderConfigs.find(ctx);
+#elif defined(IM_RICHTEXT_TARGET_BLEND2D)
+        auto it = RenderConfigs.find(&context);
+#endif
         if (it != RenderConfigs.end()) it->second.pop_back();
     }
 
-    bool IsContentMultiline(TagType type)
+    bool CanContentBeMultiline(TagType type)
     {
         switch (type)
         {
@@ -1885,6 +1724,7 @@ namespace ImRichText
                     background.End.x = std::max(background.End.x, firstSegment.Bounds.left + firstSegment.Bounds.width);
                     background.Color = firstStyle.bgcolor;
                     background.Gradient = firstStyle.gradient;
+                    background.Border = firstStyle.border;
 
                     firstStyle.bgcolor = IM_COL32_BLACK_TRANS;
                     firstStyle.gradient = ColorGradient{};
@@ -1921,7 +1761,7 @@ namespace ImRichText
 
         bool TagStart(std::string_view tag)
         {
-            if (!IsContentMultiline(tagType) && AreSame(tag, "br")) return true;
+            if (!CanContentBeMultiline(tagType) && AreSame(tag, "br")) return true;
 
             LOG("Entering Tag: <%.*s>\n", (int)tag.size(), tag.data());
             currTag = tag;
@@ -1973,7 +1813,7 @@ namespace ImRichText
                 maxWidth = std::max(maxWidth, result.ForegroundLines.empty() ? 0.f : result.ForegroundLines.back().Content.width);
 
                 if (tagType == TagType::Paragraph && config.ParagraphStop > 0)
-                    currline.Offset.left += config.GetTextSize(std::string_view{ LineSpaces,
+                    currline.Offset.left += config.Renderer->GetTextSize(std::string_view{ LineSpaces,
                         (std::size_t)std::min(config.ParagraphStop, IM_RICHTEXT_MAXTABSTOP) }, currentStyle.font.font).x;
                 else if (tagType == TagType::ListItem)
                 {
@@ -2023,7 +1863,7 @@ namespace ImRichText
             segment.SubscriptDepth = subscriptLevel;
             segment.SuperscriptDepth = superscriptLevel;
 
-            if ((currentStyle.propsSpecified & StyleBackground) != 0 && IsContentMultiline(tagType))
+            if ((currentStyle.propsSpecified & StyleBackground) != 0 && CanContentBeMultiline(tagType))
             {
                 // The current line is `currline` which is not yet added, hence record .size()
                 auto& bgidx = BackgroundSpans[CurrentStackPos].emplace_back();
@@ -2124,7 +1964,7 @@ namespace ImRichText
 
         bool TagEnd(std::string_view tag, bool selfTerminatingTag)
         {
-            if (!IsContentMultiline(tagType) && AreSame(tag, "br")) return true;
+            if (!CanContentBeMultiline(tagType) && AreSame(tag, "br")) return true;
 
             // pop stye properties and reset
             auto hasBgSpecified = (Style(CurrentStackPos).propsSpecified & StyleBackground) != 0;
@@ -2309,19 +2149,6 @@ namespace ImRichText
         return bounds;
     }
 
-    bool Show(const char* text, const char* textend)
-    {
-        if (textend == nullptr) textend = text + std::strlen(text);
-        if (textend - text == 0) return false;
-
-        auto config = GetRenderConfig();
-        if (config->Bounds.x == 0 || config->Bounds.y == 0) return false;
-
-        auto drawables = GetDrawables(text, textend, *config);
-        auto bounds = ComputeBounds(drawables, config);
-        return ShowDrawables(std::string_view{ text, (size_t)(textend - text) }, drawables, bounds, config);
-    }
-
     std::size_t CreateRichText(const char* text, const char* end)
     {
         if (end == nullptr) end = text + std::strlen(text);
@@ -2382,17 +2209,68 @@ namespace ImRichText
         RichTextStrings.clear();
     }
 
+#ifdef IM_RICHTEXT_TARGET_IMGUI
+    bool Show(const char* text, const char* textend)
+    {
+        return Show(ImGui::GetCurrentWindow()->DC.CursorPos, text, textend);
+    }
+#endif
+
+    bool Show(
+#ifdef IM_RICHTEXT_TARGET_BLEND2D
+        BLContext& context,
+#endif
+        ImVec2 pos, const char* text, const char* textend)
+    {
+        if (textend == nullptr) textend = text + std::strlen(text);
+        if (textend - text == 0) return false;
+
+        auto config = GetRenderConfig(
+#ifdef IM_RICHTEXT_TARGET_BLEND2D
+            context
+#endif
+        );
+        if (config->Bounds.x == 0 || config->Bounds.y == 0) return false;
+
+#ifdef IM_RICHTEXT_TARGET_IMGUI
+        config->Renderer->UserData = ImGui::GetCurrentWindow()->DrawList;
+#endif
+
+        auto drawables = GetDrawables(text, textend, *config);
+        auto bounds = ComputeBounds(drawables, config);
+        return ShowDrawables(
+#ifdef IM_RICHTEXT_TARGET_BLEND2D
+            context,
+#endif
+            pos, std::string_view{ text, (size_t)(textend - text) }, drawables, bounds, config);
+    }
+
+#ifdef IM_RICHTEXT_TARGET_IMGUI
     bool Show(std::size_t richTextId)
+    {
+        return Show(ImGui::GetCurrentWindow()->DC.CursorPos, richTextId);
+    }
+#endif
+
+    bool Show(
+#ifdef IM_RICHTEXT_TARGET_BLEND2D
+        BLContext& context,
+#endif
+        ImVec2 pos, std::size_t richTextId)
     {
         auto it = RichTextMap.find(richTextId);
 
         if (it != RichTextMap.end())
         {
             auto& drawdata = RichTextMap[richTextId];
-            auto config = GetRenderConfig();
+            auto config = GetRenderConfig(
+#ifdef IM_RICHTEXT_TARGET_BLEND2D
+                context
+#endif
+            );
 
-            if (config != drawdata.config || config->Scale != drawdata.scale || 
-                config->FontScale != drawdata.fontScale || 
+            if (config != drawdata.config || config->Scale != drawdata.scale ||
+                config->FontScale != drawdata.fontScale ||
                 config->DefaultBgColor != drawdata.bgcolor || drawdata.contentChanged)
             {
                 drawdata.contentChanged = false;
@@ -2400,6 +2278,10 @@ namespace ImRichText
                 drawdata.bgcolor = config->DefaultBgColor;
                 drawdata.scale = config->Scale;
                 drawdata.fontScale = config->FontScale;
+
+#ifdef IM_RICHTEXT_TARGET_IMGUI
+                config->Renderer->UserData = ImGui::GetCurrentWindow()->DrawList;
+#endif
 
 #ifdef _DEBUG
                 auto ts = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock().now().time_since_epoch());
@@ -2414,16 +2296,22 @@ namespace ImRichText
             }
 
             auto bounds = ComputeBounds(drawdata.drawables, config);
-            ShowDrawables(drawdata.richText, drawdata.drawables, bounds, config);
+            ShowDrawables(
+#ifdef IM_RICHTEXT_TARGET_BLEND2D
+                context,
+#endif
+                pos, drawdata.richText, drawdata.drawables, bounds, config);
             return true;
         }
 
         return false;
     }
 
+#ifdef IM_RICHTEXT_TARGET_IMGUI
     bool ToggleOverlay()
     {
         ShowOverlay = !ShowOverlay;
         return ShowOverlay;
     }
+#endif
 }

@@ -128,7 +128,22 @@ public:
             "<p style='background: linear-gradient(red, yellow, green); color: white;'>Multi-line <br> Text on gradient</p><br/>"
             "<mark>This is highlighted! <small>This is small...</small></mark>");
 
-        auto config = ImRichText::GetDefaultConfig({ -1.f, -1.f }, 24.f, 1.5f);
+        ImRichText::DefaultConfigParams params;
+        params.Bounds = { -1.f, -1.f };
+        params.defaultFontSize = 24.f;
+        auto config = ImRichText::GetDefaultConfig(params);
+
+#ifdef IM_RICHTEXT_TARGET_IMGUI
+        ImRichText::ImGuiRenderer renderer{ *config };
+        ImRichText::ImGuiGLFWPlatform platform;
+
+        config->Renderer = &renderer;
+        config->Platform = &platform;
+#elif defined(IM_RICHTEXT_TARGET_BLEND2D)
+        Blend2DRenderer renderer{ context };
+        config->Renderer = &renderer;
+#endif
+
         config->ListItemBullet = ImRichText::BulletType::Arrow;
 #ifdef _DEBUG
         config->DebugContents[ImRichText::ContentTypeLine] = ImColor{ 255, 0, 0 };

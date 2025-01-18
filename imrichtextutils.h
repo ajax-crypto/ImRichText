@@ -3,13 +3,28 @@
 #include <string_view>
 #include <optional>
 
+#ifdef IM_RICHTEXT_TARGET_IMGUI
 #include "imgui.h"
+#endif
+
+#if __has_include("imrichtextfont.h")
+#include "imrichtextfont.h"
+#define IM_RICHTEXT_DEFAULT_FONTS_AVAILABLE
+#else
+namespace ImRichText
+{
+    enum FontType
+    {
+        FT_Normal, FT_Light, FT_Bold, FT_Italics, FT_BoldItalics, FT_Total
+    };
+}
+#endif
 
 #ifndef IM_RICHTEXT_MAX_COLORSTOPS
 #define IM_RICHTEXT_MAX_COLORSTOPS 4
 #endif
 
-#ifdef IM_RICHTEXT_NO_IMGUI
+#ifndef IM_RICHTEXT_TARGET_IMGUI
 #define IM_COL32_BLACK       ImRichText::ToRGBA(0, 0, 0, 255)
 #define IM_COL32_BLACK_TRANS ImRichText::ToRGBA(0, 0, 0, 0)
 
@@ -30,7 +45,7 @@ enum ImGuiDir : int
 
 #endif
 
-#if !defined(IMGUI_DEFINE_MATH_OPERATORS) || defined(IM_RICHTEXT_NO_IMGUI)
+#if !defined(IMGUI_DEFINE_MATH_OPERATORS)
 [[nodiscard]] ImVec2 operator+(ImVec2 lhs, ImVec2 rhs) { return ImVec2{ lhs.x + rhs.x, lhs.y + rhs.y }; }
 [[nodiscard]] ImVec2 operator*(ImVec2 lhs, float rhs) { return ImVec2{ lhs.x * rhs, lhs.y * rhs }; }
 [[nodiscard]] ImVec2 operator-(ImVec2 lhs, ImVec2 rhs) { return ImVec2{ lhs.x - rhs.x, lhs.y - rhs.y }; }
@@ -67,6 +82,9 @@ namespace ImRichText
     {
         void* UserData = nullptr;
 
+        virtual void SetClipRect(ImVec2 startpos, ImVec2 endpos) = 0;
+        virtual void ResetClipRect() = 0;
+
         virtual void DrawLine(ImVec2 startpos, ImVec2 endpos, uint32_t color, float thickness = 1.f) = 0;
         virtual void DrawPolyline(ImVec2* points, int sz, uint32_t color, float thickness) = 0;
         virtual void DrawTriangle(ImVec2 pos1, ImVec2 pos2, ImVec2 pos3, uint32_t color, bool filled, bool thickness = 1.f) = 0;
@@ -75,10 +93,17 @@ namespace ImRichText
         virtual void DrawPolygon(ImVec2* points, int sz, uint32_t color, bool filled, float thickness = 1.f) = 0;
         virtual void DrawPolyGradient(ImVec2* points, uint32_t* colors, int sz) = 0;
         virtual void DrawCircle(ImVec2 center, float radius, uint32_t color, bool filled, bool thickness = 1.f) = 0;
+        virtual void DrawRadialGradient(ImVec2 center, float radius, uint32_t in, uint32_t out) = 0;
         virtual void DrawBullet(ImVec2 startpos, ImVec2 endpos, uint32_t color, int index, int depth) {};
+        
+        virtual bool SetCurrentFont(std::string_view family, float sz, FontType type) { return false; };
+        virtual bool SetCurrentFont(void* fontptr) { return false; };
+        virtual void ResetFont() {};
+        virtual ImVec2 GetTextSize(std::string_view text, void* fontptr) = 0;
         virtual void DrawText(std::string_view text, ImVec2 pos, uint32_t color) = 0;
-        virtual void DrawText(std::string_view text, std::string_view family, ImVec2 pos, float sz, uint32_t color, bool bold = false, bool italics = false, bool light = false) = 0;
-    
+        virtual void DrawText(std::string_view text, std::string_view family, ImVec2 pos, float sz, uint32_t color, FontType type) = 0;
+        virtual void DrawTooltip(ImVec2 pos, std::string_view text) = 0;
+
         void DrawDefaultBullet(BulletType type, ImVec2 initpos, const BoundedBox& bounds, uint32_t color, float bulletsz);
     };
 
