@@ -11,9 +11,9 @@ struct BLFont;
 /*
     This file is optional, provides a default cached
     font loading/caching mechanism that is used by the
-    library. However, if you provide your own 
-    `RenderConfig::GetFont` implementation, you may not
-    add this file in your project.
+    library. It is not mandatory to include this file
+    in your project, if you are implementing your own 
+    IRenderer interface.
 */
 
 namespace ImRichText

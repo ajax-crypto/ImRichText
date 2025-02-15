@@ -32,6 +32,8 @@ namespace ImRichText
 #ifdef IM_RICHTEXT_TARGET_IMGUI
     static void LoadFont(ImGuiIO& io, FontFamily& family, FontType ft, float size, ImFontConfig config, int flag)
     {
+        //io.Fonts->Flags = io.Fonts->Flags | ImFontAtlasFlags_NoBakedLines;
+
         if (ft == FT_Normal)
         {
             auto font = family.Files.Files[FT_Normal].empty() ? nullptr :
@@ -169,7 +171,7 @@ namespace ImRichText
     {
 #ifdef IM_RICHTEXT_TARGET_IMGUI
         ImFontConfig fconfig;
-        fconfig.OversampleH = 3.0;
+        fconfig.OversampleH = 2.0;
         fconfig.OversampleV = 1.0;
         fconfig.RasterizerMultiply = sz <= 16.f ? 2.f : 1.f;
 #ifdef IMGUI_ENABLE_FREETYPE

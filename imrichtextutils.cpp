@@ -576,11 +576,11 @@ namespace ImRichText
         uint32_t(*NamedColor)(const char*, void*), void* userData)
     {
         Border result;
-
         auto idx = WholeWord(input);
 
         if (AreSame(input.substr(0, idx), "none")) return result;
         result.thickness = ExtractFloatWithUnit(input.substr(0, idx), 1.f, ems, percent, 1.f);
+        idx = SkipSpace(input, idx);
         
         auto idx2 = WholeWord(input, idx + 1);
         auto type = input.substr(idx + 1, idx2);
@@ -588,11 +588,65 @@ namespace ImRichText
         else if (AreSame(type, "dashed")) result.lineType = LineType::Dashed;
         else if (AreSame(type, "dotted")) result.lineType = LineType::Dotted;
 
+        idx2 = SkipSpace(input, idx2);
         auto idx3 = WholeWord(input, idx2 + 1);
         auto color = input.substr(idx2 + 1, idx3);
         result.color = ExtractColor(color, NamedColor, userData);
 
         return result;
+    }
+
+    static bool IsColor(std::string_view input, int from)
+    {
+        return input[from] != '-' && std::isdigit(input[from]);
+    }
+
+    BoxShadow ExtractBoxShadow(std::string_view input, float ems, float percent, 
+        uint32_t(*NamedColor)(const char*, void*), void* userData)
+    {
+        BoxShadow result;
+        auto idx = WholeWord(input);
+
+        if (AreSame(input.substr(0, idx), "none")) return result;
+        result.offset.x = ExtractFloatWithUnit(input.substr(0, idx), 0.f, ems, percent, 1.f);
+        idx = SkipSpace(input, idx);
+
+        auto prev = idx;
+        idx = WholeWord(input, idx);
+
+        if (!IsColor(input, prev))
+        {
+            result.offset.y = ExtractFloatWithUnit(input.substr(prev, idx), 0.f, ems, percent, 1.f);
+            idx = SkipSpace(input, idx);
+
+            prev = idx;
+            idx = WholeWord(input, idx);
+
+            if (!IsColor(input, prev))
+            {
+                result.blur = ExtractFloatWithUnit(input.substr(prev, idx), 0.f, ems, percent, 1.f);
+                idx = SkipSpace(input, idx);
+
+                prev = idx;
+                idx = WholeWord(input, idx);
+
+                if (!IsColor(input, prev))
+                {
+                    result.spread = ExtractFloatWithUnit(input.substr(prev, idx), 0.f, ems, percent, 1.f);
+                    idx = SkipSpace(input, idx);
+
+                    prev = idx;
+                    idx = WholeWord(input, idx);
+                    result.color = ExtractColor(input.substr(prev, idx), NamedColor, userData);
+                }
+                else
+                    result.color = ExtractColor(input.substr(prev, idx), NamedColor, userData);
+            }
+            else
+                result.color = ExtractColor(input.substr(prev, idx), NamedColor, userData);
+        }
+        else
+            result.color = ExtractColor(input.substr(prev, idx), NamedColor, userData);
     }
     
     std::pair<std::string_view, bool> ExtractTag(const char* text, int end, char TagEnd,
@@ -680,10 +734,6 @@ namespace ImRichText
             std::string_view res{ text + begin + 1, (std::size_t)(idx - begin - 1) };
             idx++;
             return res;
-        }
-        else if (idx > begin)
-        {
-            //ERROR("Quoted string invalid... [%.*s] at %d\n", (int)(idx - begin), text + begin, idx);
         }
 
         return std::nullopt;
@@ -859,5 +909,17 @@ namespace ImRichText
         default:
             break;
         }
+    }
+
+    FourSidedBorder& FourSidedBorder::setColor(uint32_t color)
+    {
+        left.color = right.color = top.color = bottom.color = color;
+        return *this;
+    }
+
+    FourSidedBorder& FourSidedBorder::setThickness(float thickness)
+    {
+        left.thickness = right.thickness = top.thickness = bottom.thickness = thickness;
+        return *this;
     }
 }
