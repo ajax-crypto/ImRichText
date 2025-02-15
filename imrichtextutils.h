@@ -124,6 +124,7 @@ namespace ImRichText
         virtual bool IsPreformattedContent(std::string_view tag) const = 0;
     };
 
+    // Implement this to handle platform interactions
     struct IPlatform
     {
         virtual ImVec2 GetCurrentMousePos() = 0;
@@ -191,6 +192,18 @@ namespace ImRichText
 
         float h() const { return left.thickness + right.thickness; }
         float v() const { return top.thickness + bottom.thickness; }
+
+        FourSidedBorder& setColor(uint32_t color);
+        FourSidedBorder& setThickness(float thickness);
+        //FourSidedBorder& setLineType(uint32_t color);
+    };
+
+    struct BoxShadow
+    {
+        ImVec2 offset{ 0.f, 0.f };
+        float spread = 0.f;
+        float blur = 1.f;
+        uint32_t color = IM_COL32_BLACK;
     };
 
     // Generic string helpers, case-insensitive matches
@@ -215,6 +228,8 @@ namespace ImRichText
     [[nodiscard]] uint32_t GetColor(const char* name, void*);
 
     [[nodiscard]] Border ExtractBorder(std::string_view input, float ems, float percent, 
+        uint32_t(*NamedColor)(const char*, void*), void* userData);
+    [[nodiscard]] BoxShadow ExtractBoxShadow(std::string_view input, float ems, float percent,
         uint32_t(*NamedColor)(const char*, void*), void* userData);
 
     // Parse rich text and invoke appropriate visitor methods

@@ -250,23 +250,23 @@ namespace ImRichText
         }
     }
 
-    ImVec2 ImGuiGLFWPlatform::GetCurrentMousePos()
+    ImVec2 ImGuiPlatform::GetCurrentMousePos()
     {
         return ImGui::GetIO().MousePos;
     }
 
-    bool ImGuiGLFWPlatform::IsMouseClicked()
+    bool ImGuiPlatform::IsMouseClicked()
     {
         return ImGui::GetIO().MouseReleased[0];
     }
 
-    void ImGuiGLFWPlatform::HandleHyperlink(std::string_view link)
+    void ImGuiPlatform::HandleHyperlink(std::string_view link)
     {
         if (HyperlinkClicked != nullptr)
             HyperlinkClicked(link);
     }
 
-    void ImGuiGLFWPlatform::HandleHover(bool hovered)
+    void ImGuiPlatform::HandleHover(bool hovered)
     {
         hovered ? ImGui::SetMouseCursor(ImGuiMouseCursor_Hand) :
             ImGui::SetMouseCursor(ImGuiMouseCursor_Arrow);

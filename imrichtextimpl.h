@@ -41,11 +41,11 @@ namespace ImRichText
         void DrawTooltip(ImVec2 pos, std::string_view text);
     };
 
-    struct ImGuiGLFWPlatform final : public IPlatform
+    struct ImGuiPlatform final : public IPlatform
     {
         void (*HyperlinkClicked)(std::string_view);
 
-        ImGuiGLFWPlatform(void (*hc)(std::string_view) = nullptr)
+        ImGuiPlatform(void (*hc)(std::string_view) = nullptr)
             : HyperlinkClicked(hc) {}
 
         ImVec2 GetCurrentMousePos();

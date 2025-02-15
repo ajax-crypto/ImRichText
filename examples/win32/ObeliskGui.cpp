@@ -57,6 +57,7 @@ public:
 
     Application()
     {
+#ifdef IM_RICHTEXT_TARGET_IMGUI
         glfwSetErrorCallback(glfw_error_callback);
         if (!glfwInit())
             std::exit(0);
@@ -108,13 +109,11 @@ public:
         ImGui_ImplGlfw_InstallEmscriptenCallbacks(m_window, "#canvas");
 #endif
         ImGui_ImplOpenGL3_Init(glsl_version);
+#endif
     }
 
     int run()
     {
-        bool show_demo_window = true;
-        bool show_another_window = false;
-        ImVec4 clear_color = ImVec4(1.f, 1.f, 1.f, 1.00f);
         auto id1 = ImRichText::CreateRichText("<marquee>This is moving...</marquee>"
             "<blink>This is blinking</blink>"
             "<meter value='3' max='10'></meter>"
@@ -132,25 +131,30 @@ public:
         params.Bounds = { -1.f, -1.f };
         params.defaultFontSize = 24.f;
         auto config = ImRichText::GetDefaultConfig(params);
+        config->ListItemBullet = ImRichText::BulletType::Arrow;
 
 #ifdef IM_RICHTEXT_TARGET_IMGUI
         ImRichText::ImGuiRenderer renderer{ *config };
-        ImRichText::ImGuiGLFWPlatform platform;
+        ImRichText::ImGuiPlatform platform;
 
         config->Renderer = &renderer;
         config->Platform = &platform;
 #elif defined(IM_RICHTEXT_TARGET_BLEND2D)
+        BLImage img(800, 800, BL_FORMAT_PRGB32);
+        BLContext context{ img };
         Blend2DRenderer renderer{ context };
         config->Renderer = &renderer;
 #endif
-
-        config->ListItemBullet = ImRichText::BulletType::Arrow;
+        
 #ifdef _DEBUG
         config->DebugContents[ImRichText::ContentTypeLine] = ImColor{ 255, 0, 0 };
         config->DebugContents[ImRichText::ContentTypeSegment] = ImColor{ 0, 255, 0 };
 #endif
         config->Scale = 2.f;
         ImRichText::PushConfig(*config);
+
+#ifdef IM_RICHTEXT_TARGET_IMGUI
+        ImVec4 clear_color = ImVec4(1.f, 1.f, 1.f, 1.00f);
 
         // Main loop
 #ifdef __EMSCRIPTEN__
@@ -190,9 +194,12 @@ public:
             {
                 if (ImGui::IsKeyPressed(ImGuiKey::ImGuiKey_O)) ImRichText::ToggleOverlay();
 
+#endif
                 ImRichText::GetCurrentConfig()->DefaultBgColor = ImColor{ 255, 255, 255 };
                 ImRichText::Show(id1);
                 ImRichText::Show(id2);
+
+#ifdef IM_RICHTEXT_TARGET_IMGUI
             }
 
             ImGui::End();
@@ -219,6 +226,9 @@ public:
 
         glfwDestroyWindow(m_window);
         glfwTerminate();
+#else
+        img.writeToFile("rtf.png");
+#endif
 
         return 0;
     }

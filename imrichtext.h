@@ -130,7 +130,8 @@ namespace ImRichText
         StyleBorderUniform = 1 << 17,
         StyleCellSpacing = 1 << 18,
         StyleBlink = 1 << 19,
-        StyleNoWrap = 1 << 20
+        StyleNoWrap = 1 << 20,
+        StyleBoxShadow = 1 << 21
     };
 
     enum TextAlignment
@@ -150,18 +151,16 @@ namespace ImRichText
     {
         int64_t propsSpecified = NoStyleChange;
         uint32_t fgcolor = IM_COL32_BLACK;
-        uint32_t bgcolor = IM_COL32_BLACK_TRANS;
         float height = 0;
         float width = 0;
         FontStyle font;
         ListStyle list;
         FourSidedMeasure padding;
-        FourSidedBorder border;
+        FourSidedMeasure border;
         int alignment = TextAlignment::TextAlignLeading; // TODO: Implement text alignment
         float superscriptOffset = 0.f; // TODO: Move to DrawableLine
         float subscriptOffset = 0.f; // TODO: Move to DrawableLine
-        ColorGradient gradient;
-        int32_t backgroundIdx = -1; // If multi-line background, index in Drawables::BackgroundShapes
+        int32_t backgroundIdx = -1; // index in Drawables::BackgroundShapes
         bool blink = false;
     };
 
@@ -169,6 +168,7 @@ namespace ImRichText
     struct SegmentData
     {
         std::vector<Token> Tokens;
+        std::vector<int> Depths;
         BoundedBox Bounds;
         int StyleIdx = -1;
 
@@ -198,10 +198,11 @@ namespace ImRichText
 
     struct BackgroundShape
     {
-        ImVec2 Start, End;
+        ImVec2 Start{ -1.f, -1.f }, End{ -1.f, -1.f };
         uint32_t Color = IM_COL32_BLACK_TRANS;
-        ColorGradient Gradient;
         FourSidedBorder Border;
+        BoxShadow Shadow;
+        ColorGradient Gradient;
     };
 
 #ifdef _DEBUG
@@ -288,7 +289,7 @@ namespace ImRichText
     struct Drawables
     {
         std::vector<DrawableLine>    ForegroundLines;
-        std::vector<BackgroundShape> BackgroundShapes;
+        std::vector<BackgroundShape> BackgroundShapes[IM_RICHTEXT_MAXDEPTH];
         std::vector<StyleDescriptor> StyleDescriptors;
         std::vector<TagPropertyDescriptor>   TagDescriptors;
         std::vector<ListItemTokenDescriptor> ListItemTokens;
