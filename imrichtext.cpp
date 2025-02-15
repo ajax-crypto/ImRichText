@@ -2135,8 +2135,16 @@ namespace ImRichText
             }
             else if (_currTagType != TagType::Unknown)
             {
-                if (_currTagType == TagType::Superscript) _currSuperscriptLevel--;
-                else if (_currTagType == TagType::Subscript) _currSubscriptLevel--;
+                if (_currTagType == TagType::Superscript)
+                {
+                    _currSuperscriptLevel--;
+                    AddSegment(_currLine, _styleIdx, _result.StyleDescriptors, _config);
+                }
+                else if (_currTagType == TagType::Subscript)
+                {
+                    _currSubscriptLevel--;
+                    AddSegment(_currLine, _styleIdx, _result.StyleDescriptors, _config);
+                }
             }
 
             // Record background end
