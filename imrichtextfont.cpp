@@ -343,10 +343,11 @@ namespace ImRichText
     }
 
 #ifdef IM_RICHTEXT_TARGET_IMGUI
-    ImFont* GetOverlayFont()
+    ImFont* GetOverlayFont(const RenderConfig& config)
     {
         auto it = LookupFontFamily(IM_RICHTEXT_DEFAULT_FONTFAMILY);
-        return it->second.Fonts->begin()->second;
+        auto fontsz = config.DefaultFontSize * 0.8f * config.FontScale;
+        return it->second.Fonts->lower_bound(fontsz)->second;
     }
 #endif
 }

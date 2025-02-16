@@ -81,12 +81,14 @@ The following subset of HTML tags/CSS properties are supported:
 | small | Reduce font size to 80% of current block | Yes |
 | q | Wrap text inside quotation mark | Yes |
 | u | Underline current block of text | Yes[^3] |
-| a | Make current block of text a hyperlink (handle click events) | Yes[^4] |
+| a | Make current block of text a hyperlink (handle click events) | Yes |
 | abbr | Mark current block as an abbreviation, `title` attribute contains tooltip | Yes |
 | s/del | Draw a horizontal line through the text content | Yes |
 | blink | Make current block of text blink | Yes |
 | marquee | Make current block of text scroll horizontally | Yes |
 | meter | Create a progress bar inline | Yes |
+| font | Specify custom font with family/size/weight/etc. | _Under progress_ |
+| center | Center align text | _Planning |
 | blockquote | Blockquote as in HTML | _Under progress_ |
 | pre | Preformatted text with monospaced font | _Under progress_ |
 | code | Use monospace font for this block of text | _Under progress_ |
@@ -107,8 +109,11 @@ The following subset of HTML tags/CSS properties are supported:
 | text-overflow | _Under progress_ |
 
 In order to handle rich text as specified above, fonts need to be managed i.e. different family, weights, sizes, etc. 
-The library internally uses default fonts (for Windows Segoe UI family for proportional and Consolas for monospace).
-However, user can provide their own font provider through `RenderConfig::GetFont` function pointer.
+The library internally uses default fonts (on Windows, Segoe UI family for proportional and Consolas for monospace).
+However, user can provide their own font provider through `IRenderer` interface.
+
+*NOTE* : The default ImGui renderer implementation doest not support dynamic font loading right now. All fonts must be
+loaded by `ImRichText::LoadFonts` functions before rendering.
 
 ## Immediate Goals
 * Word wrapping support
@@ -131,6 +136,7 @@ However, user can provide their own font provider through `RenderConfig::GetFont
 * Build scripts like cmake, build2, make, etc. This library is intended to be used by simply copying the .h/.cpp files.
 * Full-fledged support for CSS3 styling with layout
 * Support alternate syntax i.e. Markdown, Restructured Text, MathML, etc.
+* Integrating scripting languages
 
 ## Build Dependencies
 The library depends on ImGui and C++17 standard library. It can be compiled using any C++17 compiler.
@@ -212,6 +218,5 @@ Platform integration is optional with a default implementation provided for ImGu
 [^1]: Nested subscript/superscript is untested at the moment
 [^2]: Custom bullets are also possible, set `RenderConfig::DrawBullet` function pointer and `list-style-type` property to `custom`
 [^3]: Underline text due to `<u>` tag is not baseline-underlined, but underlined beneath the whole text
-[^4]: Set `RenderConfig::HandleHyperlink` function pointer to handle hyperlinks clicked
 [^5]: Only axis aligned gradients are support as `background` property
 [^6]: Border line type is parsed but not used for rendering

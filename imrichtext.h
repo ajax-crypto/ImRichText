@@ -127,11 +127,10 @@ namespace ImRichText
         StylePaddingRight = 1 << 14,
         StyleBorder = 1 << 15,
         StyleBorderRadius = 1 << 16,
-        StyleBorderUniform = 1 << 17,
-        StyleCellSpacing = 1 << 18,
-        StyleBlink = 1 << 19,
-        StyleNoWrap = 1 << 20,
-        StyleBoxShadow = 1 << 21
+        StyleCellSpacing = 1 << 17,
+        StyleBlink = 1 << 18,
+        StyleNoWrap = 1 << 19,
+        StyleBoxShadow = 1 << 20,
     };
 
     enum TextAlignment

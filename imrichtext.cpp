@@ -112,6 +112,8 @@ namespace ImRichText
     static std::unordered_map<std::string_view, AnimationData> AnimationMap;
 
     static StackData TagStack[IM_RICHTEXT_MAXDEPTH];
+    int StyleIndexStack[IM_RICHTEXT_MAXDEPTH] = { 0 };
+    char TabSpaces[IM_RICHTEXT_MAXTABSTOP] = { 0 };
     static std::vector<BackgroundData> BackgroundSpans[IM_RICHTEXT_MAXDEPTH];
     static int CurrentStackPos = -1;
 
@@ -132,6 +134,7 @@ namespace ImRichText
 #ifdef IM_RICHTEXT_TARGET_IMGUI
 #ifdef _DEBUG
     static bool ShowOverlay = true;
+    static bool ShowBoundingBox = true;
 #else
     static const bool ShowOverlay = false;
 #endif
@@ -307,13 +310,15 @@ namespace ImRichText
             style.border.bottom = shape.Border.bottom.thickness;
             style.border.left = shape.Border.left.thickness;
             style.border.right = shape.Border.right.thickness;
-            prop = StyleBorder | StyleBorderUniform;
+            shape.Border.isUniform = true;
+            prop = StyleBorder;
         }
         else if (AreSame(stylePropName, "border-top"))
         {
             shape.Border.top = ExtractBorder(stylePropVal, config.DefaultFontSize * config.FontScale,
                 parentStyle.height, config.NamedColor, config.UserData);
             style.border.top = shape.Border.top.thickness;
+            shape.Border.isUniform = false;
             prop = StyleBorder;
         }
         else if (AreSame(stylePropName, "border-left"))
@@ -321,6 +326,7 @@ namespace ImRichText
             shape.Border.left = ExtractBorder(stylePropVal, config.DefaultFontSize * config.FontScale,
                 parentStyle.height, config.NamedColor, config.UserData);
             style.border.left = shape.Border.left.thickness;
+            shape.Border.isUniform = false;
             prop = StyleBorder;
         }
         else if (AreSame(stylePropName, "border-right"))
@@ -328,6 +334,7 @@ namespace ImRichText
             shape.Border.right = ExtractBorder(stylePropVal, config.DefaultFontSize * config.FontScale,
                 parentStyle.height, config.NamedColor, config.UserData);
             style.border.right = shape.Border.right.thickness;
+            shape.Border.isUniform = false;
             prop = StyleBorder;
         }
         else if (AreSame(stylePropName, "border-bottom"))
@@ -336,6 +343,7 @@ namespace ImRichText
                 parentStyle.height, config.NamedColor, config.UserData);
             style.border.bottom = shape.Border.bottom.thickness;
             prop = StyleBorder;
+            shape.Border.isUniform = false;
         }
         else if (AreSame(stylePropName, "border-radius"))
         {
@@ -1116,18 +1124,13 @@ namespace ImRichText
 
 
 #if defined(_DEBUG) && defined(IM_RICHTEXT_TARGET_IMGUI)
-    inline void DrawDebugRect(DebugContentType type, ImVec2 startpos, ImVec2 endpos, const RenderConfig& config)
+    inline void DrawBoundingBox(DebugContentType type, ImVec2 startpos, ImVec2 endpos, const RenderConfig& config)
     {
-        if (config.DebugContents[type] != IM_COL32_BLACK_TRANS) 
+        if (config.DebugContents[type] != IM_COL32_BLACK_TRANS && ShowBoundingBox)
             config.OverlayRenderer->DrawRect(startpos, endpos, config.DebugContents[type], false);
     }
-
-    inline void DrawDebugRect(ImColor color, ImVec2 startpos, ImVec2 endpos, const RenderConfig& config)
-    {
-        config.OverlayRenderer->DrawRect(startpos, endpos, color, false);
-    }
 #else
-#define DrawDebugRect(...)
+#define DrawBoundingBox(...)
 #endif
 
     template <typename ItrT>
@@ -1192,18 +1195,19 @@ namespace ImRichText
             config.Renderer->DrawRect(startpos, endpos, color, true);
     }
 
+#ifdef IM_RICHTEXT_TARGET_IMGUI
+
     std::tuple<int, int, int> DecomposeToRGBChannels(uint32_t color)
     {
         auto mask = (uint32_t)-1;
-        return std::make_tuple((int)(color & (mask >> 24)), 
+        return std::make_tuple((int)(color & (mask >> 24)),
             (int)(color & ((mask >> 16) & (mask << 8))) >> 8,
             (int)(color & ((mask >> 8) & (mask << 16))) >> 16);
     }
 
-#ifdef IM_RICHTEXT_TARGET_IMGUI
     bool DrawOverlay(ImVec2 startpos, ImVec2 endpos, const Token& token, 
         const StyleDescriptor& style, const BackgroundShape& bgshape, 
-        const TagPropertyDescriptor& tagprops)
+        const TagPropertyDescriptor& tagprops, const RenderConfig& config)
     {
         const auto& io = ImGui::GetCurrentContext()->IO;
         if (ImRect{ startpos, endpos }.Contains(io.MousePos) && ShowOverlay)
@@ -1213,7 +1217,7 @@ namespace ImRichText
 
             char props[2048] = { 0 };
             auto currpos = 0;
-            for (auto exp = 0; exp <= 16; ++exp)
+            for (auto exp = 0; exp <= 21; ++exp)
             {
                 auto prop = 1 << exp;
                 if ((style.propsSpecified & prop) != 0)
@@ -1234,6 +1238,8 @@ namespace ImRichText
                     case StylePaddingBottom: currpos += std::snprintf(props + currpos, 2047 - currpos, "StylePaddingBottom,"); break;
                     case StylePaddingLeft: currpos += std::snprintf(props + currpos, 2047 - currpos, "StylePaddingLeft,"); break;
                     case StylePaddingRight: currpos += std::snprintf(props + currpos, 2047 - currpos, "StylePaddingRight,"); break;
+                    case StyleBorder: currpos += std::snprintf(props + currpos, 2047 - currpos, "StyleBorder,"); break;
+                    case StyleBorderRadius: currpos += std::snprintf(props + currpos, 2047 - currpos, "StyleBorderRadius,"); break;
                     case StyleBlink: currpos += std::snprintf(props + currpos, 2047 - currpos, "StyleBlink,"); break;
                     case StyleNoWrap: currpos += std::snprintf(props + currpos, 2047 - currpos, "StyleNoWrap,"); break;
                     default: break;
@@ -1241,61 +1247,95 @@ namespace ImRichText
                 }
             }
 
-            char buffer[1024 + 2048] = { 0 };
+            constexpr int bufsz = 4096;
+            char buffer[bufsz] = { 0 };
             auto yesorno = [](bool val) { return val ? "Yes" : "No"; };
             auto [fr, fg, fb] = DecomposeToRGBChannels(style.fgcolor);
             auto [br, bg, bb] = DecomposeToRGBChannels(bgshape.Color);
 
-            currpos = std::snprintf(buffer, 1023 + 2048, "Position: (%.2f, %.2f)\nBounds: (%.2f, %.2f)\n", 
+            currpos = std::snprintf(buffer, bufsz - 1, "Position            : (%.2f, %.2f)\n"
+                "Bounds              : (%.2f, %.2f)\n",
                 startpos.x, startpos.y, token.Bounds.width, token.Bounds.height);
 
-            currpos += std::snprintf(buffer + currpos, 1023 + 2048 - currpos, 
-                "\nProperties Specified: %s\nForeground Color: (%d, %d, %d)\n",
+            currpos += std::snprintf(buffer + currpos, bufsz - currpos,
+                "\nProperties Specified: %s\nForeground Color    : (%d, %d, %d)\n",
                 props, fr, fg, fb);
 
             if (style.backgroundIdx != -1)
             {
                 if (bgshape.Gradient.totalStops == 0)
                     if (bgshape.Color != IM_COL32_BLACK_TRANS)
-                        currpos += std::snprintf(buffer + currpos, 1023 + 2048 - currpos, "Background Color: (%d, %d, %d)\n", br, bg, bb);
+                        currpos += std::snprintf(buffer + currpos, bufsz - currpos, "Background Color    : (%d, %d, %d)\n", br, bg, bb);
                     else
-                        currpos += std::snprintf(buffer + currpos, 1023 + 2048 - currpos, "Background Color: Transparent\n");
+                        currpos += std::snprintf(buffer + currpos, bufsz - currpos, "Background Color    : Transparent\n");
                 else
                 {
-                    currpos += std::snprintf(buffer + currpos, 1023 + 2048 - currpos, "Linear Gradient:");
+                    currpos += std::snprintf(buffer + currpos, bufsz - currpos, "Linear Gradient     :");
 
                     for (auto idx = 0; idx < bgshape.Gradient.totalStops; ++idx)
                     {
                         auto [r1, g1, b1] = DecomposeToRGBChannels(bgshape.Gradient.colorStops[idx].from);
                         auto [r2, g2, b2] = DecomposeToRGBChannels(bgshape.Gradient.colorStops[idx].to);
-                        currpos += std::snprintf(buffer + currpos, 1023 + 2048 - currpos, "From (%d, %d, %d) To (%d, %d, %d) at %.2f\n",
+                        currpos += std::snprintf(buffer + currpos, bufsz - currpos, "From (%d, %d, %d) To (%d, %d, %d) at %.2f\n",
                             r1, g1, b1, r2, g2, b2, bgshape.Gradient.colorStops[idx].pos);
                     }
                 }
+
+                int br = 0, bg = 0, bb = 0;
+                std::tie(br, bg, bb) = DecomposeToRGBChannels(bgshape.Border.top.color);
+                currpos += std::snprintf(buffer + currpos, bufsz - currpos,
+                    "Border.top          : (%.2fpx, rgb(%d, %d, %d))\n",
+                    bgshape.Border.top.thickness, br, bg, bb);
+
+                std::tie(br, bg, bb) = DecomposeToRGBChannels(bgshape.Border.right.color);
+                currpos += std::snprintf(buffer + currpos, bufsz - currpos,
+                    "Border.right        : (%.2fpx, rgb(%d, %d, %d))\n",
+                    bgshape.Border.right.thickness, br, bg, bb);
+
+                std::tie(br, bg, bb) = DecomposeToRGBChannels(bgshape.Border.bottom.color);
+                currpos += std::snprintf(buffer + currpos, bufsz - currpos,
+                    "Border.bottom       : (%.2fpx, rgb(%d, %d, %d))\n",
+                    bgshape.Border.bottom.thickness, br, bg, bb);
+
+                std::tie(br, bg, bb) = DecomposeToRGBChannels(bgshape.Border.left.color);
+                currpos += std::snprintf(buffer + currpos, bufsz - currpos,
+                    "Border.left         : (%.2fpx, rgb(%d, %d, %d))\n",
+                    bgshape.Border.left.thickness, br, bg, bb);
             }
 
-            currpos += std::snprintf(buffer + currpos, 1023 + 2048 - currpos,
-                "\nHeight: %.2fpx\nWidth: %.2fpx\nTooltip: %.*s\nLink: %.*s\nBlink: %s\n",
+            currpos += std::snprintf(buffer + currpos, bufsz - currpos,
+                "\nHeight              : %.2fpx\nWidth               : %.2fpx\n"
+                "Tooltip               : %.*s\nLink                : %.*s\n"
+                "Blink                 : %s\n",
                 style.width, style.height, (int)tagprops.tooltip.size(), tagprops.tooltip.data(),
                 (int)tagprops.link.size(), tagprops.link.data(), yesorno(style.blink));
 
+            currpos += std::snprintf(buffer + currpos, bufsz - currpos,
+                "Padding             : (%.2fpx, %.2fpx, %.2fpx, %.2fpx)\n",
+                style.padding.top, style.padding.right, style.padding.bottom, style.padding.left);
+
             if (token.Type == TokenType::Text)
             {
-                std::snprintf(buffer + currpos, 1023, "\n\nFont.family: %.*s\nFont.size: %.2fpx\nFont.bold: %s\nFont.italics: %f\nFont.underline: %s\n"
-                    "Font.strike: %s\nFont.wrap: %s", (int)style.font.family.size(), style.font.family.data(), style.font.size,
+                currpos += std::snprintf(buffer + currpos, bufsz - currpos, "\n\nFont.family         : %.*s\n"
+                    "Font.size           : %.2fpx\nFont.bold           : %s\nFont.italics        : %f\n"
+                    "Font.underline      : %s\n"
+                    "Font.strike         : %s\n"
+                    "Font.wrap           : %s", (int)style.font.family.size(), style.font.family.data(), style.font.size,
                     yesorno(style.font.flags & FontStyleBold), yesorno(style.font.flags & FontStyleItalics), 
                     yesorno(style.font.flags & FontStyleUnderline), yesorno(style.font.flags & FontStyleStrikethrough),
                     yesorno(!(style.font.flags & FontStyleNoWrap)));
             }
             else if (token.Type == TokenType::Meter)
             {
-                std::snprintf(buffer + currpos, 1023, "\n\nRange: (%.2f, %.2f)\nValue: %.2f", 
+                currpos += std::snprintf(buffer + currpos, bufsz - currpos, "\n\nRange               : "
+                    "(%.2f, %.2f)\nValue          : %.2f",
                     tagprops.range.first, tagprops.range.second, tagprops.value);
             }
 
-            auto font = GetOverlayFont();
+            auto font = GetOverlayFont(config);
             ImGui::PushFont(font);
-            auto sz = ImGui::CalcTextSize(buffer, buffer + 1023 + 2048, false, 300.f);
+            auto sz = ImGui::CalcTextSize(buffer, buffer + currpos, false, 300.f);
+            sz.x += 20.f;
 
             startpos.x = ImGui::GetCurrentWindow()->Size.x - sz.x;
             overlay->AddRectFilled(startpos, startpos + ImVec2{ ImGui::GetCurrentWindow()->Size.x, sz.y }, IM_COL32_WHITE);
@@ -1392,9 +1432,9 @@ namespace ImRichText
         }
 
 #ifdef IM_RICHTEXT_TARGET_IMGUI
-        if (DrawOverlay(startpos, endpos, token, style, bgshape, tagprops))
+        if (DrawOverlay(startpos, endpos, token, style, bgshape, tagprops, config))
 #endif
-            DrawDebugRect(ContentTypeToken, startpos, endpos, config);
+            DrawBoundingBox(ContentTypeToken, startpos, endpos, config);
         if ((token.Bounds.left + token.Bounds.width) > (bounds.x + initpos.x)) return false;
         return true;
     }
@@ -1412,16 +1452,15 @@ namespace ImRichText
             auto width = endpos.x - startpos.x, height = endpos.y - startpos.y;
 
             if (border.top.thickness > 0.f && border.top.color != bgcolor)
-                config.Renderer->DrawRect(startpos, startpos + ImVec2{ width, 0.f }, border.top.color, false, border.top.thickness);
+                config.Renderer->DrawLine(startpos, startpos + ImVec2{ width, 0.f }, border.top.color, border.top.thickness);
             if (border.right.thickness > 0.f && border.right.color != bgcolor)
-                config.Renderer->DrawRect(startpos + ImVec2{ width - border.right.thickness, 0.f }, endpos -
-                    ImVec2{ border.right.thickness, 0.f },
-                    border.right.color, false, border.right.thickness);
+                config.Renderer->DrawLine(startpos + ImVec2{ width - border.right.thickness, 0.f }, endpos -
+                    ImVec2{ border.right.thickness, 0.f }, border.right.color, border.right.thickness);
             if (border.left.thickness > 0.f && border.left.color != bgcolor)
-                config.Renderer->DrawRect(startpos, startpos + ImVec2{ 0.f, height }, border.left.color, false, border.left.thickness);
+                config.Renderer->DrawLine(startpos, startpos + ImVec2{ 0.f, height }, border.left.color, border.left.thickness);
             if (border.bottom.thickness > 0.f && border.bottom.color != bgcolor)
-                config.Renderer->DrawRect(startpos + ImVec2{ 0.f, height - border.bottom.thickness }, endpos -
-                    ImVec2{ 0.f, border.bottom.thickness }, border.bottom.color, false, border.bottom.thickness);
+                config.Renderer->DrawLine(startpos + ImVec2{ 0.f, height - border.bottom.thickness }, endpos -
+                    ImVec2{ 0.f, border.bottom.thickness }, border.bottom.color, border.bottom.thickness);
         }
     }
 
@@ -1461,7 +1500,7 @@ namespace ImRichText
             }
         }
 
-        DrawDebugRect(ContentTypeSegment, startpos, endpos, config);
+        DrawBoundingBox(ContentTypeSegment, startpos, endpos, config);
         if (popFont) config.Renderer->ResetFont();
         return drawTokens;
     }
@@ -1485,7 +1524,7 @@ namespace ImRichText
 #ifdef _DEBUG
             auto linestart = lines[lineidx].Content.start(initpos) + ImVec2{ lines[lineidx].Offset.left, lines[lineidx].Offset.top };
             auto lineend = lines[lineidx].Content.end(initpos);
-            DrawDebugRect(ContentTypeLine, linestart, lineend, config);
+            DrawBoundingBox(ContentTypeLine, linestart, lineend, config);
 #endif
             if ((lines[lineidx].Content.top + lines[lineidx].height()) > (bounds.y + initpos.y)) break;
         }
@@ -1502,8 +1541,8 @@ namespace ImRichText
                 auto endpos = shape.End + initpos;
 
                 DrawBackground(startpos, endpos, shape.Gradient, shape.Color, config);
-                DrawDebugRect(ContentTypeBg, startpos, endpos, config);
-                DrawBorderRect(shape.Border, startpos, endpos, false, shape.Color, config);
+                DrawBoundingBox(ContentTypeBg, startpos, endpos, config);
+                DrawBorderRect(shape.Border, startpos, endpos, shape.Border.isUniform, shape.Color, config);
                 if (shape.End.y > (bounds.y + initpos.y)) break;
             }
         }
@@ -1677,6 +1716,12 @@ namespace ImRichText
         }
     }
 
+    static bool operator!=(const TagPropertyDescriptor& lhs, const TagPropertyDescriptor& rhs)
+    {
+        return lhs.tooltip != rhs.tooltip || lhs.link != rhs.link || lhs.value != rhs.value ||
+            lhs.range != rhs.range;
+    }
+
     struct DefaultTagVisitor final : public ITagVisitor
     {
     private:
@@ -1684,9 +1729,7 @@ namespace ImRichText
         std::string_view _currTag;
         TagType _currTagType = TagType::Unknown;
         bool _currHasBackground = false;
-
         int _styleIdx = -1;
-        int StyleIndexStack[IM_RICHTEXT_MAXDEPTH] = { 0 };
 
         DrawableLine _currLine;
         StyleDescriptor _currStyle;
@@ -1695,13 +1738,10 @@ namespace ImRichText
         
         int _currListDepth = -1, _currBlockquoteDepth = -1;
         int _currSubscriptLevel = 0, _currSuperscriptLevel = 0;
-        bool _currListIsNumbered = false, _nonStyleAttribute = false;
         float _maxWidth = 0.f;
         
         const RenderConfig& _config;
         Drawables& _result;
-
-        char TabSpaces[IM_RICHTEXT_MAXTABSTOP] = { 0 };
 
     public:
 
@@ -1836,11 +1876,12 @@ namespace ImRichText
         {
             LOG("Reading attribute: %.*s\n", (int)name.size(), name.data());
             auto propsSpecified = 0;
+            auto nonStyleAttribute = false;
             const auto& parentStyle = Style(CurrentStackPos - 1);
-            std::tie(propsSpecified, _nonStyleAttribute) = RecordTagProperties(
+            std::tie(propsSpecified, nonStyleAttribute) = RecordTagProperties(
                 _currTagType, name, value, _currStyle, _currBgShape, _currTagProps, parentStyle, _config);
 
-            if (!_nonStyleAttribute)
+            if (!nonStyleAttribute)
                 _currStyle.propsSpecified |= propsSpecified;
 
             return true;
@@ -1853,8 +1894,9 @@ namespace ImRichText
             auto segmentAdded = hasUniqueStyle;
             auto& currentStyle = Style(CurrentStackPos);
             int16_t tagPropIdx = -1;
+            auto currListIsNumbered = false;
 
-            if (_nonStyleAttribute)
+            if (_currTagProps != TagPropertyDescriptor{})
             {
                 tagPropIdx = (int16_t)_result.TagDescriptors.size();
                 _result.TagDescriptors.emplace_back(_currTagProps);
@@ -1863,7 +1905,7 @@ namespace ImRichText
             if (_currTagType == TagType::List)
             {
                 _currListDepth++;
-                _currListIsNumbered = AreSame(_currTag, "ol");
+                currListIsNumbered = AreSame(_currTag, "ol");
             }
             else if (_currTagType == TagType::Font)
             {
@@ -1890,7 +1932,7 @@ namespace ImRichText
 
                     Token token;
                     auto& listItem = _result.ListItemTokens.emplace_back();
-                    token.Type = !_currListIsNumbered ? TokenType::ListItemBullet :
+                    token.Type = !currListIsNumbered ? TokenType::ListItemBullet :
                         TokenType::ListItemNumbered;
                     listItem.ListDepth = _currListDepth;
                     listItem.ListItemIndex = ListItemCountByDepths[_currListDepth];
@@ -2161,7 +2203,6 @@ namespace ImRichText
             _currTag = CurrentStackPos == -1 ? "" : TagStack[CurrentStackPos].tag;
             _currTagType = CurrentStackPos == -1 ? TagType::Unknown : TagStack[CurrentStackPos].tagType;
             _currHasBackground = CurrentStackPos == -1 ? false : TagStack[CurrentStackPos].hasBackground;
-            _nonStyleAttribute = false;
             _currTagProps = TagPropertyDescriptor{};
             return true;
         }
@@ -2404,6 +2445,7 @@ namespace ImRichText
     bool ToggleOverlay()
     {
         ShowOverlay = !ShowOverlay;
+        ShowBoundingBox = !ShowBoundingBox;
         return ShowOverlay;
     }
 #endif

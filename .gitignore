@@ -48,3 +48,5 @@
 *.opendb
 *.iobj
 *.ipdb
+
+examples/win32/ImRichTe.4aa4dee2/
