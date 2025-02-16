@@ -49,7 +49,7 @@ namespace ImRichText
 
 #ifdef IM_RICHTEXT_TARGET_IMGUI
     [[nodiscard]] ImFont* GetFont(std::string_view family, float size, FontType type, void*);
-    [[nodiscard]] ImFont* GetOverlayFont();
+    [[nodiscard]] ImFont* GetOverlayFont(const RenderConfig& config);
 #elif defined(IM_RICHTEXT_TARGET_BLEND2D)
     [[nodiscard]] BLFont* GetFont(std::string_view family, float size, FontType type, void*);
 #endif

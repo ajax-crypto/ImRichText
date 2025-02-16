@@ -36,15 +36,18 @@ namespace ImRichText
 
     void ImGuiRenderer::DrawRect(ImVec2 startpos, ImVec2 endpos, uint32_t color, bool filled, float thickness, float radius, int corners)
     {
-        auto drawflags = 0;
+        if (thickness > 0.f)
+        {
+            auto drawflags = 0;
 
-        if (corners & TopLeftCorner) drawflags |= ImDrawFlags_RoundCornersTopLeft;
-        if (corners & TopRightCorner) drawflags |= ImDrawFlags_RoundCornersTopRight;
-        if (corners & BottomRightCorner) drawflags |= ImDrawFlags_RoundCornersBottomRight;
-        if (corners & BottomLeftCorner) drawflags |= ImDrawFlags_RoundCornersBottomLeft;
+            if (corners & TopLeftCorner) drawflags |= ImDrawFlags_RoundCornersTopLeft;
+            if (corners & TopRightCorner) drawflags |= ImDrawFlags_RoundCornersTopRight;
+            if (corners & BottomRightCorner) drawflags |= ImDrawFlags_RoundCornersBottomRight;
+            if (corners & BottomLeftCorner) drawflags |= ImDrawFlags_RoundCornersBottomLeft;
 
-        filled ? ((ImDrawList*)UserData)->AddRectFilled(startpos, endpos, color, radius, drawflags) :
-            ((ImDrawList*)UserData)->AddRect(startpos, endpos, color, radius, drawflags, thickness);
+            filled ? ((ImDrawList*)UserData)->AddRectFilled(startpos, endpos, color, radius, drawflags) :
+                ((ImDrawList*)UserData)->AddRect(startpos, endpos, color, radius, drawflags, thickness);
+        }
     }
 
     void ImGuiRenderer::DrawRectGradient(ImVec2 startpos, ImVec2 endpos, uint32_t topleftcolor, uint32_t toprightcolor, uint32_t bottomrightcolor, uint32_t bottomleftcolor)

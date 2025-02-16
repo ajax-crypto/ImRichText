@@ -177,6 +177,7 @@ namespace ImRichText
 
     enum BoxCorner
     {
+        NoCorners = 0,
         TopLeftCorner = 1,
         TopRightCorner = 2,
         BottomRightCorner = 4,
@@ -188,7 +189,8 @@ namespace ImRichText
     {
         Border top, left, bottom, right;
         float radius = 0.f;
-        int rounding = BoxCorner::AllCorners;
+        int rounding = BoxCorner::NoCorners;
+        bool isUniform = false;
 
         float h() const { return left.thickness + right.thickness; }
         float v() const { return top.thickness + bottom.thickness; }
