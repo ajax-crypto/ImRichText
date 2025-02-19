@@ -13,10 +13,13 @@
 
 #ifdef _DEBUG
 #include <cstdio>
+#pragma warning( push )
+#pragma warning( disable : 4244)
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <Windows.h>
+#undef ERROR
 #define ERROR(FMT, ...) { \
     CONSOLE_SCREEN_BUFFER_INFO cbinfo; \
     auto h = GetStdHandle(STD_ERROR_HANDLE); \
@@ -1317,7 +1320,7 @@ namespace ImRichText
             if (token.Type == TokenType::Text)
             {
                 currpos += std::snprintf(buffer + currpos, bufsz - currpos, "\n\nFont.family         : %.*s\n"
-                    "Font.size           : %.2fpx\nFont.bold           : %s\nFont.italics        : %f\n"
+                    "Font.size           : %.2fpx\nFont.bold           : %s\nFont.italics        : %s\n"
                     "Font.underline      : %s\n"
                     "Font.strike         : %s\n"
                     "Font.wrap           : %s", (int)style.font.family.size(), style.font.family.data(), style.font.size,

@@ -2,7 +2,7 @@
 
 #ifdef IM_RICHTEXT_TARGET_IMGUI
 #include "imgui_internal.h"
-#elif defined(IM_RIXHTEXT_TARGET_BLEND2D)
+#elif defined(IM_RICHTEXT_TARGET_BLEND2D)
 #include <blend2d.h>
 #endif
 #include "imrichtextutils.h"
@@ -55,7 +55,7 @@ namespace ImRichText
         void HandleHover(bool hovered);
     };
 
-#elif defined(IM_RIXHTEXT_TARGET_BLEND2D)
+#elif defined(IM_RICHTEXT_TARGET_BLEND2D)
 
     struct Blend2DRenderer final : public IRenderer
     {

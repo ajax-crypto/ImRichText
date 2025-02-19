@@ -11,20 +11,9 @@
 *.gch
 *.pch
 
-# Compiled Dynamic libraries
-*.so
-*.dylib
-*.dll
-
 # Fortran module files
 *.mod
 *.smod
-
-# Compiled Static libraries
-*.lai
-*.la
-*.a
-*.lib
 
 # Executables
 *.exe
@@ -49,4 +38,4 @@
 *.iobj
 *.ipdb
 
-examples/win32/ImRichTe.4aa4dee2/
+examples/win32/ImRichTe.*/
