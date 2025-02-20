@@ -6,10 +6,6 @@
 #include "imgui.h"
 #endif
 
-#if defined(IM_RICHTEXT_TARGET_BLEND2D)
-struct BLFont;
-#endif
-
 /*
     This file is optional, provides a default cached
     font loading/caching mechanism that is used by the
