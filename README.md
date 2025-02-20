@@ -7,16 +7,14 @@
 
 Implementation of Rich Text Rendering for **ASCII text only** akin to Qt support for it. Use it as follows:
 ```c++
-// Do not cache anything
-std::string rtf = "<blink>This is blinking</blink>"
+auto id1 = ImRichText::CreateRichText("<blink>This is blinking</blink>"
     "<marquee>This is moving...</marquee>"
     "<meter value='3' max='10'></meter>"
     "<s><q>Quotation </q><cite>Citation</cite></s>"
     "<br>Powered by: <a href='https://https://github.com/ajax-crypto/ImRichText'>ImRichText</a>"
-    "<ul style='font-size: 36px;'><li>item</li><li>item</li></ul>";
+    "<ul style='font-size: 36px;'><li>item</li><li>item</li></ul>");
 
-// Create rich text with cacehable drawables
-auto id = ImRichText::CreateRichText("2<sup>2</sup> equals 4  <hr style=\"height: 4px; color: sienna;\"/>"
+auto id2 = ImRichText::CreateRichText("2<sup>2</sup> equals 4  <hr style=\"height: 4px; color: sienna;\"/>"
     "<p style=\"color: rgb(150, 0, 0);\">Paragraph <b>bold <i>italics</i> bold2 </b></p>"
     "<h1 style=\"color: darkblue;\">Heading&Tab;</h1>"
     "<span style='background: teal; color: white;'>White on Teal</span><br/>"
@@ -24,18 +22,22 @@ auto id = ImRichText::CreateRichText("2<sup>2</sup> equals 4  <hr style=\"height
 
 ImRichText::DefaultConfigParams params;
 params.Bounds = { -1.f, -1.f };
-params.defaultFontSize = 24.f;
+params.DefaultFontSize = 24.f;
 auto config = ImRichText::GetDefaultConfig(params);
 
 #ifdef IM_RICHTEXT_TARGET_IMGUI
+
 ImRichText::ImGuiRenderer renderer{ *config };
 ImRichText::ImGuiGLFWPlatform platform;
 
 config->Renderer = &renderer;
 config->Platform = &platform;
+
 #elif defined(IM_RICHTEXT_TARGET_BLEND2D)
+
 Blend2DRenderer renderer{ context };
 config->Renderer = &renderer;
+
 #endif
 
 config->ListItemBullet = ImRichText::BulletType::Arrow;
@@ -47,10 +49,10 @@ while (<event-loop>)
     {
         // ... other widgets
         ImRichText::GetCurrentConfig()->DefaultBgColor = ImColor{ 255, 255, 255 };
-        ImRichText::Show(rtf.data(), rtf.data() + rtf.size());
+        ImRichText::Show(id1);
 
         ImRichText::GetCurrentConfig()->DefaultBgColor = ImColor{ 200, 200, 200 };
-        ImRichText::Show(id);
+        ImRichText::Show(id2);
         // ... other widgets
     }
 }
