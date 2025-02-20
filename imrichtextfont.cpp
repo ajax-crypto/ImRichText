@@ -137,6 +137,14 @@ namespace ImRichText
             "c:\\Windows\\Fonts\\segoeuii.ttf",
             "c:\\Windows\\Fonts\\segoeuiz.ttf"
             }, sz, fconfig);
+#elif __linux__
+        LoadFonts(IM_RICHTEXT_DEFAULT_FONTFAMILY, {
+            "/usr/share/fonts/open-sans/OpenSans-Regular.ttf",
+            "/usr/share/fonts/open-sans/OpenSans-Light.ttf",
+            "/usr/share/fonts/open-sans/OpenSans-Bold.ttf",
+            "/usr/share/fonts/open-sans/OpenSans-Italic.ttf",
+            "/usr/share/fonts/open-sans/OpenSans-BoldItalic.ttf"
+            }, sz, fconfig);
 #endif
         // TODO: Add default fonts for other platforms
     }
@@ -150,6 +158,14 @@ namespace ImRichText
             "c:\\Windows\\Fonts\\consolab.ttf",
             "c:\\Windows\\Fonts\\consolai.ttf",
             "c:\\Windows\\Fonts\\consolaz.ttf"
+            }, sz, fconfig);
+#elif __linux__
+        LoadFonts(IM_RICHTEXT_DEFAULT_FONTFAMILY, {
+            "/usr/share/fonts/liberation-mono/LiberationMono-Regular.ttf",
+            "",
+            "/usr/share/fonts/liberation-mono/LiberationMono-Bold.ttf",
+            "/usr/share/fonts/liberation-mono/LiberationMono-Italic.ttf",
+            "/usr/share/fonts/liberation-mono/LiberationMono-BoldItalic.ttf"
             }, sz, fconfig);
 #endif
         // TODO: Add default fonts for other platforms
@@ -167,6 +183,14 @@ namespace ImRichText
             "c:\\Windows\\Fonts\\segoeuii.ttf",
             "c:\\Windows\\Fonts\\segoeuiz.ttf"
             }, sz);
+#elif __linux__
+        LoadFonts(IM_RICHTEXT_DEFAULT_FONTFAMILY, {
+            "/usr/share/fonts/open-sans/OpenSans-Regular.ttf",
+            "/usr/share/fonts/open-sans/OpenSans-Light.ttf",
+            "/usr/share/fonts/open-sans/OpenSans-Bold.ttf",
+            "/usr/share/fonts/open-sans/OpenSans-Italic.ttf",
+            "/usr/share/fonts/open-sans/OpenSans-BoldItalic.ttf"
+            }, sz);
 #endif
         // TODO: Add default fonts for other platforms
     }
@@ -181,6 +205,15 @@ namespace ImRichText
             "c:\\Windows\\Fonts\\consolai.ttf",
             "c:\\Windows\\Fonts\\consolaz.ttf"
             }, sz);
+#elif __linux__
+        LoadFonts(IM_RICHTEXT_DEFAULT_FONTFAMILY, {
+            "/usr/share/fonts/liberation-mono/LiberationMono-Regular.ttf",
+            "",
+            "/usr/share/fonts/liberation-mono/LiberationMono-Bold.ttf",
+            "/usr/share/fonts/liberation-mono/LiberationMono-Italic.ttf",
+            "/usr/share/fonts/liberation-mono/LiberationMono-BoldItalic.ttf"
+            }, sz);
+
 #endif
         // TODO: Add default fonts for other platforms
     }
