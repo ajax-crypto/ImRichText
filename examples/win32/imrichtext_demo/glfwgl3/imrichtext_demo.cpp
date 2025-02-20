@@ -10,6 +10,12 @@
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
+#include "../../../imrichtext.h"
+
+#ifdef _WIN32
+#include <Windows.h>
+#endif
+
 #include <stdio.h>
 #define GL_SILENCE_DEPRECATION
 #if defined(IMGUI_IMPL_OPENGL_ES2)
@@ -24,9 +30,9 @@
 // [Win32] Our example includes a copy of glfw3.lib pre-compiled with VS2010 to maximize ease of testing and compatibility with old VS compilers.
 // To link with VS2010-era libraries, VS2015+ requires linking with legacy_stdio_definitions.lib, which we do using this pragma.
 // Your own project should not be affected, as you are likely to link with a newer binary of GLFW that is adequate for your version of Visual Studio.
-#if defined(_MSC_VER) && (_MSC_VER >= 1900) && !defined(IMGUI_DISABLE_WIN32_FUNCTIONS)
-#pragma comment(lib, "legacy_stdio_definitions")
-#endif
+//#if defined(_MSC_VER) && (_MSC_VER >= 1900) && !defined(IMGUI_DISABLE_WIN32_FUNCTIONS)
+//#pragma comment(lib, "legacy_stdio_definitions")
+//#endif
 
 // This example can also compile and run with Emscripten! See 'Makefile.emscripten' for details.
 #ifdef __EMSCRIPTEN__
@@ -43,12 +49,7 @@ static void glfw_error_callback(int error, const char* description)
 #include <cctype>
 #include <stack>
 #include <charconv>
-#include "imgui.h"
-#include "imgui_internal.h"
-
-#pragma warning(disable: 4244)
 #include <string>
-#include "../../../imrichtext.h"
 
 class Application
 {
@@ -226,10 +227,10 @@ public:
         glfwDestroyWindow(m_window);
         glfwTerminate();
 #else
-                img.writeToFile("rtf.png");
+        img.writeToFile("rtf.png");
 #endif
 
-                return 0;
+        return 0;
     }
 
 private:
@@ -238,11 +239,15 @@ private:
     ImFont* m_defaultFont = nullptr;
 };
 
-#ifdef _DEBUG || __linux__
+#if !defined(_DEBUG) && defined(WIN32)
+int CALLBACK WinMain(
+    HINSTANCE   hInstance,
+    HINSTANCE   hPrevInstance,
+    LPSTR       lpCmdLine,
+    int         nCmdShow
+)
+#else
 int main(int argc, char** argv)
-#elif _WIN32
-#include <Windows.h>
-int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow)
 #endif
 {
     Application app;

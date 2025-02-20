@@ -2,7 +2,9 @@
 
 #include <string_view>
 
+#ifdef IM_RICHTEXT_TARGET_IMGUI
 #include "imgui.h"
+#endif
 
 #if defined(IM_RICHTEXT_TARGET_BLEND2D)
 struct BLFont;

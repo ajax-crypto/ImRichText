@@ -2,7 +2,8 @@
 
 #ifdef IM_RICHTEXT_TARGET_IMGUI
 #include "imgui_internal.h"
-#elif defined(IM_RICHTEXT_TARGET_BLEND2D)
+#endif
+#ifdef IM_RICHTEXT_TARGET_BLEND2D
 #include <blend2d.h>
 #endif
 #include "imrichtextutils.h"

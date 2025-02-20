@@ -1,16 +1,18 @@
 #include "imrichtextfont.h"
 #include "imrichtext.h"
-#if defined(IM_RICHTEXT_TARGET_IMGUI) && defined(IMGUI_ENABLE_FREETYPE)
+
+#ifdef IM_RICHTEXT_TARGET_IMGUI
+#ifdef IMGUI_ENABLE_FREETYPE
 #include "misc/freetype/imgui_freetype.h"
-#elif defined(IM_RICHTEXT_TARGET_BLEND2D)
+#endif
+#endif
+#ifdef IM_RICHTEXT_TARGET_BLEND2D
 #include "blend2d.h"
 #endif
 
 #include <unordered_set>
 #include <unordered_map>
 #include <map>
-
-// {family, style} -> { size } -> font
 
 namespace ImRichText
 {
@@ -33,8 +35,6 @@ namespace ImRichText
 #ifdef IM_RICHTEXT_TARGET_IMGUI
     static void LoadFont(ImGuiIO& io, FontFamily& family, FontType ft, float size, ImFontConfig config, int flag)
     {
-        //io.Fonts->Flags = io.Fonts->Flags | ImFontAtlasFlags_NoBakedLines;
-
         if (ft == FT_Normal)
         {
             auto font = family.Files.Files[FT_Normal].empty() ? nullptr :

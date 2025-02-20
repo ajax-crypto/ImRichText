@@ -280,7 +280,8 @@ namespace ImRichText
             ImGui::SetMouseCursor(ImGuiMouseCursor_Arrow);
     }
 
-#elif defined(IM_RICHTEXT_TARGET_BLEND2D)
+#endif
+#ifdef IM_RICHTEXT_TARGET_BLEND2D
 
     Blend2DRenderer::Blend2DRenderer(BLContext& ctx) : context{ ctx } {}
 

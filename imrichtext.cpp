@@ -11,10 +11,13 @@
 #include <chrono>
 #include <deque>
 
-#ifdef _DEBUG
-#include <cstdio>
+#ifdef _WIN32
 #pragma warning( push )
 #pragma warning( disable : 4244)
+#endif
+
+#ifdef _DEBUG
+#include <cstdio>
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -60,7 +63,7 @@ namespace ImRichText
         std::string richText;
         float scale = 1.f;
         float fontScale = 1.f;
-        ImColor bgcolor;
+        uint32_t bgcolor;
         bool contentChanged = false;
     };
 
@@ -118,7 +121,8 @@ namespace ImRichText
 
 #ifdef IM_RICHTEXT_TARGET_IMGUI
     static std::unordered_map<ImGuiContext*, std::deque<RenderConfig>> RenderConfigs;
-#elif defined(IM_RICHTEXT_TARGET_BLEND2D)
+#endif
+#ifdef IM_RICHTEXT_TARGET_BLEND2D
     static std::unordered_map<BLContext*, std::deque<RenderConfig>> RenderConfigs;
 #endif
     static RenderConfig DefaultRenderConfig;
@@ -133,6 +137,7 @@ namespace ImRichText
     static bool ShowBoundingBox = true;
 #else
     static const bool ShowOverlay = false;
+    static const bool ShowBoundingBox = false;
 #endif
 #endif
 
@@ -394,7 +399,8 @@ namespace ImRichText
 
         return config;
     }
-#elif defined(IM_RICHTEXT_TARGET_BLEND2D)
+#endif
+#ifdef IM_RICHTEXT_TARGET_BLEND2D
     [[nodiscard]] RenderConfig* GetRenderConfig(BLContext& ctx, RenderConfig* config = nullptr)
     {
         if (config != nullptr) return config;
@@ -2398,7 +2404,7 @@ namespace ImRichText
 
         if (it != RichTextMap.end())
         {
-            auto& drawdata = RichTextMap[richTextId];
+            auto& drawdata = it->second;
             auto config = GetRenderConfig();
 
             if (config != drawdata.config || config->Scale != drawdata.scale ||
@@ -2436,8 +2442,10 @@ namespace ImRichText
 
     bool ToggleOverlay()
     {
+#ifdef _DEBUG
         ShowOverlay = !ShowOverlay;
         ShowBoundingBox = !ShowBoundingBox;
+#endif
         return ShowOverlay;
     }
 #endif
