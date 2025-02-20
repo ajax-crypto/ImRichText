@@ -39,6 +39,7 @@ namespace ImRichText
         void DrawText(std::string_view text, ImVec2 pos, uint32_t color);
         void DrawText(std::string_view text, std::string_view family, ImVec2 pos, float sz, uint32_t color, FontType type);
         void DrawTooltip(ImVec2 pos, std::string_view text);
+        float EllipsisWidth(void* fontptr);
     };
 
     struct ImGuiPlatform final : public IPlatform
@@ -55,7 +56,8 @@ namespace ImRichText
         void HandleHover(bool hovered);
     };
 
-#elif defined(IM_RICHTEXT_TARGET_BLEND2D)
+#endif
+#ifdef IM_RICHTEXT_TARGET_BLEND2D
 
     struct Blend2DRenderer final : public IRenderer
     {
@@ -84,6 +86,7 @@ namespace ImRichText
         void DrawText(std::string_view text, ImVec2 pos, uint32_t color);
         void DrawText(std::string_view text, std::string_view family, ImVec2 pos, float sz, uint32_t color, FontType type);
         void DrawTooltip(ImVec2 pos, std::string_view text);
+        float EllipsisWidth(void* fontptr);
     };
 
 #endif

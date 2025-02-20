@@ -513,6 +513,7 @@ namespace ImRichText
             { "lightslategrey", ToRGBA(119, 136, 153) },
             { "lightsteelblue", ToRGBA(176, 196, 222) },
             { "lightyellow", ToRGBA(255, 255, 224) },
+            { "lilac", ToRGBA(200, 162, 200) },
             { "limegreen", ToRGBA(50, 255, 50) },
             { "linen", ToRGBA(250, 240, 230) },
             { "mediumaquamarine", ToRGBA(102, 205, 170) },
@@ -647,6 +648,7 @@ namespace ImRichText
         }
         else
             result.color = ExtractColor(input.substr(prev, idx), NamedColor, userData);
+        return result;
     }
     
     std::pair<std::string_view, bool> ExtractTag(const char* text, int end, char TagEnd,

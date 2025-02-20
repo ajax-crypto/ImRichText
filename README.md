@@ -117,19 +117,20 @@ loaded by `ImRichText::LoadFonts` functions before rendering.
 
 ## Immediate Goals
 * Word wrapping support
+* Support for class/id with stylesheets
 * Maybe add `<center>` and `<font>` tags? (These are deprecated in HTML5)
 * Add support for `margin`
 * Add support for line style (solid, dotted, dashed) for `border`
 * Implement support for vertical/horizontal text alignment including baseline alignment (May need to use FreeType backend)
 * Integration example with [Clay layout library](https://github.com/nicbarker/clay?tab=readme-ov-file)
 * Roman numerals for numbered lists
-* Radial gradient fills for backgrounds
 * Tables (`<table>`, `<tr>`, `<th>`, `<td>` tags)
 
 ## Future Goals
 * Use a library (roll your own?) to lookup font(s) based on requirements i.e. fuzzy match on family, etc.
 * Internationalization support by integrating [Harfbuzz](https://github.com/harfbuzz/harfbuzz) (Unicode Bidir algo)
 * Add ways to remove C++ standard library dependencies
+* Radial gradient fills for backgrounds
 * Text effects like "glow", "shadow", etc.
 
 ## Non-Goals

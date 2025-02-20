@@ -90,11 +90,7 @@ namespace ImRichText
 
     struct FontStyle
     {
-#ifdef IM_RICHTEXT_TARGET_IMGUI
-        ImFont* font = nullptr;
-#elif defined(IM_RICHTEXT_TARGET_BLEND2D)
-        BLFont* font = nullptr;
-#endif
+        void* font = nullptr; // Pointer to font object
         std::string_view family = IM_RICHTEXT_DEFAULT_FONTFAMILY;
         float size = 24.f;
         int32_t flags = FontStyleNone;
@@ -310,7 +306,8 @@ namespace ImRichText
     [[nodiscard]] RenderConfig* GetCurrentConfig();
     void PushConfig(const RenderConfig& config);
     void PopConfig();
-#elif defined(IM_RICHTEXT_TARGET_BLEND2D)
+#endif
+#ifdef IM_RICHTEXT_TARGET_BLEND2D
     [[nodiscard]] RenderConfig* GetCurrentConfig(BLContext& context);
     void PushConfig(const RenderConfig& config, BLContext& context);
     void PopConfig(BLContext& context);
@@ -332,7 +329,8 @@ namespace ImRichText
     bool Show(const char* text, const char* end = nullptr);
     bool Show(std::size_t richTextId);
     bool ToggleOverlay();
-#elif defined(IM_RICHTEXT_TARGET_BLEND2D)
+#endif
+#ifdef IM_RICHTEXT_TARGET_BLEND2D
     bool Show(BLContext& context, ImVec2 pos, const char* text, const char* end = nullptr);
     bool Show(BLContext& context, ImVec2 pos, std::size_t richTextId);
 #endif

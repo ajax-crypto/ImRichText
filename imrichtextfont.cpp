@@ -20,7 +20,8 @@ namespace ImRichText
         // Use sorted vector + lower_bound lookups?
 #ifdef IM_RICHTEXT_TARGET_IMGUI
         std::map<float, ImFont*> Fonts[FT_Total];
-#elif defined(IM_RICHTEXT_TARGET_BLEND2D)
+#endif
+#ifdef IM_RICHTEXT_TARGET_BLEND2D
         std::map<float, BLFont> Fonts[FT_Total];
         BLFontFace FontFace[FT_Total];
 #endif
@@ -83,8 +84,8 @@ namespace ImRichText
         return true;
     }
 
-#elif defined(IM_RICHTEXT_TARGET_BLEND2D)
-
+#endif
+#ifdef IM_RICHTEXT_TARGET_BLEND2D
     static void CreateFont(FontFamily& family, FontType ft, float size)
     {
         auto& face = family.FontFace[ft];
@@ -125,11 +126,8 @@ namespace ImRichText
     }
 #endif
 
-    static void LoadDefaultProportionalFont(float sz
 #ifdef IM_RICHTEXT_TARGET_IMGUI
-        , const ImFontConfig& fconfig
-#endif
-    )
+    static void LoadDefaultProportionalFont(float sz, const ImFontConfig& fconfig)
     {
 #ifdef _WIN32
         LoadFonts(IM_RICHTEXT_DEFAULT_FONTFAMILY, {
@@ -138,19 +136,12 @@ namespace ImRichText
             "c:\\Windows\\Fonts\\segoeuib.ttf",
             "c:\\Windows\\Fonts\\segoeuii.ttf",
             "c:\\Windows\\Fonts\\segoeuiz.ttf"
-            }, sz
-#ifdef IM_RICHTEXT_TARGET_IMGUI
-            , fconfig);
-#endif
+            }, sz, fconfig);
 #endif
         // TODO: Add default fonts for other platforms
     }
 
-    void LoadDefaultMonospaceFont(float sz
-#ifdef IM_RICHTEXT_TARGET_IMGUI
-        , const ImFontConfig& fconfig
-#endif
-    )
+    static void LoadDefaultMonospaceFont(float sz, const ImFontConfig& fconfig)
     {
 #ifdef _WIN32
         LoadFonts(IM_RICHTEXT_MONOSPACE_FONTFAMILY, {
@@ -159,20 +150,48 @@ namespace ImRichText
             "c:\\Windows\\Fonts\\consolab.ttf",
             "c:\\Windows\\Fonts\\consolai.ttf",
             "c:\\Windows\\Fonts\\consolaz.ttf"
-            }, sz
-#ifdef IM_RICHTEXT_TARGET_IMGUI
-            , fconfig);
-#endif
+            }, sz, fconfig);
 #endif
         // TODO: Add default fonts for other platforms
     }
+#endif
+
+#ifdef IM_RICHTEXT_TARGET_BLEND2D
+    static void LoadDefaultProportionalFont(float sz)
+    {
+#ifdef _WIN32
+        LoadFonts(IM_RICHTEXT_DEFAULT_FONTFAMILY, {
+            "c:\\Windows\\Fonts\\segoeui.ttf",
+            "c:\\Windows\\Fonts\\segoeuil.ttf",
+            "c:\\Windows\\Fonts\\segoeuib.ttf",
+            "c:\\Windows\\Fonts\\segoeuii.ttf",
+            "c:\\Windows\\Fonts\\segoeuiz.ttf"
+            }, sz);
+#endif
+        // TODO: Add default fonts for other platforms
+    }
+
+    static void LoadDefaultMonospaceFont(float sz)
+    {
+#ifdef _WIN32
+        LoadFonts(IM_RICHTEXT_MONOSPACE_FONTFAMILY, {
+            "c:\\Windows\\Fonts\\consola.ttf",
+            "",
+            "c:\\Windows\\Fonts\\consolab.ttf",
+            "c:\\Windows\\Fonts\\consolai.ttf",
+            "c:\\Windows\\Fonts\\consolaz.ttf"
+            }, sz);
+#endif
+        // TODO: Add default fonts for other platforms
+    }
+#endif
 
     bool LoadDefaultFonts(float sz, FontFileNames* names)
     {
 #ifdef IM_RICHTEXT_TARGET_IMGUI
         ImFontConfig fconfig;
-        fconfig.OversampleH = 2.0;
-        fconfig.OversampleV = 1.0;
+        fconfig.OversampleH = 2;
+        fconfig.OversampleV = 1;
         fconfig.RasterizerMultiply = sz <= 16.f ? 2.f : 1.f;
 #ifdef IMGUI_ENABLE_FREETYPE
         fconfig.FontBuilderFlags = ImGuiFreeTypeBuilderFlags_LightHinting;
@@ -191,7 +210,8 @@ namespace ImRichText
 #ifdef IM_RICHTEXT_TARGET_IMGUI
             LoadDefaultProportionalFont(sz, fconfig);
             LoadDefaultMonospaceFont(sz, fconfig);
-#elif defined(IM_RICHTEXT_TARGT_BLEND2D)
+#endif
+#ifdef IM_RICHTEXT_TARGET_BLEND2D
             LoadDefaultProportionalFont(sz);
             LoadDefaultMonospaceFont(sz);
 #endif
@@ -228,7 +248,8 @@ namespace ImRichText
                 files.Files[FT_BoldItalics] = copyFileName(names->Proportional.Files[FT_BoldItalics], fontpath, startidx);
 #ifdef IM_RICHTEXT_TARGET_IMGUI
                 LoadFonts(IM_RICHTEXT_DEFAULT_FONTFAMILY, files, sz, fconfig);
-#elif defined(IM_RICHTEXT_TARGT_BLEND2D)
+#endif
+#ifdef IM_RICHTEXT_TARGET_BLEND2D
                 LoadFonts(IM_RICHTEXT_DEFAULT_FONTFAMILY, files, sz);
 #endif
             }
@@ -236,7 +257,8 @@ namespace ImRichText
             {
 #ifdef IM_RICHTEXT_TARGET_IMGUI
                 LoadDefaultProportionalFont(sz, fconfig);
-#elif defined(IM_RICHTEXT_TARGT_BLEND2D)
+#endif
+#ifdef IM_RICHTEXT_TARGET_BLEND2D
                 LoadDefaultProportionalFont(sz);
 #endif
             }
@@ -249,7 +271,8 @@ namespace ImRichText
                 files.Files[FT_BoldItalics] = copyFileName(names->Monospace.Files[FT_BoldItalics], fontpath, startidx);
 #ifdef IM_RICHTEXT_TARGET_IMGUI
                 LoadFonts(IM_RICHTEXT_MONOSPACE_FONTFAMILY, files, sz, fconfig);
-#elif defined(IM_RICHTEXT_TARGT_BLEND2D)
+#endif
+#ifdef IM_RICHTEXT_TARGET_BLEND2D
                 LoadFonts(IM_RICHTEXT_MONOSPACE_FONTFAMILY, files, sz);
 #endif
             }
@@ -257,7 +280,8 @@ namespace ImRichText
             {
 #ifdef IM_RICHTEXT_TARGET_IMGUI
                 LoadDefaultMonospaceFont(sz, fconfig);
-#elif defined(IM_RICHTEXT_TARGT_BLEND2D)
+#endif
+#ifdef IM_RICHTEXT_TARGET_BLEND2D
                 LoadDefaultMonospaceFont(sz);
 #endif
             }
@@ -322,12 +346,7 @@ namespace ImRichText
         return famit;
     }
 
-#ifdef IM_RICHTEXT_TARGET_IMGUI
-    ImFont* 
-#elif defined(IM_RICHTEXT_TARGET_BLEND2D)
-    BLFont*
-#endif
-    GetFont(std::string_view family, float size, FontType ft, void*)
+    void* GetFont(std::string_view family, float size, FontType ft, void*)
     {
         auto famit = LookupFontFamily(family);
         const auto& fonts = famit->second.Fonts[ft];
@@ -342,12 +361,10 @@ namespace ImRichText
         return szit->second;
     }
 
-#ifdef IM_RICHTEXT_TARGET_IMGUI
-    ImFont* GetOverlayFont(const RenderConfig& config)
+    void* GetOverlayFont(const RenderConfig& config)
     {
         auto it = LookupFontFamily(IM_RICHTEXT_DEFAULT_FONTFAMILY);
         auto fontsz = config.DefaultFontSize * 0.8f * config.FontScale;
         return it->second.Fonts->lower_bound(fontsz)->second;
     }
-#endif
 }
