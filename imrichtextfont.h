@@ -39,7 +39,8 @@ namespace ImRichText
 
 #ifdef IM_RICHTEXT_TARGET_IMGUI
     bool LoadFonts(std::string_view family, const FontCollectionFile& files, float size, ImFontConfig config);
-#elif defined(IM_RICHTEXT_TARGET_BLEND2D)
+#endif
+#ifdef IM_RICHTEXT_TARGET_BLEND2D
     bool LoadFonts(std::string_view family, const FontCollectionFile& files, float size);
 #endif
 
@@ -47,10 +48,6 @@ namespace ImRichText
     bool LoadDefaultFonts(const std::initializer_list<float>& szs, FontFileNames* names = nullptr);
     bool LoadDefaultFonts(const RenderConfig& config);
 
-#ifdef IM_RICHTEXT_TARGET_IMGUI
-    [[nodiscard]] ImFont* GetFont(std::string_view family, float size, FontType type, void*);
-    [[nodiscard]] ImFont* GetOverlayFont(const RenderConfig& config);
-#elif defined(IM_RICHTEXT_TARGET_BLEND2D)
-    [[nodiscard]] BLFont* GetFont(std::string_view family, float size, FontType type, void*);
-#endif
+    [[nodiscard]] void* GetFont(std::string_view family, float size, FontType type, void*);
+    [[nodiscard]] void* GetOverlayFont(const RenderConfig& config);
 }

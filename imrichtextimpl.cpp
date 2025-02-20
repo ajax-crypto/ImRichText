@@ -197,7 +197,7 @@ namespace ImRichText
         auto font = GetFont(family, sz, type, nullptr);
 
         if (font != nullptr) {
-            ImGui::PushFont(font); return true;
+            ImGui::PushFont((ImFont*)font); return true;
         }
 
         return false;
@@ -236,7 +236,7 @@ namespace ImRichText
         auto font = GetFont(family, sz, type, nullptr);
 
         if (font != nullptr) {
-            ImGui::PushFont(font); popFont = true;
+            ImGui::PushFont((ImFont*)font); popFont = true;
         }
 
         ((ImDrawList*)UserData)->AddText(pos, color, text.data(), text.data() + text.size());
@@ -251,6 +251,11 @@ namespace ImRichText
             ImGui::SetTooltip("%.*s", (int)text.size(), text.data());
             ResetFont();
         }
+    }
+
+    float ImGuiRenderer::EllipsisWidth(void* fontptr)
+    {
+        return ((ImFont*)fontptr)->EllipsisWidth;
     }
 
     ImVec2 ImGuiPlatform::GetCurrentMousePos()

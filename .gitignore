@@ -39,3 +39,4 @@
 *.ipdb
 
 examples/win32/ImRichTe.*/
+/examples/win32/imrichtext_demo/.vs/imrichtext_demo/copilot-chat
