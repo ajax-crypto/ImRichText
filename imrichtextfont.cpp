@@ -14,6 +14,53 @@
 #include <unordered_map>
 #include <map>
 
+#ifdef _WIN32
+#define WINDOWS_DEFAULT_FONT \
+    "c:\\Windows\\Fonts\\segoeui.ttf", \
+    "c:\\Windows\\Fonts\\segoeuil.ttf",\
+    "c:\\Windows\\Fonts\\segoeuib.ttf",\
+    "c:\\Windows\\Fonts\\segoeuii.ttf",\
+    "c:\\Windows\\Fonts\\segoeuiz.ttf"
+
+#define WINDOWS_DEFAULT_MONOFONT \
+    "c:\\Windows\\Fonts\\consola.ttf",\
+    "",\
+    "c:\\Windows\\Fonts\\consolab.ttf",\
+    "c:\\Windows\\Fonts\\consolai.ttf",\
+    "c:\\Windows\\Fonts\\consolaz.ttf"
+
+#elif __linux__
+#define FEDORA_DEFAULT_FONT \
+    "/usr/share/fonts/open-sans/OpenSans-Regular.ttf",\
+    "/usr/share/fonts/open-sans/OpenSans-Light.ttf",\
+    "/usr/share/fonts/open-sans/OpenSans-Bold.ttf",\
+    "/usr/share/fonts/open-sans/OpenSans-Italic.ttf",\
+    "/usr/share/fonts/open-sans/OpenSans-BoldItalic.ttf"
+
+#define FEDORA_DEFAULT_MONOFONT \
+    "/usr/share/fonts/liberation-mono/LiberationMono-Regular.ttf",\
+    "",\
+    "/usr/share/fonts/liberation-mono/LiberationMono-Bold.ttf",\
+    "/usr/share/fonts/liberation-mono/LiberationMono-Italic.ttf",\
+    "/usr/share/fonts/liberation-mono/LiberationMono-BoldItalic.ttf"
+
+#define UBUNTU_DEFAULT_FONT \
+    "/usr/share/fonts/truetype/freefont/FreeSans.ttf",\
+    "",\
+    "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf",\
+    "/usr/share/fonts/truetype/freefont/FreeSansOblique.ttf",\
+    "/usr/share/fonts/truetype/freefont/FreeSansBoldOblique.ttf"
+
+#define UBUNTU_DEFAULT_MONOFONT \
+    "/usr/share/fonts/truetype/freefont/FreeMono.ttf",\
+    "",\
+    "/usr/share/fonts/truetype/freefont/FreeMonoBold.ttf",\
+    "/usr/share/fonts/truetype/freefont/FreeMonoOblique.ttf",\
+    "/usr/share/fonts/truetype/freefont/FreeMonoBoldOblique.ttf"
+
+#include <filesystem>
+#endif
+
 namespace ImRichText
 {
     struct FontFamily
@@ -130,21 +177,12 @@ namespace ImRichText
     static void LoadDefaultProportionalFont(float sz, const ImFontConfig& fconfig)
     {
 #ifdef _WIN32
-        LoadFonts(IM_RICHTEXT_DEFAULT_FONTFAMILY, {
-            "c:\\Windows\\Fonts\\segoeui.ttf",
-            "c:\\Windows\\Fonts\\segoeuil.ttf",
-            "c:\\Windows\\Fonts\\segoeuib.ttf",
-            "c:\\Windows\\Fonts\\segoeuii.ttf",
-            "c:\\Windows\\Fonts\\segoeuiz.ttf"
-            }, sz, fconfig);
+        LoadFonts(IM_RICHTEXT_DEFAULT_FONTFAMILY, { WINDOWS_DEFAULT_FONT }, sz, fconfig);
 #elif __linux__
-        LoadFonts(IM_RICHTEXT_DEFAULT_FONTFAMILY, {
-            "/usr/share/fonts/open-sans/OpenSans-Regular.ttf",
-            "/usr/share/fonts/open-sans/OpenSans-Light.ttf",
-            "/usr/share/fonts/open-sans/OpenSans-Bold.ttf",
-            "/usr/share/fonts/open-sans/OpenSans-Italic.ttf",
-            "/usr/share/fonts/open-sans/OpenSans-BoldItalic.ttf"
-            }, sz, fconfig);
+        std::filesystem::path fontdir = "/usr/share/fonts/open-sans";
+        std::filesystem::exists(fontdir) ?
+            LoadFonts(IM_RICHTEXT_DEFAULT_FONTFAMILY, { FEDORA_DEFAULT_FONT }, sz, fconfig) :
+            LoadFonts(IM_RICHTEXT_DEFAULT_FONTFAMILY, { UBUNTU_DEFAULT_FONT }, sz, fconfig);
 #endif
         // TODO: Add default fonts for other platforms
     }
@@ -152,21 +190,12 @@ namespace ImRichText
     static void LoadDefaultMonospaceFont(float sz, const ImFontConfig& fconfig)
     {
 #ifdef _WIN32
-        LoadFonts(IM_RICHTEXT_MONOSPACE_FONTFAMILY, {
-            "c:\\Windows\\Fonts\\consola.ttf",
-            "",
-            "c:\\Windows\\Fonts\\consolab.ttf",
-            "c:\\Windows\\Fonts\\consolai.ttf",
-            "c:\\Windows\\Fonts\\consolaz.ttf"
-            }, sz, fconfig);
+        LoadFonts(IM_RICHTEXT_MONOSPACE_FONTFAMILY, { WINDOWS_DEFAULT_MONOFONT }, sz, fconfig);
 #elif __linux__
-        LoadFonts(IM_RICHTEXT_DEFAULT_FONTFAMILY, {
-            "/usr/share/fonts/liberation-mono/LiberationMono-Regular.ttf",
-            "",
-            "/usr/share/fonts/liberation-mono/LiberationMono-Bold.ttf",
-            "/usr/share/fonts/liberation-mono/LiberationMono-Italic.ttf",
-            "/usr/share/fonts/liberation-mono/LiberationMono-BoldItalic.ttf"
-            }, sz, fconfig);
+        std::filesystem::path fontdir = "/usr/share/fonts/liberation-mono";
+        std::filesystem::exists(fontdir) ?
+            LoadFonts(IM_RICHTEXT_DEFAULT_FONTFAMILY, { FEDORA_DEFAULT_MONOFONT }, sz, fconfig) :
+            LoadFonts(IM_RICHTEXT_DEFAULT_FONTFAMILY, { UBUNTU_DEFAULT_MONOFONT }, sz, fconfig);
 #endif
         // TODO: Add default fonts for other platforms
     }
@@ -176,21 +205,12 @@ namespace ImRichText
     static void LoadDefaultProportionalFont(float sz)
     {
 #ifdef _WIN32
-        LoadFonts(IM_RICHTEXT_DEFAULT_FONTFAMILY, {
-            "c:\\Windows\\Fonts\\segoeui.ttf",
-            "c:\\Windows\\Fonts\\segoeuil.ttf",
-            "c:\\Windows\\Fonts\\segoeuib.ttf",
-            "c:\\Windows\\Fonts\\segoeuii.ttf",
-            "c:\\Windows\\Fonts\\segoeuiz.ttf"
-            }, sz);
+        LoadFonts(IM_RICHTEXT_DEFAULT_FONTFAMILY, { WINDOWS_DEFAULT_FONT }, sz);
 #elif __linux__
-        LoadFonts(IM_RICHTEXT_DEFAULT_FONTFAMILY, {
-            "/usr/share/fonts/open-sans/OpenSans-Regular.ttf",
-            "/usr/share/fonts/open-sans/OpenSans-Light.ttf",
-            "/usr/share/fonts/open-sans/OpenSans-Bold.ttf",
-            "/usr/share/fonts/open-sans/OpenSans-Italic.ttf",
-            "/usr/share/fonts/open-sans/OpenSans-BoldItalic.ttf"
-            }, sz);
+        std::filesystem::path fontdir = "/usr/share/fonts/open-sans";
+        std::filesystem::exists(fontdir) ?
+            LoadFonts(IM_RICHTEXT_DEFAULT_FONTFAMILY, { FEDORA_DEFAULT_FONT }, sz) :
+            LoadFonts(IM_RICHTEXT_DEFAULT_FONTFAMILY, { UBUNTU_DEFAULT_FONT }, sz);
 #endif
         // TODO: Add default fonts for other platforms
     }
@@ -198,28 +218,18 @@ namespace ImRichText
     static void LoadDefaultMonospaceFont(float sz)
     {
 #ifdef _WIN32
-        LoadFonts(IM_RICHTEXT_MONOSPACE_FONTFAMILY, {
-            "c:\\Windows\\Fonts\\consola.ttf",
-            "",
-            "c:\\Windows\\Fonts\\consolab.ttf",
-            "c:\\Windows\\Fonts\\consolai.ttf",
-            "c:\\Windows\\Fonts\\consolaz.ttf"
-            }, sz);
+        LoadFonts(IM_RICHTEXT_MONOSPACE_FONTFAMILY, { WINDOWS_DEFAULT_MONOFONT }, sz);
 #elif __linux__
-        LoadFonts(IM_RICHTEXT_DEFAULT_FONTFAMILY, {
-            "/usr/share/fonts/liberation-mono/LiberationMono-Regular.ttf",
-            "",
-            "/usr/share/fonts/liberation-mono/LiberationMono-Bold.ttf",
-            "/usr/share/fonts/liberation-mono/LiberationMono-Italic.ttf",
-            "/usr/share/fonts/liberation-mono/LiberationMono-BoldItalic.ttf"
-            }, sz);
-
+        std::filesystem::path fontdir = "/usr/share/fonts/liberation-mono";
+        std::filesystem::exists(fontdir) ?
+            LoadFonts(IM_RICHTEXT_DEFAULT_FONTFAMILY, { FEDORA_DEFAULT_MONOFONT }, sz) :
+            LoadFonts(IM_RICHTEXT_DEFAULT_FONTFAMILY, { UBUNTU_DEFAULT_MONOFONT }, sz);
 #endif
         // TODO: Add default fonts for other platforms
     }
 #endif
 
-    bool LoadDefaultFonts(float sz, FontFileNames* names)
+    bool LoadDefaultFonts(float sz, FontFileNames* names, bool skipProportional, bool skipMonospace)
     {
 #ifdef IM_RICHTEXT_TARGET_IMGUI
         ImFontConfig fconfig;
@@ -241,44 +251,44 @@ namespace ImRichText
         if (names == nullptr)
         {
 #ifdef IM_RICHTEXT_TARGET_IMGUI
-            LoadDefaultProportionalFont(sz, fconfig);
-            LoadDefaultMonospaceFont(sz, fconfig);
+            if (!skipProportional) LoadDefaultProportionalFont(sz, fconfig);
+            if (!skipMonospace) LoadDefaultMonospaceFont(sz, fconfig);
 #endif
 #ifdef IM_RICHTEXT_TARGET_BLEND2D
-            LoadDefaultProportionalFont(sz);
-            LoadDefaultMonospaceFont(sz);
+            if (!skipProportional) LoadDefaultProportionalFont(sz);
+            if (!skipMonospace) LoadDefaultMonospaceFont(sz);
 #endif
         }
         else
         {
 #if defined(_WIN32)
-            char fontpath[_MAX_PATH] = "c:\\Windows\\Fonts\\";
+            char baseFontPath[_MAX_PATH] = "c:\\Windows\\Fonts\\";
 #elif __APPLE__
-            char fontpath[_MAX_PATH] = "/Library/Fonts/";
+            char baseFontPath[_MAX_PATH] = "/Library/Fonts/";
 #elif __linux__
-            char fontpath[_MAX_PATH] = "/usr/share/fonts/truetype/";
+            char baseFontPath[_MAX_PATH] = "/usr/share/fonts/";
 #else
 #error "Platform unspported..."
 #endif
 
             if (!names->BasePath.empty())
             {
-                std::memset(fontpath, 0, _MAX_PATH);
+                std::memset(baseFontPath, 0, _MAX_PATH);
                 auto sz = std::min((int)names->BasePath.size(), _MAX_PATH);
-                strncpy_s(fontpath, names->BasePath.data(), sz);
-                fontpath[sz] = '\0';
+                strncpy_s(baseFontPath, names->BasePath.data(), sz);
+                baseFontPath[sz] = '\0';
             }
 
-            const int startidx = (int)std::strlen(fontpath);
+            const int startidx = (int)std::strlen(baseFontPath);
             FontCollectionFile files;
 
-            if (!names->Proportional.Files[FT_Normal].empty())
+            if (!skipProportional && !names->Proportional.Files[FT_Normal].empty())
             {
-                files.Files[FT_Normal] = copyFileName(names->Proportional.Files[FT_Normal], fontpath, startidx);
-                files.Files[FT_Light] = copyFileName(names->Proportional.Files[FT_Light], fontpath, startidx);
-                files.Files[FT_Bold] = copyFileName(names->Proportional.Files[FT_Bold], fontpath, startidx);
-                files.Files[FT_Italics] = copyFileName(names->Proportional.Files[FT_Italics], fontpath, startidx);
-                files.Files[FT_BoldItalics] = copyFileName(names->Proportional.Files[FT_BoldItalics], fontpath, startidx);
+                files.Files[FT_Normal] = copyFileName(names->Proportional.Files[FT_Normal], baseFontPath, startidx);
+                files.Files[FT_Light] = copyFileName(names->Proportional.Files[FT_Light], baseFontPath, startidx);
+                files.Files[FT_Bold] = copyFileName(names->Proportional.Files[FT_Bold], baseFontPath, startidx);
+                files.Files[FT_Italics] = copyFileName(names->Proportional.Files[FT_Italics], baseFontPath, startidx);
+                files.Files[FT_BoldItalics] = copyFileName(names->Proportional.Files[FT_BoldItalics], baseFontPath, startidx);
 #ifdef IM_RICHTEXT_TARGET_IMGUI
                 LoadFonts(IM_RICHTEXT_DEFAULT_FONTFAMILY, files, sz, fconfig);
 #endif
@@ -289,19 +299,19 @@ namespace ImRichText
             else
             {
 #ifdef IM_RICHTEXT_TARGET_IMGUI
-                LoadDefaultProportionalFont(sz, fconfig);
+                if (!skipProportional) LoadDefaultProportionalFont(sz, fconfig);
 #endif
 #ifdef IM_RICHTEXT_TARGET_BLEND2D
-                LoadDefaultProportionalFont(sz);
+                if (!skipProportional) LoadDefaultProportionalFont(sz);
 #endif
             }
 
-            if (!names->Monospace.Files[FT_Normal].empty())
+            if (!skipMonospace && !names->Monospace.Files[FT_Normal].empty())
             {
-                files.Files[FT_Normal] = copyFileName(names->Monospace.Files[FT_Normal], fontpath, startidx);
-                files.Files[FT_Bold] = copyFileName(names->Monospace.Files[FT_Bold], fontpath, startidx);
-                files.Files[FT_Italics] = copyFileName(names->Monospace.Files[FT_Italics], fontpath, startidx);
-                files.Files[FT_BoldItalics] = copyFileName(names->Monospace.Files[FT_BoldItalics], fontpath, startidx);
+                files.Files[FT_Normal] = copyFileName(names->Monospace.Files[FT_Normal], baseFontPath, startidx);
+                files.Files[FT_Bold] = copyFileName(names->Monospace.Files[FT_Bold], baseFontPath, startidx);
+                files.Files[FT_Italics] = copyFileName(names->Monospace.Files[FT_Italics], baseFontPath, startidx);
+                files.Files[FT_BoldItalics] = copyFileName(names->Monospace.Files[FT_BoldItalics], baseFontPath, startidx);
 #ifdef IM_RICHTEXT_TARGET_IMGUI
                 LoadFonts(IM_RICHTEXT_MONOSPACE_FONTFAMILY, files, sz, fconfig);
 #endif
@@ -312,15 +322,20 @@ namespace ImRichText
             else
             {
 #ifdef IM_RICHTEXT_TARGET_IMGUI
-                LoadDefaultMonospaceFont(sz, fconfig);
+                if (!skipMonospace) LoadDefaultMonospaceFont(sz, fconfig);
 #endif
 #ifdef IM_RICHTEXT_TARGET_BLEND2D
-                LoadDefaultMonospaceFont(sz);
+                if (!skipMonospace) LoadDefaultMonospaceFont(sz);
 #endif
             }
         }
 
         return true;
+    }
+
+    bool LoadDefaultFonts(float sz, FontFileNames* names)
+    {
+        return LoadDefaultFonts(sz, names, true, true);
     }
 
     bool LoadDefaultFonts(const std::initializer_list<float>& szs, FontFileNames* names)
@@ -336,7 +351,7 @@ namespace ImRichText
         return true;
     }
 
-    bool LoadDefaultFonts(const RenderConfig& config)
+    bool LoadDefaultFonts(const RenderConfig& config, bool skipProportional, bool skipMonospace)
     {
         // TODO: Handle absolute size font-size fonts (Look at imrichtext.cpp: PopulateSegmentStyle function)
         std::unordered_set<float> sizes;
@@ -348,7 +363,7 @@ namespace ImRichText
 
         for (auto sz : sizes)
         {
-            LoadDefaultFonts(sz, nullptr);
+            LoadDefaultFonts(sz, nullptr, skipProportional, skipMonospace);
         }
 
 #ifdef IM_RICHTEXT_TARGET_IMGUI

@@ -294,9 +294,11 @@ namespace ImRichText
     struct DefaultConfigParams
     {
         ImVec2 Bounds = { -1.f, -1.f };
-        float defaultFontSize = 24.f;
-        float fontScale = 1.f;
-        bool skipDefaultFontLoading = false;
+        float DefaultFontSize = 24.f;
+        float FontScale = 1.f;
+        bool SkipDefaultFontLoading = false;
+        bool SkipProportionalFont = false;
+        bool SkipMonospaceFont = true;
     };
 
     // RenderConfig related functions. In order to render rich text, such configs should be pushed/popped as desired 

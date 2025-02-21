@@ -9,7 +9,7 @@
 
 #if __has_include("imrichtextfont.h")
 #include "imrichtextfont.h"
-#define IM_RICHTEXT_DEFAULT_FONTS_AVAILABLE
+#define IM_RICHTEXT_BUNDLED_FONTLOADER
 #else
 namespace ImRichText
 {

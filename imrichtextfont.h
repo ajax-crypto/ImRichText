@@ -44,7 +44,7 @@ namespace ImRichText
 
     bool LoadDefaultFonts(float sz, FontFileNames* names = nullptr);
     bool LoadDefaultFonts(const std::initializer_list<float>& szs, FontFileNames* names = nullptr);
-    bool LoadDefaultFonts(const RenderConfig& config);
+    bool LoadDefaultFonts(const RenderConfig& config, bool skipProportional, bool skipMonospace);
 
     [[nodiscard]] void* GetFont(std::string_view family, float size, FontType type, void*);
     [[nodiscard]] void* GetOverlayFont(const RenderConfig& config);
