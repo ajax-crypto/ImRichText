@@ -129,7 +129,7 @@ public:
 
         ImRichText::DefaultConfigParams params;
         params.Bounds = { -1.f, -1.f };
-        params.defaultFontSize = 24.f;
+        params.DefaultFontSize = 24.f;
         auto config = ImRichText::GetDefaultConfig(params);
         config->ListItemBullet = ImRichText::BulletType::Arrow;
 

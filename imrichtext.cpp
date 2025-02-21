@@ -90,7 +90,7 @@ namespace ImRichText
     enum class TagType
     {
         Unknown,
-        Bold, Italics, Underline, Strikethrough, Mark, Small, Font,
+        Bold, Italics, Underline, Strikethrough, Mark, Small, Font, Center,
         Span, List, ListItem, Paragraph, Header, RawText, Blockquote, Quotation, Abbr, CodeBlock, Hyperlink,
         Subscript, Superscript,
         Hr, LineBreak,
@@ -514,8 +514,6 @@ namespace ImRichText
         return { width, height };
     }
 
-    
-
     SegmentData& AddSegment(DrawableLine& line, int styleIdx, const std::vector<StyleDescriptor>& styles, const RenderConfig& config)
     {
         if (!line.Segments.empty())
@@ -831,8 +829,6 @@ namespace ImRichText
         return newline;
     }
 
-    
-
     [[nodiscard]] std::pair<bool, bool> AddEscapeSequences(const std::string_view content,
         int curridx, const std::vector<std::pair<std::string_view, std::string_view>>& escapeCodes,
         char escapeStart, char escapeEnd, DrawableLine& line, int& start)
@@ -876,6 +872,7 @@ namespace ImRichText
             case TagType::Strikethrough:
             case TagType::Small:
             case TagType::LineBreak:
+            case TagType::Center:
                 return false;
             default: return true;
         }
@@ -977,15 +974,16 @@ namespace ImRichText
         return (int)styles.size() - 1;
     }
 
-    TagType GetTagType(std::string_view currTag)
+    TagType GetTagType(std::string_view currTag, bool isStrictHTML5)
     {
         if (AreSame(currTag, "b") || AreSame(currTag, "strong")) return TagType::Bold;
         else if (AreSame(currTag, "i") || AreSame(currTag, "em") || AreSame(currTag, "cite") || AreSame(currTag, "var")) 
             return TagType::Italics;
-        else if (AreSame(currTag, "font")) return TagType::Font;
+        else if (!isStrictHTML5 && AreSame(currTag, "font")) return TagType::Font;
         else if (AreSame(currTag, "hr")) return TagType::Hr;
         else if (AreSame(currTag, "br")) return TagType::LineBreak;
         else if (AreSame(currTag, "span")) return TagType::Span;
+        else if (!isStrictHTML5 && AreSame(currTag, "center")) return TagType::Center;
         else if (AreSame(currTag, "a")) return TagType::Hyperlink;
         else if (AreSame(currTag, "sub")) return TagType::Subscript;
         else if (AreSame(currTag, "sup")) return TagType::Superscript;
@@ -1002,7 +1000,7 @@ namespace ImRichText
         else if (AreSame(currTag, "blockquote")) return TagType::Blockquote;
         else if (AreSame(currTag, "code")) return TagType::CodeBlock;
         else if (AreSame(currTag, "abbr")) return TagType::Abbr;
-        else if (AreSame(currTag, "blink")) return TagType::Blink;
+        else if (!isStrictHTML5 && AreSame(currTag, "blink")) return TagType::Blink;
         else if (AreSame(currTag, "marquee")) return TagType::Marquee;
         else if (AreSame(currTag, "meter")) return TagType::Meter;
         return TagType::Unknown;
@@ -1080,6 +1078,11 @@ namespace ImRichText
         {
             style.blink = true;
             style.propsSpecified = style.propsSpecified | StyleBlink;
+        }
+        else if (tagType == TagType::Center)
+        {
+            style.alignment = TextAlignCenter;
+            style.propsSpecified = StyleHAlignment | StyleVAlignment;
         }
         
         if (style.propsSpecified != NoStyleChange)
@@ -1326,7 +1329,7 @@ namespace ImRichText
         const BackgroundShape& bgshape, const ListItemTokenDescriptor& listItem, 
         const RenderConfig& config, TooltipData& tooltip, AnimationData& animation)
     {
-        auto startpos = token.Bounds.start(initpos);
+        auto startpos = token.Bounds.start(initpos) + ImVec2{ token.Offset.left, token.Offset.top };
         auto endpos = token.Bounds.end(initpos);
 
         if ((style.blink && animation.isVisible) || !style.blink)
@@ -1662,12 +1665,12 @@ namespace ImRichText
         config->NamedColor = &GetColor;
         config->EscapeCodes.insert(config->EscapeCodes.end(), std::begin(EscapeCodes),
             std::end(EscapeCodes));
-        config->FontScale = params.fontScale;
-        config->DefaultFontSize = params.defaultFontSize;
-        config->MeterDefaultSize = { params.defaultFontSize * 5.0f, params.defaultFontSize };
+        config->FontScale = params.FontScale;
+        config->DefaultFontSize = params.DefaultFontSize;
+        config->MeterDefaultSize = { params.DefaultFontSize * 5.0f, params.DefaultFontSize };
 
-#ifdef IM_RICHTEXT_DEFAULT_FONTS_AVAILABLE
-        if (!params.skipDefaultFontLoading) LoadDefaultFonts(*config);
+#ifdef IM_RICHTEXT_BUNDLED_FONTLOADER
+        if (!params.SkipDefaultFontLoading) LoadDefaultFonts(*config, params.SkipProportionalFont, params.SkipMonospaceFont);
 #endif
         return config;
     }
@@ -1845,7 +1848,7 @@ namespace ImRichText
 
         LOG("Entering Tag: <%.*s>\n", (int)tag.size(), tag.data());
         _currTag = tag;
-        _currTagType = GetTagType(tag);
+        _currTagType = GetTagType(tag, _config.IsStrictHTML5);
         _currHasBackground = false;
         PopCurrentStyle();
             
@@ -2202,6 +2205,57 @@ namespace ImRichText
         for (auto& line : _result.ForegroundLines)
         {
             if (line.Marquee) line.Content.width = _maxWidth;
+
+            // Only apply alignment to lines which contain content from single tag
+            // Multi-tag lines can be aligned, but would require a general purpose
+            // HTML/CSS renderer, which is not a goal here
+            if (line.Segments.size() == 1u && !line.Segments.front().Tokens.empty())
+            {
+                auto& segment = line.Segments.front();
+                auto& style = _result.StyleDescriptors[segment.StyleIdx + 1];
+
+                // If complete text is already clipped/occluded, do not apply alignment
+                if (segment.Tokens.size() == 1u && segment.Tokens.front().Type == TokenType::Text &&
+                    segment.Tokens.front().VisibleTextSize < (int16_t)segment.Tokens.front().Content.size())
+                    continue;
+
+                if ((style.alignment & TextAlignHCenter) || (style.alignment & TextAlignRight)
+                    || (style.alignment & TextAlignJustify))
+                {
+                    float occupiedWidth = 0.f;
+                    for (const auto& token : segment.Tokens)
+                        occupiedWidth += token.Bounds.width;
+                    auto leftover = _maxWidth - occupiedWidth;
+
+                    for (auto& token : segment.Tokens)
+                    {
+                        if (style.alignment & TextAlignHCenter)
+                            token.Offset.left += leftover * 0.5f;
+                        else if (style.alignment & TextAlignRight)
+                            token.Offset.left += leftover;
+                        else if (style.alignment & TextAlignJustify)
+                            token.Offset.left += (leftover / (float)(segment.Tokens.size() + 1u));
+                    }
+                }
+
+                if ((style.alignment & TextAlignVCenter) || (style.alignment & TextAlignBottom))
+                {
+                    float occupiedHeight = 0.f;
+                    for (const auto& token : segment.Tokens)
+                        occupiedHeight = std::max(occupiedHeight, token.Bounds.height);
+
+                    for (auto& token : segment.Tokens)
+                    {
+                        if (style.alignment & TextAlignVCenter)
+                            token.Offset.top = (line.height() - occupiedHeight) * 0.5f;
+                        else if (style.alignment & TextAlignBottom)
+                            token.Offset.top = line.height() - occupiedHeight;
+                    }
+                }
+            }
+            else
+                ERROR("Cannot apply alignment to multi-tag lines\n[NOTE: If this feature is required, "
+                    "a general purpose HTML/CSS renderer should be used, which this library is not!]\n");
         }
 
         for (auto depth = 0; depth < IM_RICHTEXT_MAXDEPTH; ++depth)
