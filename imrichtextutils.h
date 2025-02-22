@@ -103,7 +103,7 @@ namespace ImRichText
         virtual void DrawText(std::string_view text, ImVec2 pos, uint32_t color) = 0;
         virtual void DrawText(std::string_view text, std::string_view family, ImVec2 pos, float sz, uint32_t color, FontType type) = 0;
         virtual void DrawTooltip(ImVec2 pos, std::string_view text) = 0;
-        virtual float EllipsisWidth(void* fontptr) = 0;
+        virtual float EllipsisWidth(void* fontptr);
 
         void DrawDefaultBullet(BulletType type, ImVec2 initpos, const BoundedBox& bounds, uint32_t color, float bulletsz);
     };

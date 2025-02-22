@@ -823,6 +823,11 @@ namespace ImRichText
         visitor.Finalize();
     }
 
+    float IRenderer::EllipsisWidth(void* fontptr)
+    {
+        return GetTextSize("...", fontptr).x;
+    }
+
     void IRenderer::DrawDefaultBullet(BulletType type, ImVec2 initpos, const BoundedBox& bounds, uint32_t color, float bulletsz)
     {
         switch (type)

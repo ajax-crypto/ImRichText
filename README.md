@@ -2,8 +2,7 @@
 
 ## 🚧 Work in Progress!
 
-*NOTE* : *This is not a general purpose HTML/CSS renderer, only the specified tags/properties below are targeted*
----
+**⚠ This is not a general purpose HTML/CSS renderer, only the specified tags/properties below are targeted**
 
 Implementation of Rich Text Rendering for **ASCII text only** akin to Qt support for it. Use it as follows:
 ```c++
@@ -89,8 +88,8 @@ The following subset of HTML tags/CSS properties are supported:
 | blink | Make current block of text blink | Yes |
 | marquee | Make current block of text scroll horizontally | Yes |
 | meter | Create a progress bar inline | Yes |
-| font | Specify custom font with family/size/weight/etc. | _Under progress_ |
-| center | Center align text | _Planning |
+| font | Specify custom font with family/size/weight/etc. | Yes |
+| center | Center align text | Yes |
 | blockquote | Blockquote as in HTML | _Under progress_ |
 | pre | Preformatted text with monospaced font | _Under progress_ |
 | code | Use monospace font for this block of text | _Under progress_ |
@@ -108,7 +107,11 @@ The following subset of HTML tags/CSS properties are supported:
 | list-style-type | (_Only for list items_) `circle`/`disk`/`square`/`custom`[^2] |
 | border/border-top/etc. | `2px solid gray`[^6] |
 | border-radius | `px`/`em` |
+| alignment | `left`/`right`/`center`/`justify` _(Horizontal text alignment)_ |
+| vertical-align | `top`/`bottom`/`center` _(Vertical text alignment)_ |
 | text-overflow | _Under progress_ |
+| whitespace | _Under progress_ |
+| box-shadow | _Under progress_ |
 
 In order to handle rich text as specified above, fonts need to be managed i.e. different family, weights, sizes, etc. 
 The library internally uses default fonts (on Windows, Segoe UI family for proportional and Consolas for monospace).
@@ -118,12 +121,12 @@ However, user can provide their own font provider through `IRenderer` interface.
 loaded by `ImRichText::LoadFonts` functions before rendering.
 
 ## Immediate Goals
-* Word wrapping support
+* Separate font manager interface from renderer
+* Word wrapping support _(Needs testing)_
 * Support for class/id with stylesheets
-* Maybe add `<center>` and `<font>` tags? (These are deprecated in HTML5)
 * Add support for `margin`
 * Add support for line style (solid, dotted, dashed) for `border`
-* Implement support for vertical/horizontal text alignment including baseline alignment (May need to use FreeType backend)
+* Implement baseline text alignment (May need to use FreeType backend)
 * Integration example with [Clay layout library](https://github.com/nicbarker/clay?tab=readme-ov-file)
 * Roman numerals for numbered lists
 * Tables (`<table>`, `<tr>`, `<th>`, `<td>` tags)
@@ -143,6 +146,8 @@ loaded by `ImRichText::LoadFonts` functions before rendering.
 
 ## Build Dependencies
 The library depends on ImGui and C++17 standard library. It can be compiled using any C++17 compiler.
+The following headers are used: `vector`, `deque`, `unordered_map`, `tuple`, `chrono`, `string`, `optional`.
+If using the default font manager, additionally, `map`, `unordered_set`, `filesystem` (Linux only) is also used.
 
 ## Build Macros 
 In order to customize certain behavior at build-time, the following macros can be used
@@ -164,11 +169,11 @@ When `_DEBUG` macro is defined, if a console is present, error messages will be 
 with the parsing state i.e. entering/exiting tags. Custom properties or unknonw tags are ignored, but reported.
 
 ## Contributions
-Since it is work in progress, no contributions are accepted at the moment. Once I stabilize and create a release, contributions
-will be accepted! In the meantime, feel free to browse the source...
+Contributions welcome, especially in getting Linux/MacOS examples added! 
+Prefer build.sh build scripts, over cmake/ninja/etc. solutions.
 
 ## About the Implementation
-The following interfaces are available to port it to any graphics API desired:
+The following interface is available to port it to any graphics API desired:
 
 ```c++
 struct IRenderer
@@ -196,6 +201,7 @@ struct IRenderer
     virtual void DrawText(std::string_view text, ImVec2 pos, uint32_t color) = 0;
     virtual void DrawText(std::string_view text, std::string_view family, ImVec2 pos, float sz, uint32_t color, FontType type) = 0;
     virtual void DrawTooltip(ImVec2 pos, std::string_view text) = 0;
+    virtual float EllipsisWidth(void* fontptr);
 
     void DrawDefaultBullet(BulletType type, ImVec2 initpos, const BoundedBox& bounds, uint32_t color, float bulletsz);
 };
@@ -214,9 +220,11 @@ struct IPlatform
     virtual void HandleHover(bool) = 0;
 };
 ```
+*NOTE* : Platform integration is optional, and can be omitted. If omitted, `<blink>`, `<marquee>` will not animate, and,
+`a` hyperlinks and tooltips will not be functional.
 
 Default implementations are provided for [ImGui](https://github.com/ocornut/imgui) and [Blend2D](https://github.com/blend2d/blend2d) (_Under progress_)
-Platform integration is optional with a default implementation provided for ImGui + GLFW (available in examples directory)
+Platform integration implementation provided for ImGui + GLFW (available in examples directory)
 
 [^1]: Nested subscript/superscript is untested at the moment
 [^2]: Custom bullets are also possible, set `RenderConfig::DrawBullet` function pointer and `list-style-type` property to `custom`

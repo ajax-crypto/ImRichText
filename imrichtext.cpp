@@ -773,9 +773,9 @@ namespace ImRichText
                         {
                             while (startx > width)
                             {
-                                auto partial = token.Content.substr(token.VisibleTextSize - 2);
+                                auto partial = token.Content.substr(token.VisibleTextSize - (int16_t)2);
                                 startx -= config.Renderer->GetTextSize(partial, style.font.font).x;
-                                token.VisibleTextSize -= 1;
+                                token.VisibleTextSize -= (int16_t)1;
                             }
 
                             //token.AddEllipsis = true;
@@ -1716,7 +1716,7 @@ namespace ImRichText
         if (token.Type == TokenType::Text)
         {
             auto sz = config.Renderer->GetTextSize(token.Content, style.font.font);
-            token.VisibleTextSize = (int)token.Content.size();
+            token.VisibleTextSize = (int16_t)token.Content.size();
             token.Bounds.width = sz.x;
             token.Bounds.height = sz.y;
         }
@@ -2227,14 +2227,18 @@ namespace ImRichText
                         occupiedWidth += token.Bounds.width;
                     auto leftover = _maxWidth - occupiedWidth;
 
-                    for (auto& token : segment.Tokens)
+                    for (auto tidx = 0; tidx < (int)segment.Tokens.size(); ++tidx)
                     {
+                        auto& token = segment.Tokens[tidx];
                         if (style.alignment & TextAlignHCenter)
                             token.Offset.left += leftover * 0.5f;
                         else if (style.alignment & TextAlignRight)
                             token.Offset.left += leftover;
                         else if (style.alignment & TextAlignJustify)
-                            token.Offset.left += (leftover / (float)(segment.Tokens.size() + 1u));
+                        {
+                            if (tidx == (int)(segment.Tokens.size() - 1u)) break;
+                            token.Offset.right += (leftover / (float)(segment.Tokens.size() - 1u));
+                        }
                     }
                 }
 

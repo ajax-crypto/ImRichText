@@ -40,7 +40,7 @@ namespace ImRichText
         void DrawText(std::string_view text, ImVec2 pos, uint32_t color);
         void DrawText(std::string_view text, std::string_view family, ImVec2 pos, float sz, uint32_t color, FontType type);
         void DrawTooltip(ImVec2 pos, std::string_view text);
-        float EllipsisWidth(void* fontptr);
+        float EllipsisWidth(void* fontptr) override;
     };
 
     struct ImGuiPlatform final : public IPlatform
