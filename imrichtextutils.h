@@ -2,6 +2,7 @@
 
 #include <string_view>
 #include <optional>
+#include <stdint.h>
 
 #ifdef IM_RICHTEXT_TARGET_IMGUI
 #include "imgui.h"
@@ -16,6 +17,14 @@ namespace ImRichText
     enum FontType
     {
         FT_Normal, FT_Light, FT_Bold, FT_Italics, FT_BoldItalics, FT_Total
+    };
+
+    enum class TextContentCharset
+    {
+        ASCII,        // Standard ASCII characters (0-127)
+        ASCIISymbols, // Extended ASCII + certain common characters i.e. math symbols, arrows, ™, etc.
+        UTF8Simple,   // Simple UTF8 encoded text without support for GPOS/kerning/ligatures (libgrapheme)
+        UnicodeBidir  // Standard compliant Unicode BiDir algorithm implementation (Harfbuzz)
     };
 }
 #endif
@@ -67,6 +76,33 @@ namespace ImRichText
         Custom
     };
 
+    template <typename T>
+    struct Span
+    {
+        T const* source = nullptr;
+        int sz = 0;
+
+        template <typename ItrT>
+        Span(ItrT start, ItrT end)
+            : source{ &(*start) }, sz{ (int)(end - start) }
+        {}
+
+        Span(T const* from, int size) : source{ from }, sz{ size } {}
+
+        explicit Span(T const & el) : source{ &el }, sz{ 1 } {}
+
+        T const* begin() const { return source; }
+        T const* end() const { return source + sz; }
+
+        const T& front() const { return *source; }
+        const T& back() const { return *(source + sz - 1); }
+
+        const T& operator[](int idx) const { return source[idx]; }
+    };
+
+    template <typename T> Span(T* from, int size) -> Span<T>;
+    template <typename T> Span(T&) -> Span<T>;
+
     struct BoundedBox
     {
         float top = 0.f, left = 0.f;
@@ -99,6 +135,7 @@ namespace ImRichText
         virtual bool SetCurrentFont(std::string_view family, float sz, FontType type) { return false; };
         virtual bool SetCurrentFont(void* fontptr) { return false; };
         virtual void ResetFont() {};
+
         virtual ImVec2 GetTextSize(std::string_view text, void* fontptr) = 0;
         virtual void DrawText(std::string_view text, ImVec2 pos, uint32_t color) = 0;
         virtual void DrawText(std::string_view text, std::string_view family, ImVec2 pos, float sz, uint32_t color, FontType type) = 0;
@@ -108,14 +145,57 @@ namespace ImRichText
         void DrawDefaultBullet(BulletType type, ImVec2 initpos, const BoundedBox& bounds, uint32_t color, float bulletsz);
     };
 
+    enum class WhitespaceCollapseBehavior
+    {
+        Collapse, Preserve, PreserveBreaks, PreserveSpaces, BreakSpaces
+    };
+
+    enum class WordBreakBehavior
+    {
+        Normal, BreakAll, KeepAll, AutoPhrase, BreakWord
+    };
+
+    struct ITextShaper
+    {
+        struct WordProperty
+        {
+            void* font;
+            WordBreakBehavior wb;
+        };
+
+        using StyleAccessor = WordProperty (*)(int wordIdx, void* userdata);
+        using LineRecorder = void (*)(int wordIdx, void* userdata);
+        using WordRecorder = void (*)(int wordIdx, std::string_view, ImVec2 dim, void* userdata);
+
+        virtual void ShapeText(float availwidth, const Span<std::string_view>& words,
+            StyleAccessor accessor, LineRecorder lineRecorder, WordRecorder wordRecorder, 
+            const RenderConfig& config, void* userdata) = 0;
+        virtual void SegmentText(std::string_view content, WhitespaceCollapseBehavior wsbhv, 
+            LineRecorder lineRecorder, WordRecorder wordRecorder, const RenderConfig& config, 
+            bool ignoreLineBreaks, bool ignoreEscapeCodes, void* userdata) = 0;
+
+        virtual int NextGraphemeCluster(const char* from, const char* end) const = 0;
+        virtual int NextWordBreak(const char* from, const char* end) const = 0;
+        virtual int NextLineBreak(const char* from, const char* end) const = 0;
+
+        // TODO: Implement these...
+        int SkipSuccessiveWordBreaks(const char* from, const char* end) const;
+        int SkipSuccessiveLineBreaks(const char* from, const char* end) const;
+    };
+
     // Implement this interface to handle parsed rich text
+    // NOTE: If you are questioning why this interface if there is
+    // only one implementation in the codebase, you are right!
+    // However, this interface along with ImRichText::ParseRichText
+    // function can be used for parsing HTML correctly for any purpose
+    // you see fit, hence the code can be copied and used easily!
+    // ADDENDUM: There are some larger goals surrounding this...
     struct ITagVisitor
     {
         virtual bool TagStart(std::string_view tag) = 0;
         virtual bool Attribute(std::string_view name, std::optional<std::string_view> value) = 0;
         virtual bool TagStartDone() = 0;
         virtual bool Content(std::string_view content) = 0;
-        virtual bool PreFormattedContent(std::string_view content) = 0;
         virtual bool TagEnd(std::string_view tag, bool selfTerminating) = 0;
         virtual void Finalize() = 0;
 

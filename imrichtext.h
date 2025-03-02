@@ -43,6 +43,7 @@ namespace ImRichText
     enum class TokenType
     {
         Text,
+        ElidedText,
         ListItemBullet,
         ListItemNumbered,
         HorizontalRule,
@@ -84,8 +85,8 @@ namespace ImRichText
         FontStyleLight = 1 << 3,
         FontStyleStrikethrough = 1 << 4,
         FontStyleUnderline = 1 << 5,
-        FontStyleNoWrap = 1 << 6,
-        FontStyleOverflowEllipsis = 1 << 7,
+        FontStyleOverflowEllipsis = 1 << 6,
+        FontStyleNoWrap = 1 << 7
     };
 
     struct FontStyle
@@ -125,8 +126,12 @@ namespace ImRichText
         StyleBorderRadius = 1 << 16,
         StyleCellSpacing = 1 << 17,
         StyleBlink = 1 << 18,
-        StyleNoWrap = 1 << 19,
+        StyleTextWrap = 1 << 19,
         StyleBoxShadow = 1 << 20,
+        StyleWordBreak = 1 << 21,
+        StyleWhitespaceCollapse = 1 << 22,
+        StyleWhitespace = 1 << 23,
+        StyleTextOverflow = 1 << 24
     };
 
     enum TextAlignment
@@ -149,6 +154,8 @@ namespace ImRichText
         float height = 0;
         float width = 0;
         FontStyle font;
+        WordBreakBehavior wbbhv = WordBreakBehavior::Normal;
+        WhitespaceCollapseBehavior wscbhv = WhitespaceCollapseBehavior::Collapse;
         ListStyle list;
         FourSidedMeasure padding;
         FourSidedMeasure border;
@@ -159,7 +166,6 @@ namespace ImRichText
         bool blink = false;
     };
 
-    // TODO: Can we remove this? Segmentation is not technically required...
     struct SegmentData
     {
         std::vector<Token> Tokens;
@@ -222,11 +228,9 @@ namespace ImRichText
         char EscapeSeqEnd = ';';
         std::string_view CommentStart = "!--"; // UNUSED
         std::string_view CommentEnd = "--"; // UNUSED
-        std::vector<std::pair<std::string_view, std::string_view>> EscapeCodes;
 
         float  LineGap = 5;
-        ImVec2 Bounds;
-        bool   WordWrap = false;
+        bool   WordWrap = true;
 
         int   ParagraphStop = 4;
         int   TabStop = 4;
@@ -235,7 +239,7 @@ namespace ImRichText
         BulletType ListItemBullet = BulletType::FilledCircle;
 
         std::string_view DefaultFontFamily = IM_RICHTEXT_DEFAULT_FONTFAMILY;
-        float    DefaultFontSize = 20;
+        float    DefaultFontSize = 24.f;
         uint32_t DefaultFgColor = IM_COL32_BLACK;
         uint32_t DefaultBgColor = IM_COL32_WHITE;
         uint32_t MarkHighlight = ToRGBA(255, 255, 0);
@@ -244,12 +248,13 @@ namespace ImRichText
         uint32_t (*NamedColor)(const char*, void*) = nullptr;
         IPlatform* Platform = nullptr;
         IRenderer* Renderer = nullptr;
+        ITextShaper* TextShaper = nullptr;
 
 #ifdef _DEBUG
         IRenderer* OverlayRenderer = nullptr;
 #endif
 
-        float    HFontSizes[6] = { 36, 32, 24, 20, 16, 12 };
+        float    HFontSizes[6] = { 48.f, 36.f, 24.f * 1.17f, 24.f, 0.83f * 24.f, 0.67f * 24.f };
         uint32_t HeaderLineColor = ToRGBA(128, 128, 128, 255);
 
         uint32_t BlockquoteBar = ToRGBA(0.25f, 0.25f, 0.25f);
@@ -293,31 +298,28 @@ namespace ImRichText
 
     struct DefaultConfigParams
     {
-        ImVec2 Bounds = { -1.f, -1.f };
         float DefaultFontSize = 24.f;
         float FontScale = 1.f;
-        bool SkipDefaultFontLoading = false;
-        bool SkipProportionalFont = false;
-        bool SkipMonospaceFont = true;
+        uint64_t FontLoadFlags = FLT_Proportional;
+        TextContentCharset Charset = TextContentCharset::ASCII;
     };
 
     // RenderConfig related functions. In order to render rich text, such configs should be pushed/popped as desired 
     [[nodiscard]] RenderConfig* GetDefaultConfig(const DefaultConfigParams& params);
 
+    // Create the correct text shaper engine based on charset support
+    [[nodiscard]] ITextShaper* CreateTextShaper(TextContentCharset charset);
+
 #ifdef IM_RICHTEXT_TARGET_IMGUI
     [[nodiscard]] RenderConfig* GetCurrentConfig();
-    void PushConfig(const RenderConfig& config);
+    void PushConfig(RenderConfig& config);
     void PopConfig();
 #endif
 #ifdef IM_RICHTEXT_TARGET_BLEND2D
     [[nodiscard]] RenderConfig* GetCurrentConfig(BLContext& context);
-    void PushConfig(const RenderConfig& config, BLContext& context);
+    void PushConfig(RenderConfig& config, BLContext& context);
     void PopConfig(BLContext& context);
 #endif
-
-    // Get list of drawables from rich text
-    [[nodiscard]] Drawables GetDrawables(const char* text, const char* textend, const RenderConfig& config);
-    [[nodiscard]] ImVec2 GetBounds(const Drawables& drawables, ImVec2 bounds);
 
     // Create cacheable rich text content
     [[nodiscard]] std::size_t CreateRichText(const char* text, const char* end = nullptr);
@@ -326,14 +328,13 @@ namespace ImRichText
     void ClearAllRichTexts();
 
 #ifdef IM_RICHTEXT_TARGET_IMGUI
-    bool Show(ImVec2 pos, const char* text, const char* end = nullptr);
-    bool Show(ImVec2 pos, std::size_t richTextId);
-    bool Show(const char* text, const char* end = nullptr);
-    bool Show(std::size_t richTextId);
+    [[nodiscard]] ImVec2 GetBounds(std::size_t richTextId);
+    bool Show(ImVec2 pos, std::size_t richTextId, std::optional<ImVec2> sz = std::nullopt);
+    bool Show(std::size_t richTextId, std::optional<ImVec2> sz = std::nullopt);
     bool ToggleOverlay();
 #endif
 #ifdef IM_RICHTEXT_TARGET_BLEND2D
-    bool Show(BLContext& context, ImVec2 pos, const char* text, const char* end = nullptr);
-    bool Show(BLContext& context, ImVec2 pos, std::size_t richTextId);
+    [[nodiscard]] ImVec2 GetBounds(BLContext& context, std::size_t richTextId);
+    bool Show(BLContext& context, ImVec2 pos, std::size_t richTextId, std::optional<ImVec2> sz = std::nullopt);
 #endif
 }
