@@ -130,6 +130,7 @@ loaded by `ImRichText::LoadFonts` functions before rendering.
 * Integration example with [Clay layout library](https://github.com/nicbarker/clay?tab=readme-ov-file)
 * Roman numerals for numbered lists
 * Tables (`<table>`, `<tr>`, `<th>`, `<td>` tags)
+* Thread safety
 
 ## Future Goals
 * Use a library (roll your own?) to lookup font(s) based on requirements i.e. fuzzy match on family, etc.
@@ -171,6 +172,15 @@ with the parsing state i.e. entering/exiting tags. Custom properties or unknonw 
 ## Contributions
 Contributions welcome, especially in getting Linux/MacOS examples added! 
 Prefer build.sh build scripts, over cmake/ninja/etc. solutions.
+
+The coding style is C++ with minimal OOP constructs i.e. no classes, inheritance, runtime polymorphism etc.
+The only exception being the interfaces which enable runtime polymorphism for rendering and platform integration.
+Features such as attributes, vocabulary types (`std::optional` & `std::tuple`) can be used. There are no templates, 
+exceptions, or RTTI used in the library.
+
+The current implementation is not thread-safe, and the library is not intended to be used in a multi-threaded environment.
+In terms of design, the library does not construct an explicit AST, but rather uses a stack-based approach to 
+parse and render the text.
 
 ## About the Implementation
 The following interface is available to port it to any graphics API desired:

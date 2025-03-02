@@ -12,6 +12,27 @@ namespace ImRichText
 {
     struct RenderConfig;
 
+    struct ASCIITextShaper final : public ITextShaper
+    {
+        [[nodiscard]] static ASCIITextShaper* Instance();
+
+        [[nodiscard]] static std::tuple<bool, bool, std::string_view> AddEscapeSequences(const std::string_view content,
+            int& curridx, char escapeStart, char escapeEnd);
+
+        void ShapeText(float availwidth, const Span<std::string_view>& words,
+            StyleAccessor accessor, LineRecorder lineRecorder, WordRecorder wordRecorder,
+            const RenderConfig& config, void* userdata);
+        void SegmentText(std::string_view content, WhitespaceCollapseBehavior wsbhv,
+            LineRecorder lineRecorder, WordRecorder wordRecorder, const RenderConfig& config,
+            bool ignoreLineBreaks, bool ignoreEscapeCodes, void* userdata);
+        
+        [[nodiscard]] int NextGraphemeCluster(const char* from, const char* end) const; // Dummy impl for ASCII, unused
+        [[nodiscard]] int NextWordBreak(const char* from, const char* end) const; // Dummy impl for ASCII, unused
+        [[nodiscard]] int NextLineBreak(const char* from, const char* end) const; // Dummy impl for ASCII, unused
+
+        static const std::pair<std::string_view, std::string_view> EscapeCodes[6];
+    };
+
 #ifdef IM_RICHTEXT_TARGET_IMGUI
 
     struct ImGuiRenderer final : public IRenderer
@@ -36,11 +57,11 @@ namespace ImRichText
         bool SetCurrentFont(std::string_view family, float sz, FontType type) override;
         bool SetCurrentFont(void* fontptr) override;
         void ResetFont() override;
-        ImVec2 GetTextSize(std::string_view text, void* fontptr);
+        [[nodiscard]] ImVec2 GetTextSize(std::string_view text, void* fontptr);
         void DrawText(std::string_view text, ImVec2 pos, uint32_t color);
         void DrawText(std::string_view text, std::string_view family, ImVec2 pos, float sz, uint32_t color, FontType type);
         void DrawTooltip(ImVec2 pos, std::string_view text);
-        float EllipsisWidth(void* fontptr) override;
+        [[nodiscard]] float EllipsisWidth(void* fontptr) override;
     };
 
     struct ImGuiPlatform final : public IPlatform

@@ -35,17 +35,31 @@ namespace ImRichText
 
     struct RenderConfig;
 
-#ifdef IM_RICHTEXT_TARGET_IMGUI
-    bool LoadFonts(std::string_view family, const FontCollectionFile& files, float size, ImFontConfig config);
-#endif
-#ifdef IM_RICHTEXT_TARGET_BLEND2D
-    bool LoadFonts(std::string_view family, const FontCollectionFile& files, float size);
-#endif
+    enum FontLoadType : uint64_t
+    {
+        FLT_Proportional = 1,
+        FLT_Monospace = 2,
+        FLT_HasSmall = 4,
+        FLT_HasSuperscript = 8,
+        FLT_HasSubscript = 16,
+        FLT_HasH1 = 32,
+        FLT_HasH2 = 64,
+        FLT_HasH3 = 128,
+        FLT_HasH4 = 256,
+        FLT_HasH5 = 512,
+        FLT_HasH6 = 1024,
+        FLT_HasHeaders = FLT_HasH1 | FLT_HasH2 | FLT_HasH3 | FLT_HasH4 | FLT_HasH5 | FLT_HasH6,
 
-    bool LoadDefaultFonts(float sz, FontFileNames* names = nullptr);
-    bool LoadDefaultFonts(const std::initializer_list<float>& szs, FontFileNames* names = nullptr);
-    bool LoadDefaultFonts(const RenderConfig& config, bool skipProportional, bool skipMonospace);
+        // TODO: Handle absolute size font-size fonts (Look at imrichtext.cpp: PopulateSegmentStyle function)
+    };
+
+    // TODO: Add support for char ranges based on charset
+    bool LoadDefaultFonts(const RenderConfig& config, uint64_t flt, FontFileNames* names = nullptr);
 
     [[nodiscard]] void* GetFont(std::string_view family, float size, FontType type, void*);
     [[nodiscard]] void* GetOverlayFont(const RenderConfig& config);
+
+#ifdef IM_RICHTEXT_TARGET_IMGUI
+    [[nodiscard]] bool IsFontLoaded();
+#endif
 }

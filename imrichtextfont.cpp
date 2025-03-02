@@ -351,19 +351,21 @@ namespace ImRichText
         return true;
     }
 
-    bool LoadDefaultFonts(const RenderConfig& config, bool skipProportional, bool skipMonospace)
+    bool LoadDefaultFonts(const RenderConfig& config, uint64_t flt, FontFileNames* names)
     {
-        // TODO: Handle absolute size font-size fonts (Look at imrichtext.cpp: PopulateSegmentStyle function)
+        assert((names != nullptr) || (flt & FLT_Proportional) || (flt & FLT_Monospace));
+
         std::unordered_set<float> sizes;
         sizes.insert(config.DefaultFontSize * config.FontScale);
-        sizes.insert(config.DefaultFontSize * config.ScaleSubscript * config.FontScale);
-        sizes.insert(config.DefaultFontSize * config.ScaleSuperscript * config.FontScale);
-        sizes.insert(config.DefaultFontSize * 0.8f * config.FontScale); // for <small> content
-        for (auto sz : config.HFontSizes) sizes.insert(sz * config.FontScale);
+
+        if (flt & FLT_HasSubscript) sizes.insert(config.DefaultFontSize * config.ScaleSubscript * config.FontScale);
+        if (flt & FLT_HasSuperscript) sizes.insert(config.DefaultFontSize * config.ScaleSuperscript * config.FontScale);
+        if (flt & FLT_HasSmall) sizes.insert(config.DefaultFontSize * 0.8f * config.FontScale);
+        if (flt & FLT_HasHeaders) for (auto sz : config.HFontSizes) sizes.insert(sz * config.FontScale);
 
         for (auto sz : sizes)
         {
-            LoadDefaultFonts(sz, nullptr, skipProportional, skipMonospace);
+            LoadDefaultFonts(sz, names, !(flt & FLT_Proportional), !(flt & FLT_Monospace));
         }
 
 #ifdef IM_RICHTEXT_TARGET_IMGUI
@@ -415,4 +417,11 @@ namespace ImRichText
         auto fontsz = config.DefaultFontSize * 0.8f * config.FontScale;
         return it->second.Fonts->lower_bound(fontsz)->second;
     }
+
+#ifdef IM_RICHTEXT_TARGET_IMGUI
+    bool IsFontLoaded()
+    {
+        return ImGui::GetIO().Fonts->IsBuilt();
+    }
+#endif
 }

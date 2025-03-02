@@ -67,6 +67,31 @@ namespace ImRichText
         Custom
     };
 
+    template <typename T>
+    struct Span
+    {
+        T* source = nullptr;
+        int sz = 0;
+
+        template <typename ItrT>
+        Span(ItrT start, ItrT end)
+            : source{ &(*start) }, sz{ (int)(end - start) }
+        {}
+
+        Span(T& el) : source{ &el }, sz{ 1 } {}
+
+        T* begin() { return source; }
+        T* end() { return source + sz; }
+
+        const T& front() const { return *source; }
+        T& front() { return *source; }
+        const T& back() const { return *(source + sz - 1); }
+        T& back() { return *(source + sz - 1); }
+
+        const T& operator[](int idx) const { return source[idx]; }
+        T& operator[](int idx) { return source[idx]; }
+    };
+
     struct BoundedBox
     {
         float top = 0.f, left = 0.f;
@@ -108,6 +133,49 @@ namespace ImRichText
         void DrawDefaultBullet(BulletType type, ImVec2 initpos, const BoundedBox& bounds, uint32_t color, float bulletsz);
     };
 
+    enum class WhitespaceCollapseBehavior
+    {
+        Collapse, Preserve, PreserveBreaks, PreserveSpaces, BreakSpaces
+    };
+
+    enum class WordBreakBehavior
+    {
+        Normal, BreakAll, KeepAll, AutoPhrase, BreakWord
+    };
+
+    struct ITextShaper
+    {
+        /*enum class WhitespaceBehavior
+        {
+            Normal, Pre, PreWrap, PreLine, Wrap, Collapse, PreserveNoWrap
+        };*/
+
+        struct WordProperty
+        {
+            void* font;
+            WordBreakBehavior wb;
+        };
+
+        using StyleAccessor = WordProperty (*)(int wordIdx, void* userdata);
+        using LineRecorder = void (*)(int wordIdx, void* userdata);
+        using WordRecorder = void (*)(int wordIdx, std::string_view, ImVec2 dim, void* userdata);
+
+        virtual void ShapeText(float availwidth, const Span<std::string_view>& words,
+            StyleAccessor accessor, LineRecorder lineRecorder, WordRecorder wordRecorder, 
+            const RenderConfig& config, void* userdata) = 0;
+        virtual void SegmentText(std::string_view content, WhitespaceCollapseBehavior wsbhv, 
+            LineRecorder lineRecorder, WordRecorder wordRecorder, const RenderConfig& config, 
+            bool ignoreLineBreaks, bool ignoreEscapeCodes, void* userdata) = 0;
+
+        virtual int NextGraphemeCluster(const char* from, const char* end) const = 0;
+        virtual int NextWordBreak(const char* from, const char* end) const = 0;
+        virtual int NextLineBreak(const char* from, const char* end) const = 0;
+
+        // TODO: Implement these...
+        int SkipSuccessiveWordBreaks(const char* from, const char* end) const;
+        int SkipSuccessiveLineBreaks(const char* from, const char* end) const;
+    };
+
     // Implement this interface to handle parsed rich text
     struct ITagVisitor
     {
@@ -115,7 +183,6 @@ namespace ImRichText
         virtual bool Attribute(std::string_view name, std::optional<std::string_view> value) = 0;
         virtual bool TagStartDone() = 0;
         virtual bool Content(std::string_view content) = 0;
-        virtual bool PreFormattedContent(std::string_view content) = 0;
         virtual bool TagEnd(std::string_view tag, bool selfTerminating) = 0;
         virtual void Finalize() = 0;
 

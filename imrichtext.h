@@ -43,6 +43,7 @@ namespace ImRichText
     enum class TokenType
     {
         Text,
+        ElidedText,
         ListItemBullet,
         ListItemNumbered,
         HorizontalRule,
@@ -84,8 +85,8 @@ namespace ImRichText
         FontStyleLight = 1 << 3,
         FontStyleStrikethrough = 1 << 4,
         FontStyleUnderline = 1 << 5,
-        FontStyleNoWrap = 1 << 6,
-        FontStyleOverflowEllipsis = 1 << 7,
+        FontStyleOverflowEllipsis = 1 << 6,
+        FontStyleNoWrap = 1 << 7
     };
 
     struct FontStyle
@@ -125,8 +126,12 @@ namespace ImRichText
         StyleBorderRadius = 1 << 16,
         StyleCellSpacing = 1 << 17,
         StyleBlink = 1 << 18,
-        StyleNoWrap = 1 << 19,
+        StyleTextWrap = 1 << 19,
         StyleBoxShadow = 1 << 20,
+        StyleWordBreak = 1 << 21,
+        StyleWhitespaceCollapse = 1 << 22,
+        StyleWhitespace = 1 << 23,
+        StyleTextOverflow = 1 << 24
     };
 
     enum TextAlignment
@@ -149,6 +154,8 @@ namespace ImRichText
         float height = 0;
         float width = 0;
         FontStyle font;
+        WordBreakBehavior wbbhv = WordBreakBehavior::Normal;
+        WhitespaceCollapseBehavior wscbhv = WhitespaceCollapseBehavior::Collapse;
         ListStyle list;
         FourSidedMeasure padding;
         FourSidedMeasure border;
@@ -222,11 +229,9 @@ namespace ImRichText
         char EscapeSeqEnd = ';';
         std::string_view CommentStart = "!--"; // UNUSED
         std::string_view CommentEnd = "--"; // UNUSED
-        std::vector<std::pair<std::string_view, std::string_view>> EscapeCodes;
 
         float  LineGap = 5;
-        ImVec2 Bounds;
-        bool   WordWrap = false;
+        bool   WordWrap = true;
 
         int   ParagraphStop = 4;
         int   TabStop = 4;
@@ -244,6 +249,7 @@ namespace ImRichText
         uint32_t (*NamedColor)(const char*, void*) = nullptr;
         IPlatform* Platform = nullptr;
         IRenderer* Renderer = nullptr;
+        ITextShaper* TextShaper = nullptr;
 
 #ifdef _DEBUG
         IRenderer* OverlayRenderer = nullptr;
@@ -291,18 +297,25 @@ namespace ImRichText
         bool BoundsComputed = false;
     };
 
+    enum class TextContentCharset
+    {
+        ASCII,       // Standard ASCII characters (0-127)
+        ASCIIExt,    // Extended ASCII + certain common characters i.e. ©, ®, ™, etc.
+        UTF8Simple,  // Simple UTF8 encoded text without support for GPOS/kerning/ligatures (libgrapheme)
+        UnicodeBidir // Standard compliant Unicode BiDir algorithm implementation (Harfbuzz)
+    };
+
     struct DefaultConfigParams
     {
-        ImVec2 Bounds = { -1.f, -1.f };
         float DefaultFontSize = 24.f;
         float FontScale = 1.f;
-        bool SkipDefaultFontLoading = false;
-        bool SkipProportionalFont = false;
-        bool SkipMonospaceFont = true;
+        uint64_t FontLoadFlags = FLT_Proportional;
+        TextContentCharset Charset = TextContentCharset::ASCII;
     };
 
     // RenderConfig related functions. In order to render rich text, such configs should be pushed/popped as desired 
     [[nodiscard]] RenderConfig* GetDefaultConfig(const DefaultConfigParams& params);
+    [[nodiscard]] ITextShaper* GetTextShaper(TextContentCharset charset);
 
 #ifdef IM_RICHTEXT_TARGET_IMGUI
     [[nodiscard]] RenderConfig* GetCurrentConfig();
@@ -315,10 +328,6 @@ namespace ImRichText
     void PopConfig(BLContext& context);
 #endif
 
-    // Get list of drawables from rich text
-    [[nodiscard]] Drawables GetDrawables(const char* text, const char* textend, const RenderConfig& config);
-    [[nodiscard]] ImVec2 GetBounds(const Drawables& drawables, ImVec2 bounds);
-
     // Create cacheable rich text content
     [[nodiscard]] std::size_t CreateRichText(const char* text, const char* end = nullptr);
     bool UpdateRichText(std::size_t id, const char* text, const char* end = nullptr);
@@ -326,14 +335,13 @@ namespace ImRichText
     void ClearAllRichTexts();
 
 #ifdef IM_RICHTEXT_TARGET_IMGUI
-    bool Show(ImVec2 pos, const char* text, const char* end = nullptr);
-    bool Show(ImVec2 pos, std::size_t richTextId);
-    bool Show(const char* text, const char* end = nullptr);
-    bool Show(std::size_t richTextId);
+    [[nodiscard]] ImVec2 GetBounds(std::size_t richTextId);
+    bool Show(ImVec2 pos, std::size_t richTextId, std::optional<ImVec2> sz = std::nullopt);
+    bool Show(std::size_t richTextId, std::optional<ImVec2> sz = std::nullopt);
     bool ToggleOverlay();
 #endif
 #ifdef IM_RICHTEXT_TARGET_BLEND2D
-    bool Show(BLContext& context, ImVec2 pos, const char* text, const char* end = nullptr);
-    bool Show(BLContext& context, ImVec2 pos, std::size_t richTextId);
+    [[nodiscard]] ImVec2 GetBounds(BLContext& context, std::size_t richTextId);
+    bool Show(BLContext& context, ImVec2 pos, std::size_t richTextId, std::optional<ImVec2> sz = std::nullopt);
 #endif
 }
