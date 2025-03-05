@@ -296,6 +296,14 @@ namespace ImRichText
         bool BoundsComputed = false;
     };
 
+    enum class TextContentCharset
+    {
+        ASCII,       // Standard ASCII characters (0-127)
+        ASCIIExt,    // Extended ASCII + certain common characters i.e. ©, ®, ™, etc.
+        UTF8Simple,  // Simple UTF8 encoded text without support for GPOS/kerning/ligatures (libgrapheme)
+        UnicodeBidir // Standard compliant Unicode BiDir algorithm implementation (Harfbuzz)
+    };
+
     struct DefaultConfigParams
     {
         float DefaultFontSize = 24.f;
@@ -306,6 +314,7 @@ namespace ImRichText
 
     // RenderConfig related functions. In order to render rich text, such configs should be pushed/popped as desired 
     [[nodiscard]] RenderConfig* GetDefaultConfig(const DefaultConfigParams& params);
+    [[nodiscard]] ITextShaper* GetTextShaper(TextContentCharset charset);
 
     // Create the correct text shaper engine based on charset support
     [[nodiscard]] ITextShaper* CreateTextShaper(TextContentCharset charset);

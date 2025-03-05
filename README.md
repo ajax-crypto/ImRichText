@@ -134,6 +134,7 @@ loaded by `ImRichText::LoadDefaultFonts` functions before rendering.
 * Integration example with [Clay layout library](https://github.com/nicbarker/clay?tab=readme-ov-file)
 * Roman numerals for numbered lists
 * Tables (`<table>`, `<tr>`, `<th>`, `<td>` tags)
+* Thread safety
 
 ## Future Goals
 * Use a library (roll your own?) to lookup font(s) based on glyph ranges.
