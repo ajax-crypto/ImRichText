@@ -124,9 +124,9 @@ namespace ImRichText
             lookup.files[ft] = filepath;
             lookup.serif = serif;
             lookup.family = family;
-            auto& index = !isMono ? FontLookup.ProportionalFontFamilies[lookup.family] :
-                FontLookup.MonospaceFontFamilies[lookup.family];
-            index = (int)FontLookup.info.size() - 1;
+            auto& index = !isMono ? ProportionalFontFamilies[lookup.family] :
+                MonospaceFontFamilies[lookup.family];
+            index = (int)info.size() - 1;
         }
     };
 
