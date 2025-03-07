@@ -830,6 +830,8 @@ namespace ImRichText
 
     void IRenderer::DrawDefaultBullet(BulletType type, ImVec2 initpos, const BoundedBox& bounds, uint32_t color, float bulletsz)
     {
+        // TODO: If font loaded already contain these shapes, use them instead?
+
         switch (type)
         {
         case BulletType::Circle: {

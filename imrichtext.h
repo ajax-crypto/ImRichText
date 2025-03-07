@@ -69,8 +69,8 @@ namespace ImRichText
     {
         TokenType Type = TokenType::Text;
         std::string_view Content = "";
-        BoundedBox Bounds;
-        FourSidedMeasure Offset;
+        BoundedBox Bounds; // Absolute coordinates
+        FourSidedMeasure Offset; // Local coordinates
         int16_t ListPropsIdx = -1;
         int16_t PropertiesIdx = -1;
         int16_t VisibleTextSize = -1;
@@ -159,7 +159,7 @@ namespace ImRichText
         ListStyle list;
         FourSidedMeasure padding;
         FourSidedMeasure border;
-        int alignment = TextAlignment::TextAlignLeading; // TODO: Implement text alignment
+        int alignment = TextAlignment::TextAlignLeading;
         float superscriptOffset = 0.f; // TODO: Move to DrawableLine
         float subscriptOffset = 0.f; // TODO: Move to DrawableLine
         int32_t backgroundIdx = -1; // index in Drawables::BackgroundShapes
@@ -170,8 +170,9 @@ namespace ImRichText
     {
         std::vector<Token> Tokens;
         std::vector<int> Depths;
-        BoundedBox Bounds;
+        BoundedBox Bounds; // Absolute coordinates
         int StyleIdx = -1;
+        int Depth = 0;
 
         int SubscriptDepth = 0;
         int SuperscriptDepth = 0;
@@ -184,8 +185,8 @@ namespace ImRichText
     struct DrawableLine
     {
         std::vector<SegmentData> Segments;
-        BoundedBox Content;
-        FourSidedMeasure Offset;
+        BoundedBox Content; // Absolute coordinates
+        FourSidedMeasure Offset; // Local coordinates
 
         int  BlockquoteDepth = 0;
         bool HasText = false;
@@ -306,7 +307,6 @@ namespace ImRichText
 
     // RenderConfig related functions. In order to render rich text, such configs should be pushed/popped as desired 
     [[nodiscard]] RenderConfig* GetDefaultConfig(const DefaultConfigParams& params);
-    [[nodiscard]] ITextShaper* GetTextShaper(TextContentCharset charset);
 
     // Create the correct text shaper engine based on charset support
     [[nodiscard]] ITextShaper* CreateTextShaper(TextContentCharset charset);

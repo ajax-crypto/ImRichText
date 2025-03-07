@@ -1,5 +1,7 @@
 #include "imrichtextfont.h"
+#ifndef IM_FONTMANAGER_STANDALONE
 #include "imrichtext.h"
+#endif
 
 #ifdef IM_RICHTEXT_TARGET_IMGUI
 #include "imgui.h"
@@ -55,28 +57,28 @@
     "/usr/share/fonts/liberation-mono/LiberationMono-Italic.ttf",\
     "/usr/share/fonts/liberation-mono/LiberationMono-BoldItalic.ttf"
 
-#define UBUNTU_DEFAULT_FONT \
+#define POPOS_DEFAULT_FONT \
     "/usr/share/fonts/truetype/freefont/FreeSans.ttf",\
     "",\
     "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf",\
     "/usr/share/fonts/truetype/freefont/FreeSansOblique.ttf",\
     "/usr/share/fonts/truetype/freefont/FreeSansBoldOblique.ttf"
 
-#define UBUNTU_DEFAULT_MONOFONT \
+#define POPOS_DEFAULT_MONOFONT \
     "/usr/share/fonts/truetype/freefont/FreeMono.ttf",\
     "",\
     "/usr/share/fonts/truetype/freefont/FreeMonoBold.ttf",\
     "/usr/share/fonts/truetype/freefont/FreeMonoOblique.ttf",\
     "/usr/share/fonts/truetype/freefont/FreeMonoBoldOblique.ttf"
 
-#define ARCH_DEFAULT_FONT \
+#define MANJARO_DEFAULT_FONT \
     "/usr/share/fonts/noto/NotoSans-Regular.ttf",\
     "/usr/share/fonts/noto/NotoSans-Light.ttf",\
     "/usr/share/fonts/noto/NotoSans-Bold.ttf",\
     "/usr/share/fonts/noto/NotoSans-Italic.ttf",\
     "/usr/share/fonts/noto/NotoSans-BoldItalic.ttf"
 
-#define ARCH_DEFAULT_MONOFONT \
+#define MANJARO_DEFAULT_MONOFONT \
     "/usr/share/fonts/TTF/Hack-Regular.ttf",\
     "",\
     "/usr/share/fonts/TTF/Hack-Bold.ttf",\
@@ -90,7 +92,11 @@
 
 #endif
 
+#ifndef IM_FONTMANAGER_STANDALONE
 namespace ImRichText
+#else
+namespace ImFontManager
+#endif
 {
     struct FontFamily
     {
@@ -238,8 +244,8 @@ namespace ImRichText
         std::filesystem::exists(fedoradir) ?
             LoadFonts(IM_RICHTEXT_DEFAULT_FONTFAMILY, { FEDORA_DEFAULT_FONT }, sz, fconfig) :
             std::filesystem::exists(ubuntudir) ?
-                LoadFonts(IM_RICHTEXT_DEFAULT_FONTFAMILY, { UBUNTU_DEFAULT_FONT }, sz, fconfig) :
-                LoadFonts(IM_RICHTEXT_DEFAULT_FONTFAMILY, { ARCH_DEFAULT_FONT }, sz, fconfig);
+                LoadFonts(IM_RICHTEXT_DEFAULT_FONTFAMILY, { POPOS_DEFAULT_FONT }, sz, fconfig) :
+                LoadFonts(IM_RICHTEXT_DEFAULT_FONTFAMILY, { MANJARO_DEFAULT_FONT }, sz, fconfig);
 #endif
         // TODO: Add default fonts for other platforms
     }
@@ -254,8 +260,8 @@ namespace ImRichText
         std::filesystem::exists(fedoradir) ?
             LoadFonts(IM_RICHTEXT_DEFAULT_FONTFAMILY, { FEDORA_DEFAULT_MONOFONT }, sz, fconfig) :
             std::filesystem::exists(ubuntudir) ?
-                LoadFonts(IM_RICHTEXT_DEFAULT_FONTFAMILY, { UBUNTU_DEFAULT_MONOFONT }, sz, fconfig) :
-                LoadFonts(IM_RICHTEXT_DEFAULT_FONTFAMILY, { ARCH_DEFAULT_MONOFONT }, sz, fconfig);
+                LoadFonts(IM_RICHTEXT_DEFAULT_FONTFAMILY, { POPOS_DEFAULT_MONOFONT }, sz, fconfig) :
+                LoadFonts(IM_RICHTEXT_DEFAULT_FONTFAMILY, { MANJARO_DEFAULT_MONOFONT }, sz, fconfig);
 #endif
         // TODO: Add default fonts for other platforms
     }
@@ -272,8 +278,8 @@ namespace ImRichText
         std::filesystem::exists(fedoradir) ?
             LoadFonts(IM_RICHTEXT_DEFAULT_FONTFAMILY, { FEDORA_DEFAULT_FONT }, sz) :
             std::filesystem::exists(ubuntudir) ?
-                LoadFonts(IM_RICHTEXT_DEFAULT_FONTFAMILY, { UBUNTU_DEFAULT_FONT }, sz) :
-                LoadFonts(IM_RICHTEXT_DEFAULT_FONTFAMILY, { ARCH_DEFAULT_FONT }, sz);
+                LoadFonts(IM_RICHTEXT_DEFAULT_FONTFAMILY, { POPOS_DEFAULT_FONT }, sz) :
+                LoadFonts(IM_RICHTEXT_DEFAULT_FONTFAMILY, { MANJARO_DEFAULT_FONT }, sz);
 #endif
         // TODO: Add default fonts for other platforms
     }
@@ -288,8 +294,8 @@ namespace ImRichText
         std::filesystem::exists(fedoradir) ?
             LoadFonts(IM_RICHTEXT_DEFAULT_FONTFAMILY, { FEDORA_DEFAULT_MONOFONT }, sz) :
             std::filesystem::exists(ubuntudir) ?
-                LoadFonts(IM_RICHTEXT_DEFAULT_FONTFAMILY, { UBUNTU_DEFAULT_MONOFONT }, sz) :
-                LoadFonts(IM_RICHTEXT_DEFAULT_FONTFAMILY, { ARCH_DEFAULT_MONOFONT }, sz);
+                LoadFonts(IM_RICHTEXT_DEFAULT_FONTFAMILY, { POPOS_DEFAULT_MONOFONT }, sz) :
+                LoadFonts(IM_RICHTEXT_DEFAULT_FONTFAMILY, { MANJARO_DEFAULT_MONOFONT }, sz);
 #endif
         // TODO: Add default fonts for other platforms
     }
@@ -442,6 +448,7 @@ namespace ImRichText
         return true;
     }
 
+#ifndef IM_FONTMANAGER_STANDALONE
     std::vector<float> GetFontSizes(const RenderConfig& config, uint64_t flt)
     {
         std::unordered_set<float> sizes;
@@ -460,6 +467,7 @@ namespace ImRichText
 
         return std::vector<float>{ sizes.begin(), sizes.end() };
     }
+#endif
 
     bool LoadDefaultFonts(const FontDescriptor* descriptors, int total)
     {
@@ -474,11 +482,13 @@ namespace ImRichText
         return true;
     }
 
+#ifndef IM_FONTMANAGER_STANDALONE
     bool LoadDefaultFonts(const RenderConfig& config, uint64_t flt, TextContentCharset charset)
     {
         auto sizes = GetFontSizes(config, flt);
         return LoadDefaultFonts(sizes, flt, charset, nullptr);
     }
+#endif
 
     // Structure to hold font data
     struct FontInfo 
@@ -973,12 +983,14 @@ namespace ImRichText
         return szit->second;
     }
 
+#ifndef IM_FONTMANAGER_STANDALONE
     void* GetOverlayFont(const RenderConfig& config)
     {
         auto it = LookupFontFamily(IM_RICHTEXT_DEFAULT_FONTFAMILY);
         auto fontsz = config.DefaultFontSize * 0.8f * config.FontScale;
         return it->second.FontPtrs->lower_bound(fontsz)->second;
     }
+#endif
 
     bool IsFontLoaded()
     {
