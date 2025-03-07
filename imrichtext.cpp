@@ -128,7 +128,7 @@ namespace ImRichText
         BackgroundSpanData span;
         BackgroundShape shape;
         int styleIdx = -1;
-        bool isMultiline = true;
+        bool isMultilineCapable = true;
     };
 
     static std::unordered_map<std::size_t, RichTextData> RichTextMap;
@@ -149,8 +149,8 @@ namespace ImRichText
 
 #ifdef IM_RICHTEXT_TARGET_IMGUI
 #ifdef _DEBUG
-    static bool ShowOverlay = true;
-    static bool ShowBoundingBox = true;
+    static bool ShowOverlay = false;
+    static bool ShowBoundingBox = false;
 #else
     static const bool ShowOverlay = false;
     static const bool ShowBoundingBox = false;
@@ -231,9 +231,6 @@ namespace ImRichText
         void RecordBackgroundSpanStart();
         void RecordBackgroundSpanEnd(bool isTagStart, bool segmentAdded, int depth);
         DrawableLine MoveToNextLine(bool isTagStart, int depth);
-
-        ImVec2 GetSegmentSize(const SegmentData& segment) const;
-        ImVec2 GetLineSize(const DrawableLine& line) const;
 
         float GetMaxSuperscriptOffset(const DrawableLine& line, float scale) const;
         float GetMaxSubscriptOffset(const DrawableLine& line, float scale) const;
@@ -924,6 +921,163 @@ namespace ImRichText
         }
     }
 
+    static void DrawBackgroundShadow(ImVec2 startpos, ImVec2 endpos, const BoxShadow& shadow, 
+        const RenderConfig& config)
+    {
+        // In order to draw box-shadow, it is important to understand that
+        // merely drawing an underlying rect with colors shifted by offset and dilated
+        // by spread is not enough as the default background for elements is transparent
+        // Drawing like this would be visually incorrect.
+        // Hence, we first determine how the shadow rect intersects with background
+        // There are two cases here, shadow offset is non-zero, in which case there
+        // are two rects which one gets with the intersection, otherwise, there are
+        // four potential rects provided non-zero spread or blur.
+        // An example:
+        // 
+        // ----------------------------
+        // |                          |
+        // |         BACKGROUND       |-----
+        // |                          | #2 |
+        // |                          |    |
+        // --------------------------------|
+        //      |     INTERSECTION #1      |
+        //      ----------------------------
+        // 
+        // When the intersecion happens due to non-zero offsets, two rectangles are produced
+        // Each of which needs to dilated further based on shadow spread. Spread itself can
+        // be negative, hence the dilation might be a contraction, so check if after applying
+        // spread, the intersection rect is not occluded by background, if not, then render.
+        // 
+        // If on the other hand, offsets are zero, there are four rects that need to be drawn
+        // on the four sides of background rect based on spread. 
+        // 
+        // The blur is applied after generating the intersection rects. We use trapezoids to
+        // cover the corner without overlap
+
+        if ((shadow.blur > 0.f || shadow.spread > 0.f || shadow.offset.x != 0.f ||
+            shadow.offset.y != 0) && shadow.color != IM_COL32_BLACK_TRANS)
+        {
+            ImRect rect{ startpos, endpos };
+            auto width = endpos.x - startpos.x, height = endpos.y - startpos.y;
+            auto spread = ImVec2{ shadow.spread, shadow.spread };
+            ImVec2 trapezoid[4];
+            uint32_t colors[4];
+
+            if (shadow.offset.x != 0.f || shadow.offset.y != 0.f)
+            {
+                ImVec2 rect1From, rect1To, rect2From, rect2To;
+
+                if (shadow.offset.x >= 0.f && shadow.offset.y >= 0.f)
+                {
+                    // Right intersection
+                    rect1From = ImVec2{ startpos.x + shadow.offset.x, endpos.y - spread.y };
+                    rect1To = ImVec2{ endpos.x + shadow.offset.x, endpos.y + shadow.offset.y } + spread;
+
+                    // Bottom intersection
+                    rect2From = ImVec2{ endpos.x - spread.x, startpos.y + shadow.offset.y };
+                    rect2To = rect1To;
+
+                    //if (shadow.blur > 0.f)
+                    //{
+                    //    // Top (From top-left)
+                    //    trapezoid[0] = rect1From - ImVec2{ 0.f, shadow.blur };
+                    //    trapezoid[1] = ImVec2{ rect1To.x + shadow.blur, rect1From.y - shadow.blur };
+                    //    trapezoid[2] = ImVec2{ rect1To.x, rect1From.y };
+                    //    trapezoid[3] = rect1From;
+                    //    colors[2] = colors[3] = shadow.color;
+                    //    colors[0] = colors[1] = IM_COL32_BLACK_TRANS;
+                    //    config.Renderer->DrawPolyGradient(trapezoid, colors, 4);
+
+                    //    // Right (From top-left)
+                    //    trapezoid[0] = trapezoid[2];
+                    //    trapezoid[2] = rect1To + ImVec2{ shadow.blur, shadow.blur };
+                    //    trapezoid[3] = rect1To;
+                    //    colors[0] = colors[3] = shadow.color;
+                    //    colors[1] = colors[2] = IM_COL32_BLACK_TRANS;
+                    //    config.Renderer->DrawPolyGradient(trapezoid, colors, 4);
+
+                    //    // Bottom (From top-right)
+                    //    trapezoid[0] = trapezoid[3];
+                    //    trapezoid[1] = trapezoid[2];
+                    //    trapezoid[2] = ImVec2{ rect2From.x - shadow.blur, rect2From.y + shadow.blur };
+                    //    trapezoid[3] = rect2To;
+                    //    colors[0] = colors[3] = shadow.color;
+                    //    colors[1] = colors[2] = IM_COL32_BLACK_TRANS;
+                    //    config.Renderer->DrawPolyGradient(trapezoid, colors, 4);
+
+                    //    // Left (From top-right)
+                    //    trapezoid[0] = rect2From - ImVec2{ 0.f, shadow.offset.y };
+                    //    trapezoid[1] = trapezoid[3];
+                    //    trapezoid[3] = rect2From - ImVec2{ shadow.blur, shadow.offset.y };
+                    //    colors[0] = colors[1] = shadow.color;
+                    //    colors[2] = colors[3] = IM_COL32_BLACK_TRANS;
+                    //    config.Renderer->DrawPolyGradient(trapezoid, colors, 4);
+                    //}
+                }
+                else if (shadow.offset.x >= 0.f && shadow.offset.y < 0.f)
+                {
+                    // Top intersection
+                    rect1From = ImVec2{ startpos.x + shadow.offset.x, startpos.y + shadow.offset.y } - spread;
+                    rect1To = ImVec2{ endpos.x + shadow.offset.x + spread.x, startpos.y };
+
+                    // Right intersection
+                    rect2From = ImVec2{ endpos.x, startpos.y + shadow.offset.y - spread.x };
+                    rect2To = ImVec2{ startpos.x + shadow.offset.x, endpos.y + shadow.offset.y } + spread;
+                }
+                else if (shadow.offset.x < 0.f && shadow.offset.y < 0.f)
+                {
+                    // Left intersection
+                    rect1From = ImVec2{ startpos.x + shadow.offset.x, startpos.y + shadow.offset.y } - spread;
+                    rect1To = ImVec2{ endpos.x, startpos.y + shadow.offset.y + spread.x };
+
+                    // Top intersection
+                    rect2From = rect1From;
+                    rect2To = ImVec2{ endpos.x + shadow.offset.x + spread.x, startpos.y };
+                }
+                else
+                {
+                    // Left intersection
+                    rect1From = ImVec2{ startpos.x + shadow.offset.x, startpos.y + shadow.offset.y } - spread;
+                    rect1To = ImVec2{ startpos.x, endpos.y + shadow.offset.y + spread.y };
+
+                    // Bottom intersection
+                    rect2From = ImVec2{ startpos.x + shadow.offset.x - spread.x, endpos.y };
+                    rect2To = ImVec2{ endpos.x + shadow.offset.x, endpos.y + shadow.offset.y } + spread;
+                }
+
+                if (!rect.Contains(ImRect{ rect1From, rect1To }))
+                    config.Renderer->DrawRect(rect1From, rect1To, shadow.color, true);
+
+                if (!rect.Contains(ImRect{ rect2From, rect2To }))
+                    config.Renderer->DrawRect(rect2From, rect2To, shadow.color, true);
+            }
+            else
+            {
+                if (shadow.spread > 0.f)
+                {
+                    ImVec2 rectstart[4], rectend[4];
+                    rectstart[0] = startpos - ImVec2{ shadow.spread, shadow.spread };
+                    rectend[0] = startpos + ImVec2{ 0.f, shadow.spread + height };
+
+                    rectstart[1] = rectstart[0];
+                    rectend[1] = endpos + ImVec2{ shadow.spread, 0.f };
+
+                    rectstart[2] = startpos + ImVec2{ width, -shadow.spread };
+                    rectend[2] = endpos + ImVec2{ shadow.spread, shadow.spread };
+
+                    rectstart[3] = startpos + ImVec2{ -shadow.spread, height };
+                    rectend[3] = endpos + ImVec2{ shadow.spread, shadow.spread };
+
+                    config.Renderer->DrawRect(rectstart[0], rectend[0], shadow.color, true);
+                    config.Renderer->DrawRect(rectstart[1], rectend[1], shadow.color, true);
+                    config.Renderer->DrawRect(rectstart[2], rectend[2], shadow.color, true);
+                    config.Renderer->DrawRect(rectstart[3], rectend[3], shadow.color, true);
+                }
+                
+            }
+        }
+    }
+
     static void DrawBackground(ImVec2 startpos, ImVec2 endpos,
         const ColorGradient& gradient, uint32_t color, const RenderConfig& config)
     {
@@ -1290,7 +1444,7 @@ namespace ImRichText
             {
                 auto startpos = shape.Start + initpos;
                 auto endpos = shape.End + initpos;
-
+                DrawBackgroundShadow(startpos, endpos, shape.Shadow, config);
                 DrawBackground(startpos, endpos, shape.Gradient, shape.Color, config);
                 DrawBoundingBox(ContentTypeBg, startpos, endpos, config);
                 DrawBorderRect(shape.Border, startpos, endpos, shape.Border.isUniform, shape.Color, config);
@@ -1707,10 +1861,8 @@ namespace ImRichText
         for (auto index = linesModified.first; index < (linesModified.first + linesModified.second); ++index)
         {
             auto& line = result[index];
+            line.Content.width = line.Content.height = 0.f;
             auto currx = line.Content.left + line.Offset.left;
-            auto sz = GetLineSize(line);
-            line.Content.width = sz.x;
-            line.Content.height = sz.y;
 
             if (index > 0) line.Content.top = result[index - 1].Content.top + result[index - 1].height() + _config.LineGap;
 
@@ -1741,11 +1893,19 @@ namespace ImRichText
 
                 currx += style.padding.right + style.border.right;
                 segment.Bounds.width = currx - segment.Bounds.left;
-                segment.Bounds.height = height + style.padding.top + style.border.top;
-
-                for (auto& token : segment.Tokens)
-                    token.Bounds.top += (line.height() - segment.Bounds.height) * 0.5f;
+                segment.Bounds.height = height + style.padding.v() + style.border.v();
+                line.Content.width += segment.Bounds.width;
+                line.Content.height = std::max(segment.Bounds.height, line.Content.height);
             }
+
+            // Default aligment of segments is left horizontally and centered vertically in the current line
+            for (auto index = linesModified.first; index < (linesModified.first + linesModified.second); ++index)
+                for (auto& segment : _result.ForegroundLines[index].Segments)
+                {
+                    for (auto& token : segment.Tokens)
+                        token.Bounds.top += (line.height() - segment.Bounds.height) * 0.5f;
+                    segment.Bounds.top += (line.height() - segment.Bounds.height) * 0.5f;
+                }
 
             HIGHLIGHT("\nCreated line #%d at (%f, %f) of size (%f, %f) with %d segments", index,
                 line.Content.left, line.Content.top, line.Content.width, line.Content.height,
@@ -1760,22 +1920,24 @@ namespace ImRichText
         bgspan.span.start.second = (int)_currLine.Segments.size() - 1;
         bgspan.styleIdx = _currStyleIdx;
         bgspan.shape = _currBgShape;
-        bgspan.isMultiline = CanContentBeMultiline(_currTagType);
+        bgspan.isMultilineCapable = CanContentBeMultiline(_currTagType);
         _currBgShape = BackgroundShape{};
         _pendingBackground = false;
     }
 
-    void DefaultTagVisitor::RecordBackgroundSpanEnd(bool isTagStart, bool segmentAdded, int depth)
+    void DefaultTagVisitor::RecordBackgroundSpanEnd(bool lineAdded, bool segmentAdded, int depth)
     {
-        if (!isTagStart && !_backgroundSpans[depth].empty())
+        if (!_backgroundSpans[depth].empty())
         {
             for (auto& bgspan : _backgroundSpans[depth])
             {
                 if (bgspan.span.end.first == -1)
                 {
-                    bgspan.span.end.first = std::max((int)_result.ForegroundLines.size() - 1,
+                    bgspan.span.end.first = std::max((int)_result.ForegroundLines.size() - (lineAdded ? 1 : 0),
                         bgspan.span.start.first);
-                    bgspan.span.end.second = std::max(0, (int)_currLine.Segments.size() - (segmentAdded ? 2 : 1));
+                    bgspan.span.end.second = lineAdded ? 
+                        std::max(0, (int)_result.ForegroundLines.back().Segments.size() - (segmentAdded ? 2 : 1)) :
+                        std::max(0, (int)_currLine.Segments.size() - (segmentAdded ? 2 : 1));
                 }
             }
         }
@@ -1828,34 +1990,6 @@ namespace ImRichText
             ((float)(_currBlockquoteDepth + 1) * _config.BlockquoteOffset);
         newline.Content.top = lastline.Content.top + lastline.height() + (isEmpty ? 0.f : _config.LineGap);
         return newline;
-    }
-
-    ImVec2 DefaultTagVisitor::GetSegmentSize(const SegmentData& segment) const
-    {
-        auto height = 0.f, width = 0.f;
-        const auto& style = _result.StyleDescriptors[segment.StyleIdx + 1];
-
-        for (const auto& token : segment.Tokens)
-        {
-            height = std::max(height, token.Bounds.height + token.Offset.v());
-            width += token.Bounds.width + token.Offset.h();
-        }
-
-        return { width + style.padding.h() + style.border.h(), height + style.padding.v() + style.border.v() };
-    }
-
-    ImVec2 DefaultTagVisitor::GetLineSize(const DrawableLine& line) const
-    {
-        auto height = 0.f, width = 0.f;
-
-        for (const auto& segment : line.Segments)
-        {
-            auto sz = GetSegmentSize(segment);
-            height = std::max(height, sz.y);
-            width += sz.x;
-        }
-
-        return { width, height };
     }
 
     float DefaultTagVisitor::GetMaxSuperscriptOffset(const DrawableLine& line, float scale) const
@@ -1926,7 +2060,6 @@ namespace ImRichText
                 (_currStyle.propsSpecified & StyleBorder) ||
                 (_currStyle.propsSpecified & StyleBoxShadow))
             {
-                //_currStyle.backgroundIdx = (int)_backgroundSpans[_currentStackPos].size();
                 _currHasBackground = _tagStack[_currentStackPos].hasBackground = true;
             }
 
@@ -1996,7 +2129,6 @@ namespace ImRichText
     {
         auto hasSegments = !_currLine.Segments.empty();
         auto hasUniqueStyle = CreateNewStyle();
-        auto segmentAdded = hasUniqueStyle;
         auto& currentStyle = Style(_currentStackPos);
         int16_t tagPropIdx = -1;
         auto currListIsNumbered = false;
@@ -2039,7 +2171,6 @@ namespace ImRichText
 
                 AddSegment();
                 AddToken(token, currentStyle.propsSpecified);
-                segmentAdded = true;
             }
         }
         else if (_currTagType == TagType::Blockquote)
@@ -2143,7 +2274,7 @@ namespace ImRichText
         _currStyleIdx = _currentStackPos >= 0 ? _styleIndexStack[_currentStackPos] : -1;
         PopCurrentStyle();
 
-        auto segmentAdded = false;
+        auto segmentAdded = false, lineAdded = false;
         LOG("Exited Tag: <%.*s>\n", (int)_currTag.size(), _currTag.data());
 
         if (_currTagType == TagType::List || _currTagType == TagType::Paragraph || 
@@ -2161,6 +2292,7 @@ namespace ImRichText
             _currLine.Marquee = _currTagType == TagType::Marquee;
             _currLine = MoveToNextLine(false, _currentStackPos + 1);
             _maxWidth = std::max(_maxWidth, _result.ForegroundLines.back().Content.width);
+            lineAdded = true;
 
             if (_currTagType == TagType::Blockquote)
             {
@@ -2197,7 +2329,10 @@ namespace ImRichText
             auto& prevstyle = Style(_currentStackPos + 1);
             prevstyle.padding.top = prevstyle.padding.bottom = _config.HrVerticalMargins;
             if (!_currLine.Segments.empty())
+            {
                 _currLine = MoveToNextLine(false, _currentStackPos + 1);
+                lineAdded = true;
+            }
             _maxWidth = std::max(_maxWidth, _result.ForegroundLines.empty() ? 0.f : 
                 _result.ForegroundLines.back().Content.width);
 
@@ -2233,7 +2368,7 @@ namespace ImRichText
         }
 
         if (!selfTerminatingTag && _currHasBackground)
-            RecordBackgroundSpanEnd(false, segmentAdded, _currentStackPos + 1);
+            RecordBackgroundSpanEnd(lineAdded, segmentAdded, _currentStackPos + 1);
 
         // Update all members for next tag in stack
         if (selfTerminatingTag) _tagStack[_currentStackPos + 1] = StackData{};
@@ -2366,7 +2501,7 @@ namespace ImRichText
                     _result.StyleDescriptors[_result.ForegroundLines[bgdata.span.end.first]
                     .Segments[bgdata.span.end.second].StyleIdx].backgroundIdx = bgidx;
 
-                if (bgdata.isMultiline)
+                if (bgdata.isMultilineCapable)
                 {
                     background.End = { endBounds.left + endBounds.width,
                         endBounds.top + _result.ForegroundLines[bgdata.span.end.first].height() };

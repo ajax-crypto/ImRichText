@@ -42,6 +42,17 @@ struct ImVec2
     float x = 0.f, y = 0.f;
 };
 
+struct ImRect
+{
+    ImVec2 min, max;
+
+    bool Contains(const ImRect& other) const
+    {
+        return min.x <= other.min.x && min.y <= other.min.y &&
+            max.x >= other.max.x && max.y >= other.max.y;
+    }
+};
+
 enum ImGuiDir : int
 {
     ImGuiDir_None = -1,
@@ -285,8 +296,8 @@ namespace ImRichText
     {
         ImVec2 offset{ 0.f, 0.f };
         float spread = 0.f;
-        float blur = 1.f;
-        uint32_t color = IM_COL32_BLACK;
+        float blur = 0.f;
+        uint32_t color = IM_COL32_BLACK_TRANS;
     };
 
     // Generic string helpers, case-insensitive matches

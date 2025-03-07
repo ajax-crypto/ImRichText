@@ -599,7 +599,7 @@ namespace ImRichText
 
     static bool IsColor(std::string_view input, int from)
     {
-        return input[from] != '-' && std::isdigit(input[from]);
+        return input[from] != '-' && !std::isdigit(input[from]);
     }
 
     BoxShadow ExtractBoxShadow(std::string_view input, float ems, float percent, 
@@ -617,7 +617,7 @@ namespace ImRichText
 
         if (!IsColor(input, prev))
         {
-            result.offset.y = ExtractFloatWithUnit(input.substr(prev, idx), 0.f, ems, percent, 1.f);
+            result.offset.y = ExtractFloatWithUnit(input.substr(prev, (idx - prev)), 0.f, ems, percent, 1.f);
             idx = SkipSpace(input, idx);
 
             prev = idx;
@@ -625,7 +625,7 @@ namespace ImRichText
 
             if (!IsColor(input, prev))
             {
-                result.blur = ExtractFloatWithUnit(input.substr(prev, idx), 0.f, ems, percent, 1.f);
+                result.blur = ExtractFloatWithUnit(input.substr(prev, (idx - prev)), 0.f, ems, percent, 1.f);
                 idx = SkipSpace(input, idx);
 
                 prev = idx;
@@ -633,21 +633,21 @@ namespace ImRichText
 
                 if (!IsColor(input, prev))
                 {
-                    result.spread = ExtractFloatWithUnit(input.substr(prev, idx), 0.f, ems, percent, 1.f);
+                    result.spread = ExtractFloatWithUnit(input.substr(prev, (idx - prev)), 0.f, ems, percent, 1.f);
                     idx = SkipSpace(input, idx);
 
                     prev = idx;
                     idx = WholeWord(input, idx);
-                    result.color = ExtractColor(input.substr(prev, idx), NamedColor, userData);
+                    result.color = ExtractColor(input.substr(prev, (idx - prev)), NamedColor, userData);
                 }
                 else
-                    result.color = ExtractColor(input.substr(prev, idx), NamedColor, userData);
+                    result.color = ExtractColor(input.substr(prev, (idx - prev)), NamedColor, userData);
             }
             else
-                result.color = ExtractColor(input.substr(prev, idx), NamedColor, userData);
+                result.color = ExtractColor(input.substr(prev, (idx - prev)), NamedColor, userData);
         }
         else
-            result.color = ExtractColor(input.substr(prev, idx), NamedColor, userData);
+            result.color = ExtractColor(input.substr(prev, (idx - prev)), NamedColor, userData);
         return result;
     }
     

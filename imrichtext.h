@@ -1,5 +1,9 @@
 #pragma once
 
+#if !defined(IM_RICHTEXT_TARGET_IMGUI) && !defined(IM_RICHTEXT_TARGET_BLEND2D)
+#error "No targets defined... Either define IM_RICHTEXT_TARGET_IMGUI or IM_RICHTEXT_TARGET_BLEND2D macro"
+#endif
+
 #ifdef IM_RICHTEXT_TARGET_IMGUI
 #include "imgui.h"
 #endif
@@ -8,6 +12,7 @@
 
 #include <string_view>
 #include <vector>
+#include <stdint.h>
 
 #define IM_RICHTEXT_DEFAULT_FONTFAMILY "default-font-family"
 #define IM_RICHTEXT_MONOSPACE_FONTFAMILY "monospace"
