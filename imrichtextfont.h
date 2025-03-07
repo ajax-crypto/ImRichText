@@ -17,7 +17,11 @@
           supported.
 */
 
+#ifndef IM_FONTMANAGER_STANDALONE
 namespace ImRichText
+#else
+namespace ImFontManager
+#endif
 {
     enum FontType
     {
@@ -74,9 +78,11 @@ namespace ImRichText
         uint64_t flags = FLT_Proportional;
     };
 
+#ifndef IM_FONTMANAGER_STANDALONE
     // Get font sizes required from the specified config and flt
     // flt is a bitwise OR of FontLoadType flags
     std::vector<float> GetFontSizes(const RenderConfig& config, uint64_t flt);
+#endif
 
     // Load default fonts based on provided descriptor. Custom paths can also be 
     // specified through FontDescriptor::names member. If not specified, a OS specific
@@ -84,9 +90,11 @@ namespace ImRichText
     // /usr/share/fonts/ for Linux.
     bool LoadDefaultFonts(const FontDescriptor* descriptors, int totalNames = 1);
 
+#ifndef IM_FONTMANAGER_STANDALONE
     // Load default fonts from specified config, bitwise OR of FontLoadType flags, 
     // and provided charset which determines which glyph ranges to load
     bool LoadDefaultFonts(const RenderConfig& config, uint64_t flt, TextContentCharset charset);
+#endif
 
     // Find out path to .ttf file for specified font family and font type
     // The exact filepath returned is based on reading TTF OS/2 and name tables
@@ -103,8 +111,10 @@ namespace ImRichText
     //       should be preloaded for ImGui, dynamic font atlas updates are not supported.
     [[nodiscard]] void* GetFont(std::string_view family, float size, FontType type, void*);
 
+#ifndef IM_FONTMANAGER_STANDALONE
     // Get font to display overlay i.e. style info in side panel
     [[nodiscard]] void* GetOverlayFont(const RenderConfig& config);
+#endif
 
     // Return status of font atlas construction
     [[nodiscard]] bool IsFontLoaded();

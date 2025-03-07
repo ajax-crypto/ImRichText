@@ -171,6 +171,7 @@ In order to customize certain behavior at build-time, the following macros can b
 | `IM_RICHTEXT_MAX_COLORSTOPS` | Specify maximum color stops in gradients | 8 |
 | `IM_RICHTEXT_TARGET_IMGUI` | Specify if target is ImGui | undefined |
 | `IM_RICHTEXT_TARGET_BLEND2D` | Specify if target is Blend2D | undefined |
+| `IM_FONTMANAGER_STANDALONE` | Specify if using only font manager in standalone context (without rest of ImRichText) |
 
 ## Error Reporting
 When `_DEBUG` macro is defined, if a console is present, error messages will be printed along
