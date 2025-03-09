@@ -1,3 +1,6 @@
+#define _USE_MATH_DEFINES
+#include <math.h>
+
 #include "imrichtextimpl.h"
 #include "imrichtext.h"
 
@@ -578,14 +581,16 @@ namespace ImRichText
         }
     }
 
-    void ImGuiRenderer::DrawRadialGradient(ImVec2 center, float radius, uint32_t in, uint32_t out)
+    void ImGuiRenderer::DrawRadialGradient(ImVec2 center, float radius, uint32_t in, uint32_t out, int start, int end)
     {
         auto drawList = ((ImDrawList*)UserData);
         if (((in | out) & IM_COL32_A_MASK) == 0 || radius < 0.5f)
             return;
+        auto startrad = ((float)M_PI / 180.f) * (float)start;
+        auto endrad = ((float)M_PI / 180.f) * (float)end;
 
-        // Use arc with automatic segment count
-        drawList->_PathArcToFastEx(center, radius, 0, IM_DRAWLIST_ARCFAST_SAMPLE_MAX, 0);
+        // Use arc with 32 segment count
+        drawList->PathArcTo(center, radius, startrad, endrad, 32);
         const int count = drawList->_Path.Size - 1;
 
         unsigned int vtx_base = drawList->_VtxCurrentIdx;
@@ -805,7 +810,7 @@ namespace ImRichText
         context.strokeCircle(center.x, center.y, radius);
     }
 
-    void Blend2DRenderer::DrawRadialGradient(ImVec2 center, float radius, uint32_t in, uint32_t out)
+    void Blend2DRenderer::DrawRadialGradient(ImVec2 center, float radius, uint32_t in, uint32_t out, int start, int end)
     {
     }
 

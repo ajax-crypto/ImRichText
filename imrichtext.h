@@ -223,8 +223,29 @@ namespace ImRichText
     };
 #endif
 
+    enum class BoxShadowQuality
+    {
+        Fast,     // Shadow corners are hard triangles
+        Balanced, // Shadow corners are rounded (with coarse roundedness)
+        High      // Unimplemented
+    };
+
     struct RenderConfig
     {
+        // The members at the beginning are the ones that will
+        // be used in drawing loop
+        IPlatform* Platform = nullptr;
+        IRenderer* Renderer = nullptr;
+        BoxShadowQuality ShadowQuality = BoxShadowQuality::Fast;
+
+#ifdef _DEBUG
+        IRenderer* OverlayRenderer = nullptr;
+#endif
+
+        // All other members are used in parsing phase
+        uint32_t(*NamedColor)(const char*, void*) = nullptr;
+        ITextShaper* TextShaper = nullptr;
+
         float Scale = 1.0f;
         float FontScale = 1.f;
 
@@ -250,16 +271,7 @@ namespace ImRichText
         uint32_t DefaultBgColor = IM_COL32_WHITE;
         uint32_t MarkHighlight = ToRGBA(255, 255, 0);
         uint32_t HyperlinkColor = ToRGBA(0, 50, 255);
-
-        uint32_t (*NamedColor)(const char*, void*) = nullptr;
-        IPlatform* Platform = nullptr;
-        IRenderer* Renderer = nullptr;
-        ITextShaper* TextShaper = nullptr;
-
-#ifdef _DEBUG
-        IRenderer* OverlayRenderer = nullptr;
-#endif
-
+        
         float    HFontSizes[6] = { 48.f, 36.f, 24.f * 1.17f, 24.f, 0.83f * 24.f, 0.67f * 24.f };
         uint32_t HeaderLineColor = ToRGBA(128, 128, 128, 255);
 
