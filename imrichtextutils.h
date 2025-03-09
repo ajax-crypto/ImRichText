@@ -6,6 +6,7 @@
 
 #ifdef IM_RICHTEXT_TARGET_IMGUI
 #include "imgui.h"
+#include "imgui_internal.h"
 #endif
 
 #if __has_include("imrichtextfont.h")
@@ -50,6 +51,16 @@ struct ImRect
     {
         return min.x <= other.min.x && min.y <= other.min.y &&
             max.x >= other.max.x && max.y >= other.max.y;
+    }
+
+    void Expand(const float amount) 
+    { 
+        Min.x -= amount;   Min.y -= amount;   Max.x += amount;   Max.y += amount; 
+    }
+
+    void Translate(const ImVec2& d) 
+    { 
+        Min.x += d.x; Min.y += d.y; Max.x += d.x; Max.y += d.y; 
     }
 };
 
@@ -140,7 +151,7 @@ namespace ImRichText
         virtual void DrawPolygon(ImVec2* points, int sz, uint32_t color, bool filled, float thickness = 1.f) = 0;
         virtual void DrawPolyGradient(ImVec2* points, uint32_t* colors, int sz) = 0;
         virtual void DrawCircle(ImVec2 center, float radius, uint32_t color, bool filled, bool thickness = 1.f) = 0;
-        virtual void DrawRadialGradient(ImVec2 center, float radius, uint32_t in, uint32_t out) = 0;
+        virtual void DrawRadialGradient(ImVec2 center, float radius, uint32_t in, uint32_t out, int start, int end) = 0;
         virtual void DrawBullet(ImVec2 startpos, ImVec2 endpos, uint32_t color, int index, int depth) {};
         
         virtual bool SetCurrentFont(std::string_view family, float sz, FontType type) { return false; };
@@ -300,6 +311,23 @@ namespace ImRichText
         uint32_t color = IM_COL32_BLACK_TRANS;
     };
 
+    
+    struct IntersectRects
+    {
+        ImRect intersects[4];
+        bool visibleRect[4] = { true, true, true, true };
+    };
+
+    struct RectBreakup
+    {
+        ImRect rects[4];
+        ImRect corners[4];
+    };
+
+    // Geometry functions
+    [[nodiscard]] IntersectRects ComputeIntersectRects(ImRect rect, ImVec2 startpos, ImVec2 endpos);
+    [[nodiscard]] RectBreakup ComputeRectBreakups(ImRect rect, float amount);
+
     // Generic string helpers, case-insensitive matches
     [[nodiscard]] bool AreSame(const std::string_view lhs, const char* rhs);
     [[nodiscard]] bool AreSame(const std::string_view lhs, const std::string_view rhs);
@@ -310,17 +338,20 @@ namespace ImRichText
     [[nodiscard]] int SkipSpace(const char* text, int idx, int end);
     [[nodiscard]] std::optional<std::string_view> GetQuotedString(const char* text, int& idx, int end);
 
+    // String to number conversion functions
     [[nodiscard]] int ExtractInt(std::string_view input, int defaultVal);
     [[nodiscard]] int ExtractIntFromHex(std::string_view input, int defaultVal);
     [[nodiscard]] IntOrFloat ExtractNumber(std::string_view input, float defaultVal);
     [[nodiscard]] float ExtractFloatWithUnit(std::string_view input, float defaultVal, float ems, float parent, float scale);
 
+    // Color related functions
     [[nodiscard]] uint32_t ToRGBA(int r, int g, int b, int a = 255);
     [[nodiscard]] uint32_t ToRGBA(float r, float g, float b, float a = 1.f);
-    [[nodiscard]] uint32_t ExtractColor(std::string_view stylePropVal, uint32_t(*NamedColor)(const char*, void*), void* userData);
-    [[nodiscard]] ColorGradient ExtractLinearGradient(std::string_view input, uint32_t(*NamedColor)(const char*, void*), void* userData);
     [[nodiscard]] uint32_t GetColor(const char* name, void*);
 
+    // Parsing functions
+    [[nodiscard]] uint32_t ExtractColor(std::string_view stylePropVal, uint32_t(*NamedColor)(const char*, void*), void* userData);
+    [[nodiscard]] ColorGradient ExtractLinearGradient(std::string_view input, uint32_t(*NamedColor)(const char*, void*), void* userData);
     [[nodiscard]] Border ExtractBorder(std::string_view input, float ems, float percent, 
         uint32_t(*NamedColor)(const char*, void*), void* userData);
     [[nodiscard]] BoxShadow ExtractBoxShadow(std::string_view input, float ems, float percent,

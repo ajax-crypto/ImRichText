@@ -924,157 +924,95 @@ namespace ImRichText
     static void DrawBackgroundShadow(ImVec2 startpos, ImVec2 endpos, const BoxShadow& shadow, 
         const RenderConfig& config)
     {
-        // In order to draw box-shadow, it is important to understand that
-        // merely drawing an underlying rect with colors shifted by offset and dilated
-        // by spread is not enough as the default background for elements is transparent
-        // Drawing like this would be visually incorrect.
-        // Hence, we first determine how the shadow rect intersects with background
-        // There are two cases here, shadow offset is non-zero, in which case there
-        // are two rects which one gets with the intersection, otherwise, there are
-        // four potential rects provided non-zero spread or blur.
-        // An example:
-        // 
-        // ----------------------------
-        // |                          |
-        // |         BACKGROUND       |-----
-        // |                          | #2 |
-        // |                          |    |
-        // --------------------------------|
-        //      |     INTERSECTION #1      |
-        //      ----------------------------
-        // 
-        // When the intersecion happens due to non-zero offsets, two rectangles are produced
-        // Each of which needs to dilated further based on shadow spread. Spread itself can
-        // be negative, hence the dilation might be a contraction, so check if after applying
-        // spread, the intersection rect is not occluded by background, if not, then render.
-        // 
-        // If on the other hand, offsets are zero, there are four rects that need to be drawn
-        // on the four sides of background rect based on spread. 
-        // 
-        // The blur is applied after generating the intersection rects. We use trapezoids to
-        // cover the corner without overlap
+        // In order to draw box-shadow, the following steps are used:
+        // 1. Draw the underlying rectangle with shadow color, spread and offset.
+        // 2. Decompose the blur region into 8 rects i.e. 4 for corners, 4 for the sides
+        // 3. For each rect, determine the vertex color i.e. shadow color or transparent,
+        //    and draw a rect gradient accordingly.
 
         if ((shadow.blur > 0.f || shadow.spread > 0.f || shadow.offset.x != 0.f ||
             shadow.offset.y != 0) && shadow.color != IM_COL32_BLACK_TRANS)
         {
             ImRect rect{ startpos, endpos };
-            auto width = endpos.x - startpos.x, height = endpos.y - startpos.y;
-            auto spread = ImVec2{ shadow.spread, shadow.spread };
-            ImVec2 trapezoid[4];
-            uint32_t colors[4];
+            rect.Expand(shadow.spread);
+            rect.Translate(shadow.offset);
+            config.Renderer->DrawRect(rect.Min, rect.Max, shadow.color, true);
 
-            if (shadow.offset.x != 0.f || shadow.offset.y != 0.f)
+            if (shadow.blur > 0.f)
             {
-                ImVec2 rect1From, rect1To, rect2From, rect2To;
+                auto outercol = shadow.color & ~IM_COL32_A_MASK;
+                auto brk = ComputeRectBreakups(rect, shadow.blur);
 
-                if (shadow.offset.x >= 0.f && shadow.offset.y >= 0.f)
+                // Sides: Left -> Top -> Right -> Bottom
+                uint32_t colors[4];
+                colors[0] = colors[3] = outercol;
+                colors[1] = colors[2] = shadow.color;
+                config.Renderer->DrawRectGradient(brk.rects[0].Min, brk.rects[0].Max, colors[0], colors[1], colors[2], colors[3]);
+
+                colors[0] = colors[1] = outercol;
+                colors[2] = colors[3] = shadow.color;
+                config.Renderer->DrawRectGradient(brk.rects[1].Min, brk.rects[1].Max, colors[0], colors[1], colors[2], colors[3]);
+
+                colors[1] = colors[2] = outercol;
+                colors[0] = colors[3] = shadow.color;
+                config.Renderer->DrawRectGradient(brk.rects[2].Min, brk.rects[2].Max, colors[0], colors[1], colors[2], colors[3]);
+
+                colors[2] = colors[3] = outercol;
+                colors[0] = colors[1] = shadow.color;
+                config.Renderer->DrawRectGradient(brk.rects[3].Min, brk.rects[3].Max, colors[0], colors[1], colors[2], colors[3]);
+
+                // Corners: Top-left -> Top-right -> Bottom-right -> Bottom-left
+                switch (config.ShadowQuality)
                 {
-                    // Right intersection
-                    rect1From = ImVec2{ startpos.x + shadow.offset.x, endpos.y - spread.y };
-                    rect1To = ImVec2{ endpos.x + shadow.offset.x, endpos.y + shadow.offset.y } + spread;
-
-                    // Bottom intersection
-                    rect2From = ImVec2{ endpos.x - spread.x, startpos.y + shadow.offset.y };
-                    rect2To = rect1To;
-
-                    //if (shadow.blur > 0.f)
-                    //{
-                    //    // Top (From top-left)
-                    //    trapezoid[0] = rect1From - ImVec2{ 0.f, shadow.blur };
-                    //    trapezoid[1] = ImVec2{ rect1To.x + shadow.blur, rect1From.y - shadow.blur };
-                    //    trapezoid[2] = ImVec2{ rect1To.x, rect1From.y };
-                    //    trapezoid[3] = rect1From;
-                    //    colors[2] = colors[3] = shadow.color;
-                    //    colors[0] = colors[1] = IM_COL32_BLACK_TRANS;
-                    //    config.Renderer->DrawPolyGradient(trapezoid, colors, 4);
-
-                    //    // Right (From top-left)
-                    //    trapezoid[0] = trapezoid[2];
-                    //    trapezoid[2] = rect1To + ImVec2{ shadow.blur, shadow.blur };
-                    //    trapezoid[3] = rect1To;
-                    //    colors[0] = colors[3] = shadow.color;
-                    //    colors[1] = colors[2] = IM_COL32_BLACK_TRANS;
-                    //    config.Renderer->DrawPolyGradient(trapezoid, colors, 4);
-
-                    //    // Bottom (From top-right)
-                    //    trapezoid[0] = trapezoid[3];
-                    //    trapezoid[1] = trapezoid[2];
-                    //    trapezoid[2] = ImVec2{ rect2From.x - shadow.blur, rect2From.y + shadow.blur };
-                    //    trapezoid[3] = rect2To;
-                    //    colors[0] = colors[3] = shadow.color;
-                    //    colors[1] = colors[2] = IM_COL32_BLACK_TRANS;
-                    //    config.Renderer->DrawPolyGradient(trapezoid, colors, 4);
-
-                    //    // Left (From top-right)
-                    //    trapezoid[0] = rect2From - ImVec2{ 0.f, shadow.offset.y };
-                    //    trapezoid[1] = trapezoid[3];
-                    //    trapezoid[3] = rect2From - ImVec2{ shadow.blur, shadow.offset.y };
-                    //    colors[0] = colors[1] = shadow.color;
-                    //    colors[2] = colors[3] = IM_COL32_BLACK_TRANS;
-                    //    config.Renderer->DrawPolyGradient(trapezoid, colors, 4);
-                    //}
-                }
-                else if (shadow.offset.x >= 0.f && shadow.offset.y < 0.f)
+                case BoxShadowQuality::Fast:
                 {
-                    // Top intersection
-                    rect1From = ImVec2{ startpos.x + shadow.offset.x, startpos.y + shadow.offset.y } - spread;
-                    rect1To = ImVec2{ endpos.x + shadow.offset.x + spread.x, startpos.y };
+                    colors[0] = colors[1] = colors[3] = outercol;
+                    colors[2] = shadow.color;
+                    config.Renderer->DrawRectGradient(brk.corners[0].Min, brk.corners[0].Max, colors[0], colors[1], colors[2], colors[3]);
 
-                    // Right intersection
-                    rect2From = ImVec2{ endpos.x, startpos.y + shadow.offset.y - spread.x };
-                    rect2To = ImVec2{ startpos.x + shadow.offset.x, endpos.y + shadow.offset.y } + spread;
+                    colors[0] = colors[1] = colors[2] = outercol;
+                    colors[3] = shadow.color;
+                    config.Renderer->DrawRectGradient(brk.corners[1].Min, brk.corners[1].Max, colors[0], colors[1], colors[2], colors[3]);
+
+                    colors[1] = colors[2] = colors[3] = outercol;
+                    colors[0] = shadow.color;
+                    config.Renderer->DrawRectGradient(brk.corners[2].Min, brk.corners[2].Max, colors[0], colors[1], colors[2], colors[3]);
+
+                    colors[0] = colors[2] = colors[3] = outercol;
+                    colors[1] = shadow.color;
+                    config.Renderer->DrawRectGradient(brk.corners[3].Min, brk.corners[3].Max, colors[0], colors[1], colors[2], colors[3]);
+                    break;
                 }
-                else if (shadow.offset.x < 0.f && shadow.offset.y < 0.f)
+                case BoxShadowQuality::Balanced:
                 {
-                    // Left intersection
-                    rect1From = ImVec2{ startpos.x + shadow.offset.x, startpos.y + shadow.offset.y } - spread;
-                    rect1To = ImVec2{ endpos.x, startpos.y + shadow.offset.y + spread.x };
+                    ImVec2 center = brk.corners[0].Max;
+                    auto radius = brk.corners[0].GetHeight() - 0.5f; // all corners of same size
+                    config.Renderer->SetClipRect(brk.corners[0].Min, brk.corners[0].Max);
+                    config.Renderer->DrawRadialGradient(center, radius, shadow.color, outercol, 180, 270);
+                    config.Renderer->ResetClipRect();
 
-                    // Top intersection
-                    rect2From = rect1From;
-                    rect2To = ImVec2{ endpos.x + shadow.offset.x + spread.x, startpos.y };
+                    center = ImVec2{ brk.corners[1].Min.x, brk.corners[1].Max.y };
+                    config.Renderer->SetClipRect(brk.corners[1].Min, brk.corners[1].Max);
+                    config.Renderer->DrawRadialGradient(center, radius, shadow.color, outercol, 270, 360);
+                    config.Renderer->ResetClipRect();
+
+                    center = brk.corners[2].Min;
+                    config.Renderer->SetClipRect(brk.corners[2].Min, brk.corners[2].Max);
+                    config.Renderer->DrawRadialGradient(center, radius, shadow.color, outercol, 0, 90);
+                    config.Renderer->ResetClipRect();
+
+                    center = ImVec2{ brk.corners[3].Max.x, brk.corners[3].Min.y };
+                    config.Renderer->SetClipRect(brk.corners[3].Min, brk.corners[3].Max);
+                    config.Renderer->DrawRadialGradient(center, radius, shadow.color, outercol, 90, 180);
+                    config.Renderer->ResetClipRect();
+                    break;
                 }
-                else
-                {
-                    // Left intersection
-                    rect1From = ImVec2{ startpos.x + shadow.offset.x, startpos.y + shadow.offset.y } - spread;
-                    rect1To = ImVec2{ startpos.x, endpos.y + shadow.offset.y + spread.y };
-
-                    // Bottom intersection
-                    rect2From = ImVec2{ startpos.x + shadow.offset.x - spread.x, endpos.y };
-                    rect2To = ImVec2{ endpos.x + shadow.offset.x, endpos.y + shadow.offset.y } + spread;
+                default:
+                    break;
                 }
-
-                if (!rect.Contains(ImRect{ rect1From, rect1To }))
-                    config.Renderer->DrawRect(rect1From, rect1To, shadow.color, true);
-
-                if (!rect.Contains(ImRect{ rect2From, rect2To }))
-                    config.Renderer->DrawRect(rect2From, rect2To, shadow.color, true);
             }
-            else
-            {
-                if (shadow.spread > 0.f)
-                {
-                    ImVec2 rectstart[4], rectend[4];
-                    rectstart[0] = startpos - ImVec2{ shadow.spread, shadow.spread };
-                    rectend[0] = startpos + ImVec2{ 0.f, shadow.spread + height };
 
-                    rectstart[1] = rectstart[0];
-                    rectend[1] = endpos + ImVec2{ shadow.spread, 0.f };
-
-                    rectstart[2] = startpos + ImVec2{ width, -shadow.spread };
-                    rectend[2] = endpos + ImVec2{ shadow.spread, shadow.spread };
-
-                    rectstart[3] = startpos + ImVec2{ -shadow.spread, height };
-                    rectend[3] = endpos + ImVec2{ shadow.spread, shadow.spread };
-
-                    config.Renderer->DrawRect(rectstart[0], rectend[0], shadow.color, true);
-                    config.Renderer->DrawRect(rectstart[1], rectend[1], shadow.color, true);
-                    config.Renderer->DrawRect(rectstart[2], rectend[2], shadow.color, true);
-                    config.Renderer->DrawRect(rectstart[3], rectend[3], shadow.color, true);
-                }
-                
-            }
+            config.Renderer->DrawRect(startpos, endpos, config.DefaultBgColor, true);
         }
     }
 
@@ -1438,6 +1376,8 @@ namespace ImRichText
     static void DrawBackgroundLayer(ImVec2 initpos, ImVec2 bounds,
         const std::vector<BackgroundShape>* shapes, const RenderConfig& config)
     {
+        // Draw all shadows first, which will underlay the backgrounds, this is
+        // because shadows do not add to the dimension of segments/lines
         for (auto depth = 0; depth < IM_RICHTEXT_MAXDEPTH; ++depth)
         {
             for (const auto& shape : shapes[depth])
@@ -1445,6 +1385,17 @@ namespace ImRichText
                 auto startpos = shape.Start + initpos;
                 auto endpos = shape.End + initpos;
                 DrawBackgroundShadow(startpos, endpos, shape.Shadow, config);
+                if (shape.End.y > (bounds.y + initpos.y)) break;
+            }
+        }
+
+        // Draw backgrounds on top of shadows
+        for (auto depth = 0; depth < IM_RICHTEXT_MAXDEPTH; ++depth)
+        {
+            for (const auto& shape : shapes[depth])
+            {
+                auto startpos = shape.Start + initpos;
+                auto endpos = shape.End + initpos;
                 DrawBackground(startpos, endpos, shape.Gradient, shape.Color, config);
                 DrawBoundingBox(ContentTypeBg, startpos, endpos, config);
                 DrawBorderRect(shape.Border, startpos, endpos, shape.Border.isUniform, shape.Color, config);

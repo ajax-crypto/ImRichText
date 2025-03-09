@@ -67,7 +67,7 @@ namespace ImRichText
         void DrawPolygon(ImVec2* points, int sz, uint32_t color, bool filled, float thickness = 1.f);
         void DrawPolyGradient(ImVec2* points, uint32_t* colors, int sz);
         void DrawCircle(ImVec2 center, float radius, uint32_t color, bool filled, bool thickness = 1.f);
-        void DrawRadialGradient(ImVec2 center, float radius, uint32_t in, uint32_t out);
+        void DrawRadialGradient(ImVec2 center, float radius, uint32_t in, uint32_t out, int start, int end);
 
         bool SetCurrentFont(std::string_view family, float sz, FontType type) override;
         bool SetCurrentFont(void* fontptr) override;
@@ -114,7 +114,7 @@ namespace ImRichText
         void DrawPolygon(ImVec2* points, int sz, uint32_t color, bool filled, float thickness = 1.f);
         void DrawPolyGradient(ImVec2* points, uint32_t* colors, int sz);
         void DrawCircle(ImVec2 center, float radius, uint32_t color, bool filled, bool thickness = 1.f);
-        void DrawRadialGradient(ImVec2 center, float radius, uint32_t in, uint32_t out);
+        void DrawRadialGradient(ImVec2 center, float radius, uint32_t in, uint32_t out, int start, int end);
 
         bool SetCurrentFont(std::string_view family, float sz, FontType type) override;
         bool SetCurrentFont(void* fontptr) override;

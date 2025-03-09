@@ -108,15 +108,15 @@ The following subset of HTML tags/CSS properties are supported:
 | height/width | `px`/`em` |
 | list-style-type | (_Only for list items_) `circle`/`disk`/`square`/`custom`[^2] |
 | border/border-top/etc. | `2px solid gray`[^6] |
-| border-radius | `px`/`em` |
+| border-radius | `px`/`em`[^4] |
 | alignment | `left`/`right`/`center`/`justify` _(Horizontal text alignment)_ |
 | vertical-align | `top`/`bottom`/`center` _(Vertical text alignment)_ |
+| box-shadow | `offset`, `blur` and `spread` supported |
 | text-overflow | _Under progress_ |
 | text-wrap | _Under progress_ |
 | word-break | _Under progress_ |
 | white-space-collapse | _Under progress_ |
 | white-space | _Under progress_ |
-| box-shadow | _Under progress_ |
 
 In order to handle rich text as specified above, fonts need to be managed i.e. different family, weights, sizes, etc. 
 The library internally uses default fonts (on Windows, Segoe UI family for proportional and Consolas for monospace).
@@ -144,7 +144,6 @@ loaded by `ImRichText::LoadDefaultFonts` functions before rendering.
 * Clipping mask support (requires ImGui changes?)
 * Text effects like "glow", "shadow", etc.
 * Add a tooltip property as a replacement for title property
-* Thread safety
 
 ## Non-Goals
 * Build scripts like cmake, build2, make, etc. This library is intended to be used by simply copying the .h/.cpp files.
@@ -213,7 +212,7 @@ struct IRenderer
     virtual void DrawPolygon(ImVec2* points, int sz, uint32_t color, bool filled, float thickness = 1.f) = 0;
     virtual void DrawPolyGradient(ImVec2* points, uint32_t* colors, int sz) = 0;
     virtual void DrawCircle(ImVec2 center, float radius, uint32_t color, bool filled, bool thickness = 1.f) = 0;
-    virtual void DrawRadialGradient(ImVec2 center, float radius, uint32_t in, uint32_t out) = 0;
+    virtual void DrawRadialGradient(ImVec2 center, float radius, uint32_t in, uint32_t out, int start, int end) = 0;
     virtual void DrawBullet(ImVec2 startpos, ImVec2 endpos, uint32_t color, int index, int depth) {};
     
     virtual bool SetCurrentFont(std::string_view family, float sz, FontType type) { return false; };
@@ -283,5 +282,6 @@ Platform integration implementation provided for ImGui + GLFW (available in exam
 [^1]: Nested subscript/superscript is untested at the moment
 [^2]: Custom bullets are also possible, set `RenderConfig::DrawBullet` function pointer and `list-style-type` property to `custom`
 [^3]: Underline text due to `<u>` tag is not baseline-underlined, but underlined beneath the whole text
+[^4]: Border radius support is rudimentary currently, radius is applied to all corners uniformly
 [^5]: Only axis aligned gradients are support as `background` property
 [^6]: Border line type is parsed but not used for rendering

@@ -5,6 +5,87 @@
 
 namespace ImRichText
 {
+    IntersectRects ComputeIntersectRects(ImRect rect, ImVec2 startpos, ImVec2 endpos)
+    {
+        IntersectRects res;
+
+        res.intersects[0].Max.x = startpos.x;
+        res.intersects[1].Max.y = startpos.y;
+        res.intersects[2].Min.x = endpos.x;
+        res.intersects[3].Min.y = endpos.y;
+
+        if (rect.Min.x < startpos.x)
+        {
+            res.intersects[0].Min.x = res.intersects[1].Min.x = res.intersects[3].Min.x = rect.Min.x;
+        }
+        else
+        {
+            res.intersects[1].Min.x = res.intersects[3].Min.x = rect.Min.x;
+            res.visibleRect[0] = false;
+        }
+
+        if (rect.Min.y < startpos.y)
+        {
+            res.intersects[0].Min.y = res.intersects[1].Min.y = res.intersects[2].Min.y = rect.Min.y;
+        }
+        else
+        {
+            res.intersects[0].Min.y = res.intersects[2].Min.y = rect.Min.y;
+            res.visibleRect[1] = false;
+        }
+
+        if (rect.Max.x > endpos.x)
+        {
+            res.intersects[1].Max.x = res.intersects[2].Max.x = res.intersects[3].Max.x = rect.Max.x;
+        }
+        else
+        {
+            res.intersects[1].Max.x = res.intersects[3].Max.x = rect.Max.x;
+            res.visibleRect[2] = false;
+        }
+
+        if (rect.Max.y > endpos.y)
+        {
+            res.intersects[0].Max.y = res.intersects[2].Max.y = res.intersects[3].Max.y = rect.Max.y;
+        }
+        else
+        {
+            res.intersects[0].Max.y = res.intersects[2].Max.y = rect.Max.y;
+            res.visibleRect[3] = false;
+        }
+
+        return res;
+    }
+
+    RectBreakup ComputeRectBreakups(ImRect rect, float amount)
+    {
+        RectBreakup res;
+
+        res.rects[0].Min = ImVec2{ rect.Min.x - amount, rect.Min.y };
+        res.rects[0].Max = ImVec2{ rect.Min.x, rect.Max.y };
+
+        res.rects[1].Min = ImVec2{ rect.Min.x, rect.Min.y - amount };
+        res.rects[1].Max = ImVec2{ rect.Max.x, rect.Min.y };
+
+        res.rects[2].Min = ImVec2{ rect.Max.x, rect.Min.y };
+        res.rects[2].Max = ImVec2{ rect.Max.x + amount, rect.Max.y };
+
+        res.rects[3].Min = ImVec2{ rect.Min.x, rect.Max.y };
+        res.rects[3].Max = ImVec2{ rect.Max.x, rect.Max.y + amount };
+
+        ImVec2 delta{ amount, amount };
+        res.corners[0].Min = rect.Min - delta;
+        res.corners[0].Max = rect.Min;
+        res.corners[1].Min = ImVec2{ rect.Max.x, rect.Min.y - amount };
+        res.corners[1].Max = res.corners[1].Min + delta;
+        res.corners[2].Min = rect.Max;
+        res.corners[2].Max = rect.Max + delta;
+        res.corners[3].Min = ImVec2{ rect.Min.x - amount, rect.Max.y };
+        res.corners[3].Max = res.corners[3].Min + delta;
+
+        return res;
+    }
+
 #pragma optimize( "", on )
     [[nodiscard]] int SkipSpace(const char* text, int idx, int end)
     {
