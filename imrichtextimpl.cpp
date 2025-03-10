@@ -453,19 +453,53 @@ namespace ImRichText
             ((ImDrawList*)UserData)->AddTriangle(pos1, pos2, pos3, color, thickness);
     }
 
-    void ImGuiRenderer::DrawRect(ImVec2 startpos, ImVec2 endpos, uint32_t color, bool filled, float thickness, float radius, int corners)
+    void ImGuiRenderer::DrawRect(ImVec2 startpos, ImVec2 endpos, uint32_t color, bool filled, float thickness)
     {
-        if (thickness > 0.f)
+        if (thickness > 0.f || filled)
+        {
+            filled ? ((ImDrawList*)UserData)->AddRectFilled(startpos, endpos, color) :
+                ((ImDrawList*)UserData)->AddRect(startpos, endpos, color, 0.f, 0, thickness);
+        }
+    }
+
+    void ImGuiRenderer::DrawRoundedRect(ImVec2 startpos, ImVec2 endpos, uint32_t color, bool filled, float topleftr, float toprightr, float bottomrightr, float bottomleftr, float thickness)
+    {
+        auto isUniformRadius = topleftr == toprightr && toprightr == bottomrightr && bottomrightr == bottomleftr;
+
+        if (isUniformRadius)
         {
             auto drawflags = 0;
 
-            if (corners & TopLeftCorner) drawflags |= ImDrawFlags_RoundCornersTopLeft;
-            if (corners & TopRightCorner) drawflags |= ImDrawFlags_RoundCornersTopRight;
-            if (corners & BottomRightCorner) drawflags |= ImDrawFlags_RoundCornersBottomRight;
-            if (corners & BottomLeftCorner) drawflags |= ImDrawFlags_RoundCornersBottomLeft;
+            if (topleftr > 0.f) drawflags |= ImDrawFlags_RoundCornersTopLeft;
+            if (toprightr > 0.f) drawflags |= ImDrawFlags_RoundCornersTopRight;
+            if (bottomrightr > 0.f) drawflags |= ImDrawFlags_RoundCornersBottomRight;
+            if (bottomleftr > 0.f) drawflags |= ImDrawFlags_RoundCornersBottomLeft;
 
-            filled ? ((ImDrawList*)UserData)->AddRectFilled(startpos, endpos, color, radius, drawflags) :
-                ((ImDrawList*)UserData)->AddRect(startpos, endpos, color, radius, drawflags, thickness);
+            filled ? ((ImDrawList*)UserData)->AddRectFilled(startpos, endpos, color, toprightr, drawflags) :
+                ((ImDrawList*)UserData)->AddRect(startpos, endpos, color, toprightr, drawflags, thickness);
+        }
+        else
+        {
+            auto& dl = *((ImDrawList*)UserData);
+            auto minlength = std::min(endpos.x - startpos.x, endpos.y - startpos.y);
+            topleftr = std::min(topleftr, minlength);
+            toprightr = std::min(toprightr, minlength);
+            bottomrightr = std::min(bottomrightr, minlength);
+            bottomleftr = std::min(bottomleftr, minlength);
+
+            dl.PathClear();
+            dl.PathLineTo(ImVec2{ startpos.x, endpos.y - bottomleftr });
+            dl.PathLineTo(ImVec2{ startpos.x, startpos.y + topleftr });
+            if (topleftr > 0.f) dl.PathArcToFast(ImVec2{ startpos.x + topleftr, startpos.y + topleftr }, topleftr, 6, 9);
+            dl.PathLineTo(ImVec2{ endpos.x - toprightr, startpos.y });
+            if (toprightr > 0.f) dl.PathArcToFast(ImVec2{ endpos.x - toprightr, startpos.y + toprightr }, toprightr, 9, 12);
+            dl.PathLineTo(ImVec2{ endpos.x, startpos.y - bottomrightr });
+            if (bottomrightr > 0.f) dl.PathArcToFast(ImVec2{ endpos.x - bottomrightr, endpos.y - bottomrightr }, bottomrightr, 0, 3);
+            dl.PathLineTo(ImVec2{ startpos.x - bottomleftr, endpos.y });
+            if (bottomleftr > 0.f) dl.PathArcToFast(ImVec2{ startpos.x + bottomleftr, startpos.y - bottomleftr }, bottomleftr, 3, 6);
+            dl.PathLineTo(ImVec2{ startpos.x, endpos.y - bottomleftr }); // create a closed path
+            
+            filled ? dl.PathFillConvex(color) : dl.PathStroke(color, 0, thickness);
         }
     }
 
@@ -756,25 +790,58 @@ namespace ImRichText
         context.strokeTriangle(pos1.x, pos1.y, pos2.x, pos2.y, pos3.x, pos3.y);
     }
 
-    void Blend2DRenderer::DrawRect(ImVec2 startpos, ImVec2 endpos, uint32_t color, bool filled, float thickness, float radius, int corners)
+    void Blend2DRenderer::DrawRect(ImVec2 startpos, ImVec2 endpos, uint32_t color, bool filled, float thickness)
     {
         BLRgba32 rgba{ color };
         context.setStrokeWidth(thickness);
         context.setStrokeStyle(rgba);
         if (filled) context.setFillStyle(rgba);
         else context.setFillStyle(IM_COL32_BLACK_TRANS);
-        context.strokeRoundRect(startpos.x, startpos.y, endpos.x - startpos.x, endpos.y - startpos.y, radius, radius);
+        context.strokeRect(startpos.x, startpos.y, endpos.x - startpos.x, endpos.y - startpos.y);
     }
 
     void Blend2DRenderer::DrawRectGradient(ImVec2 startpos, ImVec2 endpos, uint32_t topleftcolor, uint32_t toprightcolor, uint32_t bottomrightcolor, uint32_t bottomleftcolor)
     {
         BLGradient gradient;
         gradient.setType(BLGradientType::BL_GRADIENT_TYPE_LINEAR);
-        //gradient.setAngle();
+        gradient.setX0(startpos.x);
+        gradient.setX1(endpos.x);
+        gradient.setY0(startpos.y);
+        gradient.setY1(endpos.y);
         gradient.addStop(0.f, BLRgba32{ topleftcolor });
         gradient.addStop(1.f, BLRgba32{ bottomrightcolor });
         context.setFillStyle(gradient);
         context.strokeRect(startpos.x, startpos.y, endpos.x - startpos.x, endpos.y - startpos.y);
+    }
+
+    void Blend2DRenderer::DrawRoundedRect(ImVec2 startpos, ImVec2 endpos, uint32_t color, bool filled, float topleftr, float toprightr, float bottomrightr, float bottomleftr, float thickness)
+    {
+        auto isUniformRadius = toprightr == toprightr && toprightr == bottomrightr && bottomrightr == bottomleftr;
+        BLRgba32 rgba{ color };
+        context.setStrokeWidth(thickness);
+        context.setStrokeStyle(rgba);
+        if (filled) context.setFillStyle(rgba);
+        else context.setFillStyle(IM_COL32_BLACK_TRANS);
+
+        if (isUniformRadius)
+        {
+            context.strokeRoundedRect(startpos.x, startpos.y, endpos.x - startpos.x, endpos.y - startpos.y, topleftr, bottomrightr);
+        }
+        else
+        {
+            BLPath path;
+            path.moveTo(startpos.x, endpos.y - bottomleftr);
+            path.lineTo(startpos.x, startpos.y + topleftr);
+            if (topleftr > 0.f) path.arcTo(startpos.x + topleftr, startpos.y + topleftr, topleftr, topleftr, M_PI, 1.5 * M_PI);
+            path.lineTo(endpos.x - toprightr, startpos.y);
+            if (toprightr > 0.f) path.arcTo(endpos.x - toprightr, startpos.y + toprightr, toprightr, toprightr, 1.5 * M_PI, 2.0 * M_PI);
+            path.lineTo(endpos.x, startpos.y - bottomrightr);
+            if (bottomrightr > 0.f) path.arcTo(endpos.x - bottomrightr, endpos.y - bottomrightr, bottomrightr, bottomrightr, 0.0, 0.5 * M_PI);
+            path.lineTo(startpos.x - bottomleftr, endpos.y);
+            if (bottomleftr > 0.f) path.arcTo(startpos.x + bottomleftr, startpos.y - bottomleftr, bottomleftr, bottomleftr, 0.5 * M_PI, M_PI);
+
+            context.strokePath(path);
+        }
     }
 
     void Blend2DRenderer::DrawPolygon(ImVec2* points, int sz, uint32_t color, bool filled, float thickness)
@@ -812,6 +879,18 @@ namespace ImRichText
 
     void Blend2DRenderer::DrawRadialGradient(ImVec2 center, float radius, uint32_t in, uint32_t out, int start, int end)
     {
+        BLGradient gradient;
+        gradient.setType(BLGradientType::BL_GRADIENT_TYPE_RADIAL);
+        gradient.setX0(startpos.x);
+        gradient.setX1(startpos.x);
+        gradient.setY0(startpos.y);
+        gradient.setY1(startpos.y);
+        gradient.setR0(radius);
+        gradient.setR1(radius);
+        gradient.addStop(0.f, BLRgba32{ in });
+        gradient.addStop(1.f, BLRgba32{ out });
+        context.setFillStyle(gradient);
+        context.strokeCircle(startpos.x, startpos.y, radius);
     }
 
     bool Blend2DRenderer::SetCurrentFont(std::string_view family, float sz, FontType type) override
@@ -833,7 +912,15 @@ namespace ImRichText
 
     ImVec2 Blend2DRenderer::GetTextSize(std::string_view text, void* fontptr)
     {
-        // TODO: Implement this
+        auto& font = *((BLFont*)fontptr);
+        BLGlyphBuffer buf;
+        BLTextMetrics metrics;
+        buf.setUtf8Text(text.data(), text.size());
+        font.shape(buf);
+        font.getTextMetrics(buf, metrics);
+
+        auto& bb = metrics.boundingBox;
+        return ImVec2{ bb.x1 - bb.x0, bb.y1 - bb.y0 };
     }
 
     void Blend2DRenderer::DrawText(std::string_view text, ImVec2 pos, uint32_t color)
@@ -847,6 +934,7 @@ namespace ImRichText
     void Blend2DRenderer::DrawText(std::string_view text, std::string_view family, ImVec2 pos, float sz, uint32_t color, FontType type)
     {
         auto font = GetFont(family, sz, type, nullptr);
+        assert(font != nullptr);
         BLRgba32 rgba{ color };
         context.setFillStyle(rgba);
         context.fillUtf8Text(BLPoint{ pos.x, pos.y }, *font, BLStringView{ text.data(), text.size() });

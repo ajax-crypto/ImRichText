@@ -133,6 +133,7 @@ namespace ImRichText
 
     static std::unordered_map<std::size_t, RichTextData> RichTextMap;
 
+    // Using std::deque as a stable vector, could be replaced
 #ifdef IM_RICHTEXT_TARGET_IMGUI
     static std::unordered_map<ImGuiContext*, std::deque<RenderConfig>> ImRenderConfigs;
 #endif
@@ -485,8 +486,46 @@ namespace ImRichText
         }
         else if (AreSame(stylePropName, "border-radius"))
         {
-            shape.Border.radius = ExtractFloatWithUnit(stylePropVal, 0.f, config.DefaultFontSize * config.FontScale,
-                parentStyle.height, 1.f);
+            auto radius = ExtractFloatWithUnit(stylePropVal, 0.f, config.DefaultFontSize * config.FontScale,
+                style.height, 1.f);
+            shape.Border.setRadius(radius);
+            prop = StyleBorder;
+        }
+        else if (AreSame(stylePropName, "border-width"))
+        {
+            auto width = ExtractFloatWithUnit(stylePropVal, 0.f, config.DefaultFontSize * config.FontScale,
+                style.border.top, 1.f);
+            shape.Border.setThickness(width);
+            prop = StyleBorder;
+        }
+        else if (AreSame(stylePropName, "border-color"))
+        {
+            auto color = ExtractColor(stylePropVal, config.NamedColor, config.UserData);
+            shape.Border.setColor(color);
+            prop = StyleBorder;
+        }
+        else if (AreSame(stylePropName, "border-top-left-radius"))
+        {
+            shape.Border.cornerRadius[TopLeftCorner] = ExtractFloatWithUnit(stylePropVal, 0.f, config.DefaultFontSize * config.FontScale,
+                style.height, 1.f);
+            prop = StyleBorder;
+        }
+        else if (AreSame(stylePropName, "border-top-right-radius"))
+        {
+            shape.Border.cornerRadius[TopRightCorner] = ExtractFloatWithUnit(stylePropVal, 0.f, config.DefaultFontSize * config.FontScale,
+                style.height, 1.f);
+            prop = StyleBorder;
+        }
+        else if (AreSame(stylePropName, "border-bottom-right-radius"))
+        {
+            shape.Border.cornerRadius[BottomRightCorner] = ExtractFloatWithUnit(stylePropVal, 0.f, config.DefaultFontSize * config.FontScale,
+                style.height, 1.f);
+            prop = StyleBorder;
+        }
+        else if (AreSame(stylePropName, "border-bottom-left-radius"))
+        {
+            shape.Border.cornerRadius[BottomLeftCorner] = ExtractFloatWithUnit(stylePropVal, 0.f, config.DefaultFontSize * config.FontScale,
+                style.height, 1.f);
             prop = StyleBorder;
         }
         else if (AreSame(stylePropName, "font-style"))
@@ -1011,22 +1050,57 @@ namespace ImRichText
                     break;
                 }
             }
-
-            config.Renderer->DrawRect(startpos, endpos, config.DefaultBgColor, true);
         }
     }
 
-    static void DrawBackground(ImVec2 startpos, ImVec2 endpos,
-        const ColorGradient& gradient, uint32_t color, const RenderConfig& config)
+    static void DrawBorderRect(const FourSidedBorder& border, ImVec2 startpos, ImVec2 endpos, bool isUniform,
+        uint32_t bgcolor, const RenderConfig& config)
     {
+        if (isUniform && border.top.thickness > 0.f && border.top.color != bgcolor)
+        {
+            if (!border.isRounded())
+                config.Renderer->DrawRect(startpos, endpos, border.top.color, false, border.top.thickness);
+            else
+                config.Renderer->DrawRoundedRect(startpos, endpos, border.top.color, false,
+                    border.cornerRadius[TopLeftCorner], border.cornerRadius[TopRightCorner],
+                    border.cornerRadius[BottomRightCorner], border.cornerRadius[BottomLeftCorner],
+                    border.top.thickness);
+        }
+        else
+        {
+            auto width = endpos.x - startpos.x, height = endpos.y - startpos.y;
+
+            if (border.top.thickness > 0.f && border.top.color != bgcolor)
+                config.Renderer->DrawLine(startpos, startpos + ImVec2{ width, 0.f }, border.top.color, border.top.thickness);
+            if (border.right.thickness > 0.f && border.right.color != bgcolor)
+                config.Renderer->DrawLine(startpos + ImVec2{ width - border.right.thickness, 0.f }, endpos -
+                    ImVec2{ border.right.thickness, 0.f }, border.right.color, border.right.thickness);
+            if (border.left.thickness > 0.f && border.left.color != bgcolor)
+                config.Renderer->DrawLine(startpos, startpos + ImVec2{ 0.f, height }, border.left.color, border.left.thickness);
+            if (border.bottom.thickness > 0.f && border.bottom.color != bgcolor)
+                config.Renderer->DrawLine(startpos + ImVec2{ 0.f, height - border.bottom.thickness }, endpos -
+                    ImVec2{ 0.f, border.bottom.thickness }, border.bottom.color, border.bottom.thickness);
+        }
+    }
+
+    static void DrawBackground(ImVec2 startpos, ImVec2 endpos, const ColorGradient& gradient, uint32_t color, 
+        const FourSidedBorder& border, const RenderConfig& config)
+    {
+        if (color == IM_COL32_BLACK_TRANS) color = config.DefaultBgColor;
+
         if (gradient.totalStops != 0)
             (gradient.dir == ImGuiDir_Down || gradient.dir == ImGuiDir_Left) ?
             DrawLinearGradient(startpos, endpos, gradient.angleDegrees, gradient.dir,
                 std::begin(gradient.colorStops), std::begin(gradient.colorStops) + gradient.totalStops, config) :
             DrawLinearGradient(startpos, endpos, gradient.angleDegrees, gradient.dir,
                 std::rbegin(gradient.colorStops), std::rbegin(gradient.colorStops) + gradient.totalStops, config);
-        else if (color != config.DefaultBgColor && color != IM_COL32_BLACK_TRANS)
-            config.Renderer->DrawRect(startpos, endpos, color, true);
+        else
+            if (!border.isRounded())
+                config.Renderer->DrawRect(startpos, endpos, color, true);
+            else
+                config.Renderer->DrawRoundedRect(startpos, endpos, color, true, 
+                    border.cornerRadius[TopLeftCorner], border.cornerRadius[TopRightCorner],
+                    border.cornerRadius[BottomRightCorner], border.cornerRadius[BottomLeftCorner]);
     }
 
 #ifdef IM_RICHTEXT_TARGET_IMGUI
@@ -1216,10 +1290,10 @@ namespace ImRichText
                 auto diff = tagprops.range.second - tagprops.range.first;
                 auto progress = (tagprops.value / diff) * token.Bounds.width;
 
-                config.Renderer->DrawRect(startpos, endpos, config.MeterBgColor, true, 1.f, borderRadius, AllCorners);
-                config.Renderer->DrawRect(startpos, endpos, config.MeterBorderColor, false, 1.f, borderRadius, AllCorners);
-                config.Renderer->DrawRect(startpos + border, startpos - border + ImVec2{ progress, token.Bounds.height },
-                    config.MeterFgColor, true, 1.f, borderRadius, TopLeftCorner | BottomLeftCorner);
+                config.Renderer->DrawRoundedRect(startpos, endpos, config.MeterBgColor, true, borderRadius, borderRadius, borderRadius, borderRadius);
+                config.Renderer->DrawRoundedRect(startpos, endpos, config.MeterBorderColor, false, borderRadius, borderRadius, borderRadius, borderRadius);
+                config.Renderer->DrawRoundedRect(startpos + border, startpos - border + ImVec2{ progress, token.Bounds.height },
+                    config.MeterFgColor, true, borderRadius, 0.f, 0.f, borderRadius);
             }
             else
             {
@@ -1277,31 +1351,6 @@ namespace ImRichText
             DrawBoundingBox(ContentTypeToken, startpos, endpos, config);
         if ((token.Bounds.left + token.Bounds.width) > (bounds.x + initpos.x)) return false;
         return true;
-    }
-
-    static void DrawBorderRect(const FourSidedBorder& border, ImVec2 startpos, ImVec2 endpos, bool isUniform,
-        uint32_t bgcolor, const RenderConfig& config)
-    {
-        if (isUniform && border.top.thickness > 0.f && border.top.color != bgcolor)
-        {
-            config.Renderer->DrawRect(startpos, endpos, border.top.color, false, border.top.thickness,
-                border.radius, border.rounding);
-        }
-        else
-        {
-            auto width = endpos.x - startpos.x, height = endpos.y - startpos.y;
-
-            if (border.top.thickness > 0.f && border.top.color != bgcolor)
-                config.Renderer->DrawLine(startpos, startpos + ImVec2{ width, 0.f }, border.top.color, border.top.thickness);
-            if (border.right.thickness > 0.f && border.right.color != bgcolor)
-                config.Renderer->DrawLine(startpos + ImVec2{ width - border.right.thickness, 0.f }, endpos -
-                    ImVec2{ border.right.thickness, 0.f }, border.right.color, border.right.thickness);
-            if (border.left.thickness > 0.f && border.left.color != bgcolor)
-                config.Renderer->DrawLine(startpos, startpos + ImVec2{ 0.f, height }, border.left.color, border.left.thickness);
-            if (border.bottom.thickness > 0.f && border.bottom.color != bgcolor)
-                config.Renderer->DrawLine(startpos + ImVec2{ 0.f, height - border.bottom.thickness }, endpos -
-                    ImVec2{ 0.f, border.bottom.thickness }, border.bottom.color, border.bottom.thickness);
-        }
     }
 
     static bool DrawSegment(int lineidx, const SegmentData& segment,
@@ -1396,7 +1445,7 @@ namespace ImRichText
             {
                 auto startpos = shape.Start + initpos;
                 auto endpos = shape.End + initpos;
-                DrawBackground(startpos, endpos, shape.Gradient, shape.Color, config);
+                DrawBackground(startpos, endpos, shape.Gradient, shape.Color, shape.Border, config);
                 DrawBoundingBox(ContentTypeBg, startpos, endpos, config);
                 DrawBorderRect(shape.Border, startpos, endpos, shape.Border.isUniform, shape.Color, config);
                 if (shape.End.y > (bounds.y + initpos.y)) break;
