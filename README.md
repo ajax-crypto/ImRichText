@@ -108,7 +108,9 @@ The following subset of HTML tags/CSS properties are supported:
 | height/width | `px`/`em` |
 | list-style-type | (_Only for list items_) `circle`/`disk`/`square`/`custom`[^2] |
 | border/border-top/etc. | `2px solid gray`[^6] |
-| border-radius | `px`/`em`[^4] |
+| border-color | As specified for `background` |
+| border-width | Numeric value in pixel |
+| border-radius/border-top-left-radius/etc. | `px`/`em` |
 | alignment | `left`/`right`/`center`/`justify` _(Horizontal text alignment)_ |
 | vertical-align | `top`/`bottom`/`center` _(Vertical text alignment)_ |
 | box-shadow | `offset`, `blur` and `spread` supported |
@@ -282,6 +284,5 @@ Platform integration implementation provided for ImGui + GLFW (available in exam
 [^1]: Nested subscript/superscript is untested at the moment
 [^2]: Custom bullets are also possible, set `RenderConfig::DrawBullet` function pointer and `list-style-type` property to `custom`
 [^3]: Underline text due to `<u>` tag is not baseline-underlined, but underlined beneath the whole text
-[^4]: Border radius support is rudimentary currently, radius is applied to all corners uniformly
 [^5]: Only axis aligned gradients are support as `background` property
 [^6]: Border line type is parsed but not used for rendering

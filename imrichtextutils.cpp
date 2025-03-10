@@ -1001,6 +1001,14 @@ namespace ImRichText
         }
     }
 
+    bool FourSidedBorder::isRounded() const
+    {
+        return cornerRadius[TopLeftCorner] > 0.f ||
+            cornerRadius[TopRightCorner] > 0.f ||
+            cornerRadius[BottomRightCorner] > 0.f ||
+            cornerRadius[BottomLeftCorner] > 0.f;
+    }
+
     FourSidedBorder& FourSidedBorder::setColor(uint32_t color)
     {
         left.color = right.color = top.color = bottom.color = color;
@@ -1010,6 +1018,12 @@ namespace ImRichText
     FourSidedBorder& FourSidedBorder::setThickness(float thickness)
     {
         left.thickness = right.thickness = top.thickness = bottom.thickness = thickness;
+        return *this;
+    }
+
+    FourSidedBorder& FourSidedBorder::setRadius(float radius)
+    {
+        cornerRadius[0] = cornerRadius[1] = cornerRadius[2] = cornerRadius[3] = radius;
         return *this;
     }
 }

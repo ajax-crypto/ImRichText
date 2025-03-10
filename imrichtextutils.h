@@ -136,6 +136,7 @@ namespace ImRichText
     };
 
     // Implement this to draw primitives in your favorite graphics API
+    // TODO: Separate gradient creation vs. drawing
     struct IRenderer
     {
         void* UserData = nullptr;
@@ -146,7 +147,8 @@ namespace ImRichText
         virtual void DrawLine(ImVec2 startpos, ImVec2 endpos, uint32_t color, float thickness = 1.f) = 0;
         virtual void DrawPolyline(ImVec2* points, int sz, uint32_t color, float thickness) = 0;
         virtual void DrawTriangle(ImVec2 pos1, ImVec2 pos2, ImVec2 pos3, uint32_t color, bool filled, bool thickness = 1.f) = 0;
-        virtual void DrawRect(ImVec2 startpos, ImVec2 endpos, uint32_t color, bool filled, float thickness = 1.f, float radius = 0.f, int corners = 0) = 0;
+        virtual void DrawRect(ImVec2 startpos, ImVec2 endpos, uint32_t color, bool filled, float thickness = 1.f) = 0;
+        virtual void DrawRoundedRect(ImVec2 startpos, ImVec2 endpos, uint32_t color, bool filled, float topleftr, float toprightr, float bottomrightr, float bottomleftr, float thickness = 1.f) = 0;
         virtual void DrawRectGradient(ImVec2 startpos, ImVec2 endpos, uint32_t topleftcolor, uint32_t toprightcolor, uint32_t bottomrightcolor, uint32_t bottomleftcolor) = 0;
         virtual void DrawPolygon(ImVec2* points, int sz, uint32_t color, bool filled, float thickness = 1.f) = 0;
         virtual void DrawPolyGradient(ImVec2* points, uint32_t* colors, int sz) = 0;
@@ -280,26 +282,25 @@ namespace ImRichText
 
     enum BoxCorner
     {
-        NoCorners = 0,
-        TopLeftCorner = 1,
-        TopRightCorner = 2,
-        BottomRightCorner = 4,
-        BottomLeftCorner = 8,
-        AllCorners = TopLeftCorner | TopRightCorner | BottomRightCorner | BottomLeftCorner
+        TopLeftCorner,
+        TopRightCorner,
+        BottomRightCorner,
+        BottomLeftCorner
     };
 
     struct FourSidedBorder
     {
         Border top, left, bottom, right;
-        float radius = 0.f;
-        int rounding = BoxCorner::NoCorners;
+        float cornerRadius[4];
         bool isUniform = false;
 
         float h() const { return left.thickness + right.thickness; }
         float v() const { return top.thickness + bottom.thickness; }
+        bool isRounded() const;
 
         FourSidedBorder& setColor(uint32_t color);
         FourSidedBorder& setThickness(float thickness);
+        FourSidedBorder& setRadius(float radius);
         //FourSidedBorder& setLineType(uint32_t color);
     };
 

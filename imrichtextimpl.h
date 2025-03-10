@@ -62,7 +62,8 @@ namespace ImRichText
         void DrawLine(ImVec2 startpos, ImVec2 endpos, uint32_t color, float thickness = 1.f);
         void DrawPolyline(ImVec2* points, int sz, uint32_t color, float thickness);
         void DrawTriangle(ImVec2 pos1, ImVec2 pos2, ImVec2 pos3, uint32_t color, bool filled, bool thickness = 1.f);
-        void DrawRect(ImVec2 startpos, ImVec2 endpos, uint32_t color, bool filled, float thickness = 1.f, float radius = 0.f, int corners = 0);
+        void DrawRect(ImVec2 startpos, ImVec2 endpos, uint32_t color, bool filled, float thickness = 1.f);
+        void DrawRoundedRect(ImVec2 startpos, ImVec2 endpos, uint32_t color, bool filled, float topleftr, float toprightr, float bottomrightr, float bottomleftr, float thickness = 1.f);
         void DrawRectGradient(ImVec2 startpos, ImVec2 endpos, uint32_t topleftcolor, uint32_t toprightcolor, uint32_t bottomrightcolor, uint32_t bottomleftcolor);
         void DrawPolygon(ImVec2* points, int sz, uint32_t color, bool filled, float thickness = 1.f);
         void DrawPolyGradient(ImVec2* points, uint32_t* colors, int sz);
@@ -109,8 +110,9 @@ namespace ImRichText
         void DrawLine(ImVec2 startpos, ImVec2 endpos, uint32_t color, float thickness = 1.f);
         void DrawPolyline(ImVec2* points, int sz, uint32_t color, float thickness);
         void DrawTriangle(ImVec2 pos1, ImVec2 pos2, ImVec2 pos3, uint32_t color, bool filled, bool thickness = 1.f);
-        void DrawRect(ImVec2 startpos, ImVec2 endpos, uint32_t color, bool filled, float thickness = 1.f, float radius = 0.f, int corners = 0);
+        void DrawRect(ImVec2 startpos, ImVec2 endpos, uint32_t color, bool filled, float thickness = 1.f);
         void DrawRectGradient(ImVec2 startpos, ImVec2 endpos, uint32_t topleftcolor, uint32_t toprightcolor, uint32_t bottomrightcolor, uint32_t bottomleftcolor);
+        void DrawRoundedRect(ImVec2 startpos, ImVec2 endpos, uint32_t color, bool filled, float topleftr, float toprightr, float bottomrightr, float bottomleftr, float thickness = 1.f);
         void DrawPolygon(ImVec2* points, int sz, uint32_t color, bool filled, float thickness = 1.f);
         void DrawPolyGradient(ImVec2* points, uint32_t* colors, int sz);
         void DrawCircle(ImVec2 center, float radius, uint32_t color, bool filled, bool thickness = 1.f);
