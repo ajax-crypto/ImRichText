@@ -654,6 +654,11 @@ namespace ImRichText
         return it != Colors.end() ? it->second : uint32_t{ IM_COL32_BLACK };
     }
 
+    bool IsColorVisible(uint32_t color)
+    {
+        return (color & 0xFF000000) != 0;
+    }
+
     Border ExtractBorder(std::string_view input, float ems, float percent, 
         uint32_t(*NamedColor)(const char*, void*), void* userData)
     {
@@ -1007,6 +1012,12 @@ namespace ImRichText
             cornerRadius[TopRightCorner] > 0.f ||
             cornerRadius[BottomRightCorner] > 0.f ||
             cornerRadius[BottomLeftCorner] > 0.f;
+    }
+
+    bool FourSidedBorder::exists() const
+    {
+        return top.thickness > 0.f || bottom.thickness > 0.f ||
+            left.thickness > 0.f || right.thickness > 0.f;
     }
 
     FourSidedBorder& FourSidedBorder::setColor(uint32_t color)
