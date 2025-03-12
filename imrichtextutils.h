@@ -297,6 +297,7 @@ namespace ImRichText
         float h() const { return left.thickness + right.thickness; }
         float v() const { return top.thickness + bottom.thickness; }
         bool isRounded() const;
+        bool exists() const;
 
         FourSidedBorder& setColor(uint32_t color);
         FourSidedBorder& setThickness(float thickness);
@@ -349,7 +350,8 @@ namespace ImRichText
     [[nodiscard]] uint32_t ToRGBA(int r, int g, int b, int a = 255);
     [[nodiscard]] uint32_t ToRGBA(float r, float g, float b, float a = 1.f);
     [[nodiscard]] uint32_t GetColor(const char* name, void*);
-
+    [[nodiscard]] bool IsColorVisible(uint32_t color);
+ 
     // Parsing functions
     [[nodiscard]] uint32_t ExtractColor(std::string_view stylePropVal, uint32_t(*NamedColor)(const char*, void*), void* userData);
     [[nodiscard]] ColorGradient ExtractLinearGradient(std::string_view input, uint32_t(*NamedColor)(const char*, void*), void* userData);

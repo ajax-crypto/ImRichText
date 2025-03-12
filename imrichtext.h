@@ -123,10 +123,8 @@ namespace ImRichText
         StyleListBulletType = 1 << 8,
         StyleHAlignment = 1 << 9,
         StyleVAlignment = 1 << 10,
-        StylePaddingTop = 1 << 11,
-        StylePaddingBottom = 1 << 12,
-        StylePaddingLeft = 1 << 13,
-        StylePaddingRight = 1 << 14,
+        StylePadding = 1 << 11,
+        StyleMargin = 1 << 12,
         StyleBorder = 1 << 15,
         StyleBorderRadius = 1 << 16,
         StyleCellSpacing = 1 << 17,
@@ -136,7 +134,7 @@ namespace ImRichText
         StyleWordBreak = 1 << 21,
         StyleWhitespaceCollapse = 1 << 22,
         StyleWhitespace = 1 << 23,
-        StyleTextOverflow = 1 << 24
+        StyleTextOverflow = 1 << 24,
     };
 
     enum TextAlignment
@@ -162,22 +160,17 @@ namespace ImRichText
         WordBreakBehavior wbbhv = WordBreakBehavior::Normal;
         WhitespaceCollapseBehavior wscbhv = WhitespaceCollapseBehavior::Collapse;
         ListStyle list;
-        FourSidedMeasure padding;
-        FourSidedMeasure border;
         int alignment = TextAlignment::TextAlignLeading;
         float superscriptOffset = 0.f; // TODO: Move to DrawableLine
         float subscriptOffset = 0.f; // TODO: Move to DrawableLine
-        int32_t backgroundIdx = -1; // index in Drawables::BackgroundShapes
         bool blink = false;
     };
 
     struct SegmentData
     {
         std::vector<Token> Tokens;
-        std::vector<int> Depths;
         BoundedBox Bounds; // Absolute coordinates
         int StyleIdx = -1;
-        int Depth = 0;
 
         int SubscriptDepth = 0;
         int SuperscriptDepth = 0;
@@ -203,11 +196,14 @@ namespace ImRichText
         float height() const { return Content.height + Offset.top + Offset.bottom; }
     };
 
-    struct BackgroundShape
+    struct DrawableBlock
     {
         ImVec2 Start{ -1.f, -1.f }, End{ -1.f, -1.f };
         uint32_t Color = IM_COL32_BLACK_TRANS;
+        FourSidedMeasure padding;
+        FourSidedMeasure margin;
         FourSidedBorder Border;
+        int  BorderCornerRel = 0;
         BoxShadow Shadow;
         ColorGradient Gradient;
     };
@@ -306,8 +302,8 @@ namespace ImRichText
 
     struct Drawables
     {
-        std::vector<DrawableLine>    ForegroundLines;
-        std::vector<BackgroundShape> BackgroundShapes[IM_RICHTEXT_MAXDEPTH];
+        std::vector<DrawableLine>  ForegroundLines;
+        std::vector<DrawableBlock> BackgroundBlocks[IM_RICHTEXT_MAXDEPTH];
         std::vector<StyleDescriptor> StyleDescriptors;
         std::vector<TagPropertyDescriptor>   TagDescriptors;
         std::vector<ListItemTokenDescriptor> ListItemTokens;

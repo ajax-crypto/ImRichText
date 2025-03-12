@@ -462,9 +462,11 @@ namespace ImRichText
         }
     }
 
-    void ImGuiRenderer::DrawRoundedRect(ImVec2 startpos, ImVec2 endpos, uint32_t color, bool filled, float topleftr, float toprightr, float bottomrightr, float bottomleftr, float thickness)
+    void ImGuiRenderer::DrawRoundedRect(ImVec2 startpos, ImVec2 endpos, uint32_t color, bool filled, 
+        float topleftr, float toprightr, float bottomrightr, float bottomleftr, float thickness)
     {
-        auto isUniformRadius = topleftr == toprightr && toprightr == bottomrightr && bottomrightr == bottomleftr;
+        auto isUniformRadius = (topleftr == toprightr && toprightr == bottomrightr && bottomrightr == bottomleftr) ||
+            ((topleftr + toprightr + bottomrightr + bottomleftr) == 0.f);
 
         if (isUniformRadius)
         {
@@ -493,11 +495,10 @@ namespace ImRichText
             if (topleftr > 0.f) dl.PathArcToFast(ImVec2{ startpos.x + topleftr, startpos.y + topleftr }, topleftr, 6, 9);
             dl.PathLineTo(ImVec2{ endpos.x - toprightr, startpos.y });
             if (toprightr > 0.f) dl.PathArcToFast(ImVec2{ endpos.x - toprightr, startpos.y + toprightr }, toprightr, 9, 12);
-            dl.PathLineTo(ImVec2{ endpos.x, startpos.y - bottomrightr });
+            dl.PathLineTo(ImVec2{ endpos.x, endpos.y - bottomrightr });
             if (bottomrightr > 0.f) dl.PathArcToFast(ImVec2{ endpos.x - bottomrightr, endpos.y - bottomrightr }, bottomrightr, 0, 3);
             dl.PathLineTo(ImVec2{ startpos.x - bottomleftr, endpos.y });
-            if (bottomleftr > 0.f) dl.PathArcToFast(ImVec2{ startpos.x + bottomleftr, startpos.y - bottomleftr }, bottomleftr, 3, 6);
-            dl.PathLineTo(ImVec2{ startpos.x, endpos.y - bottomleftr }); // create a closed path
+            if (bottomleftr > 0.f) dl.PathArcToFast(ImVec2{ startpos.x + bottomleftr, endpos.y - bottomleftr }, bottomleftr, 3, 6);
             
             filled ? dl.PathFillConvex(color) : dl.PathStroke(color, 0, thickness);
         }
@@ -835,10 +836,10 @@ namespace ImRichText
             if (topleftr > 0.f) path.arcTo(startpos.x + topleftr, startpos.y + topleftr, topleftr, topleftr, M_PI, 1.5 * M_PI);
             path.lineTo(endpos.x - toprightr, startpos.y);
             if (toprightr > 0.f) path.arcTo(endpos.x - toprightr, startpos.y + toprightr, toprightr, toprightr, 1.5 * M_PI, 2.0 * M_PI);
-            path.lineTo(endpos.x, startpos.y - bottomrightr);
+            path.lineTo(endpos.x, endpos.y - bottomrightr);
             if (bottomrightr > 0.f) path.arcTo(endpos.x - bottomrightr, endpos.y - bottomrightr, bottomrightr, bottomrightr, 0.0, 0.5 * M_PI);
             path.lineTo(startpos.x - bottomleftr, endpos.y);
-            if (bottomleftr > 0.f) path.arcTo(startpos.x + bottomleftr, startpos.y - bottomleftr, bottomleftr, bottomleftr, 0.5 * M_PI, M_PI);
+            if (bottomleftr > 0.f) path.arcTo(startpos.x + bottomleftr, endpos.y - bottomleftr, bottomleftr, bottomleftr, 0.5 * M_PI, M_PI);
 
             context.strokePath(path);
         }
