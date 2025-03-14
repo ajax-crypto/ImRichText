@@ -909,9 +909,9 @@ namespace ImRichText
         visitor.Finalize();
     }
 
-    float IRenderer::EllipsisWidth(void* fontptr)
+    float IRenderer::EllipsisWidth(void* fontptr, float sz)
     {
-        return GetTextSize("...", fontptr).x;
+        return GetTextSize("...", fontptr, sz).x;
     }
 
     void IRenderer::DrawDefaultBullet(BulletType type, ImVec2 initpos, const BoundedBox& bounds, uint32_t color, float bulletsz)

@@ -157,14 +157,14 @@ namespace ImRichText
         virtual void DrawBullet(ImVec2 startpos, ImVec2 endpos, uint32_t color, int index, int depth) {};
         
         virtual bool SetCurrentFont(std::string_view family, float sz, FontType type) { return false; };
-        virtual bool SetCurrentFont(void* fontptr) { return false; };
+        virtual bool SetCurrentFont(void* fontptr, float sz) { return false; };
         virtual void ResetFont() {};
 
-        virtual ImVec2 GetTextSize(std::string_view text, void* fontptr) = 0;
+        virtual ImVec2 GetTextSize(std::string_view text, void* fontptr, float sz) = 0;
         virtual void DrawText(std::string_view text, ImVec2 pos, uint32_t color) = 0;
         virtual void DrawText(std::string_view text, std::string_view family, ImVec2 pos, float sz, uint32_t color, FontType type) = 0;
         virtual void DrawTooltip(ImVec2 pos, std::string_view text) = 0;
-        virtual float EllipsisWidth(void* fontptr);
+        virtual float EllipsisWidth(void* fontptr, float sz);
 
         void DrawDefaultBullet(BulletType type, ImVec2 initpos, const BoundedBox& bounds, uint32_t color, float bulletsz);
     };
@@ -184,6 +184,7 @@ namespace ImRichText
         struct WordProperty
         {
             void* font;
+            float sz;
             WordBreakBehavior wb;
         };
 

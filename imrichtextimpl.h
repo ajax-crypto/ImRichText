@@ -71,13 +71,17 @@ namespace ImRichText
         void DrawRadialGradient(ImVec2 center, float radius, uint32_t in, uint32_t out, int start, int end);
 
         bool SetCurrentFont(std::string_view family, float sz, FontType type) override;
-        bool SetCurrentFont(void* fontptr) override;
+        bool SetCurrentFont(void* fontptr, float sz) override;
         void ResetFont() override;
-        [[nodiscard]] ImVec2 GetTextSize(std::string_view text, void* fontptr);
+        [[nodiscard]] ImVec2 GetTextSize(std::string_view text, void* fontptr, float sz);
         void DrawText(std::string_view text, ImVec2 pos, uint32_t color);
         void DrawText(std::string_view text, std::string_view family, ImVec2 pos, float sz, uint32_t color, FontType type);
         void DrawTooltip(ImVec2 pos, std::string_view text);
-        [[nodiscard]] float EllipsisWidth(void* fontptr) override;
+        [[nodiscard]] float EllipsisWidth(void* fontptr, float sz) override;
+
+    private:
+
+        float _currentFontSz = 0.f;
     };
 
     struct ImGuiPlatform final : public IPlatform
@@ -119,9 +123,9 @@ namespace ImRichText
         void DrawRadialGradient(ImVec2 center, float radius, uint32_t in, uint32_t out, int start, int end);
 
         bool SetCurrentFont(std::string_view family, float sz, FontType type) override;
-        bool SetCurrentFont(void* fontptr) override;
+        bool SetCurrentFont(void* fontptr, float sz) override;
         void ResetFont() override;
-        ImVec2 GetTextSize(std::string_view text, void* fontptr);
+        ImVec2 GetTextSize(std::string_view text, void* fontptr, float sz);
         void DrawText(std::string_view text, ImVec2 pos, uint32_t color);
         void DrawText(std::string_view text, std::string_view family, ImVec2 pos, float sz, uint32_t color, FontType type);
         void DrawTooltip(ImVec2 pos, std::string_view text);
