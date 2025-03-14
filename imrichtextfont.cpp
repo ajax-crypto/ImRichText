@@ -108,6 +108,7 @@ namespace ImFontManager
         BLFontFace FontFace[FT_Total];
 #endif
         FontCollectionFile Files;
+        bool AutoScale = false;
     };
 
     struct FontMatchInfo
@@ -170,12 +171,13 @@ namespace ImFontManager
         }
     }
 
-    bool LoadFonts(std::string_view family, const FontCollectionFile& files, float size, ImFontConfig config)
+    bool LoadFonts(std::string_view family, const FontCollectionFile& files, float size, ImFontConfig config, bool autoScale)
     {
         ImGuiIO& io = ImGui::GetIO();
         FontStore[family].Files = files;
 
         auto& ffamily = FontStore[family];
+        ffamily.AutoScale = autoScale;
         LoadFont(io, ffamily, FT_Normal, size, config, 0);
 
 #ifdef IMGUI_ENABLE_FREETYPE
@@ -234,10 +236,10 @@ namespace ImFontManager
 #endif
 
 #ifdef IM_RICHTEXT_TARGET_IMGUI
-    static void LoadDefaultProportionalFont(float sz, const ImFontConfig& fconfig)
+    static void LoadDefaultProportionalFont(float sz, const ImFontConfig& fconfig, bool autoScale)
     {
 #ifdef _WIN32
-        LoadFonts(IM_RICHTEXT_DEFAULT_FONTFAMILY, { WINDOWS_DEFAULT_FONT }, sz, fconfig);
+        LoadFonts(IM_RICHTEXT_DEFAULT_FONTFAMILY, { WINDOWS_DEFAULT_FONT }, sz, fconfig, autoScale);
 #elif __linux__
         std::filesystem::path fedoradir = "/usr/share/fonts/open-sans";
         std::filesystem::path ubuntudir = "/usr/share/fonts/truetype/freefont";
@@ -250,10 +252,10 @@ namespace ImFontManager
         // TODO: Add default fonts for other platforms
     }
 
-    static void LoadDefaultMonospaceFont(float sz, const ImFontConfig& fconfig)
+    static void LoadDefaultMonospaceFont(float sz, const ImFontConfig& fconfig, bool autoScale)
     {
 #ifdef _WIN32
-        LoadFonts(IM_RICHTEXT_MONOSPACE_FONTFAMILY, { WINDOWS_DEFAULT_MONOFONT }, sz, fconfig);
+        LoadFonts(IM_RICHTEXT_MONOSPACE_FONTFAMILY, { WINDOWS_DEFAULT_MONOFONT }, sz, fconfig, autoScale);
 #elif __linux__
         std::filesystem::path fedoradir = "/usr/share/fonts/liberation-mono";
         std::filesystem::path ubuntudir = "/usr/share/fonts/truetype/freefont";
@@ -305,7 +307,8 @@ namespace ImFontManager
     using ImWchar = uint32_t;
 #endif
 
-    static bool LoadDefaultFonts(float sz, const FontFileNames* names, bool skipProportional, bool skipMonospace, const ImWchar* glyphs)
+    static bool LoadDefaultFonts(float sz, const FontFileNames* names, bool skipProportional, bool skipMonospace, 
+        bool autoScale, const ImWchar* glyphs)
     {
 #ifdef IM_RICHTEXT_TARGET_IMGUI
         ImFontConfig fconfig;
@@ -328,8 +331,8 @@ namespace ImFontManager
         if (names == nullptr)
         {
 #ifdef IM_RICHTEXT_TARGET_IMGUI
-            if (!skipProportional) LoadDefaultProportionalFont(sz, fconfig);
-            if (!skipMonospace) LoadDefaultMonospaceFont(sz, fconfig);
+            if (!skipProportional) LoadDefaultProportionalFont(sz, fconfig, autoScale);
+            if (!skipMonospace) LoadDefaultMonospaceFont(sz, fconfig, autoScale);
 #endif
 #ifdef IM_RICHTEXT_TARGET_BLEND2D
             if (!skipProportional) LoadDefaultProportionalFont(sz);
@@ -367,7 +370,7 @@ namespace ImFontManager
                 files.Files[FT_Italics] = copyFileName(names->Proportional.Files[FT_Italics], baseFontPath, startidx);
                 files.Files[FT_BoldItalics] = copyFileName(names->Proportional.Files[FT_BoldItalics], baseFontPath, startidx);
 #ifdef IM_RICHTEXT_TARGET_IMGUI
-                LoadFonts(IM_RICHTEXT_DEFAULT_FONTFAMILY, files, sz, fconfig);
+                LoadFonts(IM_RICHTEXT_DEFAULT_FONTFAMILY, files, sz, fconfig, autoScale);
 #endif
 #ifdef IM_RICHTEXT_TARGET_BLEND2D
                 LoadFonts(IM_RICHTEXT_DEFAULT_FONTFAMILY, files, sz);
@@ -376,7 +379,7 @@ namespace ImFontManager
             else
             {
 #ifdef IM_RICHTEXT_TARGET_IMGUI
-                if (!skipProportional) LoadDefaultProportionalFont(sz, fconfig);
+                if (!skipProportional) LoadDefaultProportionalFont(sz, fconfig, autoScale);
 #endif
 #ifdef IM_RICHTEXT_TARGET_BLEND2D
                 if (!skipProportional) LoadDefaultProportionalFont(sz);
@@ -390,7 +393,7 @@ namespace ImFontManager
                 files.Files[FT_Italics] = copyFileName(names->Monospace.Files[FT_Italics], baseFontPath, startidx);
                 files.Files[FT_BoldItalics] = copyFileName(names->Monospace.Files[FT_BoldItalics], baseFontPath, startidx);
 #ifdef IM_RICHTEXT_TARGET_IMGUI
-                LoadFonts(IM_RICHTEXT_MONOSPACE_FONTFAMILY, files, sz, fconfig);
+                LoadFonts(IM_RICHTEXT_MONOSPACE_FONTFAMILY, files, sz, fconfig, autoScale);
 #endif
 #ifdef IM_RICHTEXT_TARGET_BLEND2D
                 LoadFonts(IM_RICHTEXT_MONOSPACE_FONTFAMILY, files, sz);
@@ -399,7 +402,7 @@ namespace ImFontManager
             else
             {
 #ifdef IM_RICHTEXT_TARGET_IMGUI
-                if (!skipMonospace) LoadDefaultMonospaceFont(sz, fconfig);
+                if (!skipMonospace) LoadDefaultMonospaceFont(sz, fconfig, autoScale);
 #endif
 #ifdef IM_RICHTEXT_TARGET_BLEND2D
                 if (!skipMonospace) LoadDefaultMonospaceFont(sz);
@@ -439,7 +442,8 @@ namespace ImFontManager
 
         for (auto sz : sizes)
         {
-            LoadDefaultFonts(sz, names, !(flt & FLT_Proportional), !(flt & FLT_Monospace), glyphrange);
+            LoadDefaultFonts(sz, names, !(flt & FLT_Proportional), !(flt & FLT_Monospace), 
+                flt & FLT_AutoScale, glyphrange);
         }
 
 #ifdef IM_RICHTEXT_TARGET_IMGUI
@@ -451,21 +455,22 @@ namespace ImFontManager
 #ifndef IM_FONTMANAGER_STANDALONE
     std::vector<float> GetFontSizes(const RenderConfig& config, uint64_t flt)
     {
-        std::unordered_set<float> sizes;
-        sizes.insert(config.DefaultFontSize * config.FontScale);
+        std::vector<float> sizes;
+        sizes.push_back(config.DefaultFontSize * config.FontScale);
 
-        if (flt & FLT_HasSubscript) sizes.insert(config.DefaultFontSize * config.ScaleSubscript * config.FontScale);
-        if (flt & FLT_HasSuperscript) sizes.insert(config.DefaultFontSize * config.ScaleSuperscript * config.FontScale);
-        if (flt & FLT_HasSmall) sizes.insert(config.DefaultFontSize * 0.8f * config.FontScale);
-        if (flt & FLT_HasH1) sizes.insert(config.HFontSizes[0] * config.FontScale);
-        if (flt & FLT_HasH2) sizes.insert(config.HFontSizes[1] * config.FontScale);
-        if (flt & FLT_HasH3) sizes.insert(config.HFontSizes[2] * config.FontScale);
-        if (flt & FLT_HasH4) sizes.insert(config.HFontSizes[3] * config.FontScale);
-        if (flt & FLT_HasH5) sizes.insert(config.HFontSizes[4] * config.FontScale);
-        if (flt & FLT_HasH6) sizes.insert(config.HFontSizes[5] * config.FontScale);
-        if (flt & FLT_HasHeaders) for (auto sz : config.HFontSizes) sizes.insert(sz * config.FontScale);
+        if (flt & FLT_HasSubscript) sizes.push_back(config.DefaultFontSize * config.ScaleSubscript * config.FontScale);
+        if (flt & FLT_HasSuperscript) sizes.push_back(config.DefaultFontSize * config.ScaleSuperscript * config.FontScale);
+        if (flt & FLT_HasSmall) sizes.push_back(config.DefaultFontSize * 0.8f * config.FontScale);
+        if (flt & FLT_HasH1) sizes.push_back(config.HFontSizes[0] * config.FontScale);
+        if (flt & FLT_HasH2) sizes.push_back(config.HFontSizes[1] * config.FontScale);
+        if (flt & FLT_HasH3) sizes.push_back(config.HFontSizes[2] * config.FontScale);
+        if (flt & FLT_HasH4) sizes.push_back(config.HFontSizes[3] * config.FontScale);
+        if (flt & FLT_HasH5) sizes.push_back(config.HFontSizes[4] * config.FontScale);
+        if (flt & FLT_HasH6) sizes.push_back(config.HFontSizes[5] * config.FontScale);
+        if (flt & FLT_HasHeaders) for (auto sz : config.HFontSizes) sizes.push_back(sz * config.FontScale);
+        std::sort(sizes.begin(), sizes.end());
 
-        return std::vector<float>{ sizes.begin(), sizes.end() };
+        return (flt & FLT_AutoScale) ? std::vector<float>{ *(--sizes.end()) } : sizes;
     }
 #endif
 
@@ -904,7 +909,7 @@ namespace ImFontManager
                 {
                     for (const auto& entry : std::filesystem::directory_iterator{ path })
                     {
-                        if (entry.is_regular_file() && entry.path().extension() == ".TTF")
+                        if (entry.is_regular_file() && entry.path().extension() == ".ttf")
                         {
                             ProcessFileEntry(entry, false);
 
@@ -968,7 +973,7 @@ namespace ImFontManager
         return famit;
     }
 
-    void* GetFont(std::string_view family, float size, FontType ft, void*)
+    void* GetFont(std::string_view family, float size, FontType ft)
     {
         auto famit = LookupFontFamily(family);
         const auto& fonts = famit->second.FontPtrs[ft];
@@ -976,8 +981,15 @@ namespace ImFontManager
 
         if (szit == fonts.end() && !fonts.empty())
         {
-            szit = fonts.lower_bound(size);
-            szit = szit == fonts.begin() ? szit : std::prev(szit);
+            if (famit->second.AutoScale)
+            {
+                return fonts.begin()->second;
+            }
+            else
+            {
+                szit = fonts.lower_bound(size);
+                szit = szit == fonts.begin() ? szit : std::prev(szit);
+            }
         }
 
         return szit->second;
@@ -1004,7 +1016,7 @@ namespace ImFontManager
         PreloadFontLookupInfoImpl(timeoutMs, nullptr, 0);
     }
 
-    void* GetFont(std::string_view family, float size, FontType type, FontExtraInfo extra, void*)
+    void* GetFont(std::string_view family, float size, FontType type, FontExtraInfo extra)
     {
         auto famit = FontStore.find(family);
 

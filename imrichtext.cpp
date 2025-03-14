@@ -593,7 +593,7 @@ namespace ImRichText
         StyleDescriptor result;
         result.font.family = config.DefaultFontFamily;
         result.font.size = config.DefaultFontSize * config.FontScale;
-        result.font.font = GetFont(result.font.family, result.font.size, FT_Normal, config.UserData);
+        result.font.font = GetFont(result.font.family, result.font.size, FT_Normal);
         result.fgcolor = config.DefaultFgColor;
         result.list.itemStyle = config.ListItemBullet;
         return result;
@@ -631,7 +631,7 @@ namespace ImRichText
     {
         auto width = bounds.x;
         width = (style.propsSpecified & StyleWidth) != 0 ? std::min(width, style.width) : width;
-        auto sz = config.Renderer->EllipsisWidth(style.font.font);
+        auto sz = config.Renderer->EllipsisWidth(style.font.font, style.font.size);
         width -= sz;
 
         if ((style.font.flags & FontStyleOverflowEllipsis) != 0 && width > 0.f)
@@ -653,7 +653,7 @@ namespace ImRichText
                             while (startx > width)
                             {
                                 auto partial = token.Content.substr(revidx, 1);
-                                startx -= config.Renderer->GetTextSize(partial, style.font.font).x;
+                                startx -= config.Renderer->GetTextSize(partial, style.font.font, style.font.size).x;
                                 token.VisibleTextSize -= (int16_t)1;
                                 --revidx;
                             }
@@ -909,8 +909,7 @@ namespace ImRichText
             else if ((style.font.flags & FontStyleBold) != 0) fstyle = FT_Bold;
             else if ((style.font.flags & FontStyleItalics) != 0) fstyle = FT_Italics;
             else if ((style.font.flags & FontStyleLight) != 0) fstyle = FT_Light;
-            style.font.font = GetFont(style.font.family, style.font.size,
-                fstyle, config.UserData);
+            style.font.font = GetFont(style.font.family, style.font.size, fstyle);
         }
     }
 
@@ -1348,7 +1347,7 @@ namespace ImRichText
 
                 if (token.Type == TokenType::ElidedText)
                 {
-                    auto ewidth = config.Renderer->EllipsisWidth(style.font.font);
+                    auto ewidth = config.Renderer->EllipsisWidth(style.font.font, style.font.size);
                     config.Renderer->DrawText("...", ImVec2{ startpos.x + token.Bounds.width - ewidth, startpos.y }, style.fgcolor);
                 }
 
@@ -1408,7 +1407,7 @@ namespace ImRichText
 
         if (style.font.font != nullptr)
         {
-            popFont = config.Renderer->SetCurrentFont(style.font.font);
+            popFont = config.Renderer->SetCurrentFont(style.font.font, style.font.size);
         }
 
         auto drawTokens = true;
@@ -1598,7 +1597,7 @@ namespace ImRichText
 
         if (token.Type == TokenType::Text)
         {
-            auto sz = _config.Renderer->GetTextSize(token.Content, style.font.font);
+            auto sz = _config.Renderer->GetTextSize(token.Content, style.font.font, style.font.size);
             token.VisibleTextSize = (int16_t)token.Content.size();
             token.Bounds.width = sz.x;
             token.Bounds.height = sz.y;
@@ -1641,7 +1640,7 @@ namespace ImRichText
             }
 
             std::string_view input{ listItem.NestedListItemIndex, (size_t)currbuf };
-            auto sz = _config.Renderer->GetTextSize(input, style.font.font);
+            auto sz = _config.Renderer->GetTextSize(input, style.font.font, style.font.size);
             token.Bounds.width = sz.x;
             token.Bounds.height = sz.y;
         }
@@ -1765,7 +1764,7 @@ namespace ImRichText
             [](int wordIdx, void* userdata) {
                 const auto& data = *reinterpret_cast<UserData*>(userdata);
                 const auto& style = data.styles[data.tokenIndexes[wordIdx].styleIdx + 1];
-                return ITextShaper::WordProperty{ style.font.font, style.wbbhv };
+                return ITextShaper::WordProperty{ style.font.font, style.font.size, style.wbbhv };
             },
             [](int wordIdx, void* userdata) {
                 const auto& data = *reinterpret_cast<UserData*>(userdata);
@@ -2039,6 +2038,7 @@ namespace ImRichText
         std::pair<int, int> linesModified;
         _result.ForegroundLines.emplace_back(_currLine);
         auto lineIdx = (int)_result.ForegroundLines.size() - 1;
+        const auto& style = _result.StyleDescriptors[_currStyleIdx + 1];
 
         if (_currLine.Segments.size() == 1u && _currLine.Segments.front().Tokens.size() == 1u &&
             _currLine.Segments.front().Tokens.front().Type == TokenType::HorizontalRule)
@@ -2049,9 +2049,10 @@ namespace ImRichText
         {
             linesModified = std::make_pair(lineIdx, 1);
             UpdateLineGeometry(linesModified, depth);
+            auto xwidth = _currStyle.propsSpecified & StyleWidth ? _currStyle.width : _bounds.x;
 
-            if (!_currLine.Marquee && _bounds.x > 0.f && (_result.StyleDescriptors[_currStyleIdx + 1].font.flags & FontStyleNoWrap) == 0 &&
-                _result.ForegroundLines.back().width() > _bounds.x)
+            if (!_currLine.Marquee && xwidth > 0.f && (style.font.flags & FontStyleNoWrap) == 0 &&
+                _result.ForegroundLines.back().width() > xwidth)
             {
                 auto remapping = PerformWordWrap(lineIdx);
                 UpdateBackgroundSpan(depth, lineIdx, remapping);
@@ -2073,7 +2074,6 @@ namespace ImRichText
         else if (_currBlockquoteDepth < lastline.BlockquoteDepth) lastline.Offset.bottom = _config.BlockquotePadding;
 
         UpdateLineGeometry(linesModified, depth);
-        const auto& style = _result.StyleDescriptors[_currStyleIdx + 1];
         CreateElidedTextToken(_result.ForegroundLines.back(), style, _config, _bounds);
 
         newline.Content.left = ((float)(_currListDepth + 1) * _config.ListItemIndent) +
@@ -2213,14 +2213,14 @@ namespace ImRichText
         _currStyle = _result.StyleDescriptors[_currStyleIdx + 1];
         if ((_currentStackPos - 1) < IM_RICHTEXT_MAXDEPTH) _styleIndexStack[_currentStackPos + 1] = -2;
 
-        if (_currTagType != TagType::LineBreak)
-        {
-            // This reset is necessary as we are popping the style, and CreateNewStyle will create
-            // a new style instead if not unset
-            // TODO: Restore this value once popping is done
-            _currStyle.propsSpecified = 0;
-            _currStyle.superscriptOffset = _currStyle.subscriptOffset = 0.f;
-        }
+        //if (_currTagType != TagType::LineBreak)
+        //{
+        //    // This reset is necessary as we are popping the style, and CreateNewStyle will create
+        //    // a new style instead if not unset
+        //    // TODO: Restore this value once popping is done
+        //    _currStyle.propsSpecified = 0;
+        //    _currStyle.superscriptOffset = _currStyle.subscriptOffset = 0.f;
+        //}
     }
 
     bool DefaultTagVisitor::TagStart(std::string_view tag)
@@ -2292,7 +2292,7 @@ namespace ImRichText
             if (_currTagType == TagType::Paragraph && _config.ParagraphStop > 0)
                 _currLine.Offset.left += _config.Renderer->GetTextSize(std::string_view{ LineSpaces,
                     (std::size_t)std::min(_config.ParagraphStop, IM_RICHTEXT_MAXTABSTOP) }, 
-                    currentStyle.font.font).x;
+                    currentStyle.font.font, currentStyle.font.size).x;
             else if (_currTagType == TagType::ListItem)
             {
                 _listItemCountByDepths[_currListDepth]++;

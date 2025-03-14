@@ -66,7 +66,7 @@ namespace ImRichText
         for (auto idx = 0; idx < words.sz; ++idx)
         {
             auto font = accessor(idx, userdata);
-            auto sz = config.Renderer->GetTextSize(words[idx], font.font);
+            auto sz = config.Renderer->GetTextSize(words[idx], font.font, font.sz);
 
             if ((sz.x > availwidth) && (font.wb == WordBreakBehavior::BreakWord || font.wb == WordBreakBehavior::BreakAll))
             {
@@ -78,7 +78,7 @@ namespace ImRichText
 
                 for (; chidx < (int)words[idx].size(); chidx++)
                 {
-                    auto chsz = config.Renderer->GetTextSize(words[idx].substr(chidx, 1), font.font);
+                    auto chsz = config.Renderer->GetTextSize(words[idx].substr(chidx, 1), font.font, font.sz);
 
                     if (currsz.x + chsz.x > availwidth)
                     {
@@ -250,7 +250,7 @@ namespace ImRichText
         for (auto idx = 0; idx < words.sz; ++idx)
         {
             auto font = accessor(idx, userdata);
-            auto sz = config.Renderer->GetTextSize(words[idx], font.font);
+            auto sz = config.Renderer->GetTextSize(words[idx], font.font, font.sz);
 
             if ((sz.x > availwidth) && (font.wb == WordBreakBehavior::BreakWord || font.wb == WordBreakBehavior::BreakAll))
             {
@@ -263,7 +263,7 @@ namespace ImRichText
                 for (; chidx < (int)words[idx].size();)
                 {
                     auto charsz = NextGraphemeCluster(words[idx].data() + lastidx, words[idx].data() + words[idx].size());
-                    auto chsz = config.Renderer->GetTextSize(words[idx].substr(chidx, charsz), font.font);
+                    auto chsz = config.Renderer->GetTextSize(words[idx].substr(chidx, charsz), font.font, font.sz);
 
                     if (currsz.x + chsz.x > availwidth)
                     {
@@ -650,19 +650,25 @@ namespace ImRichText
 
     bool ImGuiRenderer::SetCurrentFont(std::string_view family, float sz, FontType type)
     {
-        auto font = GetFont(family, sz, type, nullptr);
+        auto font = GetFont(family, sz, type);
 
-        if (font != nullptr) {
-            ImGui::PushFont((ImFont*)font); return true;
+        if (font != nullptr) 
+        {
+            _currentFontSz = sz;
+            ImGui::PushFont((ImFont*)font); 
+            return true;
         }
 
         return false;
     }
 
-    bool ImGuiRenderer::SetCurrentFont(void* fontptr)
+    bool ImGuiRenderer::SetCurrentFont(void* fontptr, float sz)
     {
-        if (fontptr != nullptr) {
-            ImGui::PushFont((ImFont*)fontptr); return true;
+        if (fontptr != nullptr) 
+        {
+            _currentFontSz = sz;
+            ImGui::PushFont((ImFont*)fontptr); 
+            return true;
         }
 
         return false;
@@ -673,29 +679,37 @@ namespace ImRichText
         ImGui::PopFont();
     }
 
-    ImVec2 ImGuiRenderer::GetTextSize(std::string_view text, void* fontptr)
+    ImVec2 ImGuiRenderer::GetTextSize(std::string_view text, void* fontptr, float sz)
     {
-        ImGui::PushFont((ImFont*)fontptr);
-        auto sz = ImGui::CalcTextSize(text.data(), text.data() + text.size());
+        auto imfont = (ImFont*)fontptr;
+        ImGui::PushFont(imfont);
+        auto txtsz = ImGui::CalcTextSize(text.data(), text.data() + text.size());
         ImGui::PopFont();
-        return sz;
+
+        auto ratio = (sz / imfont->FontSize);
+        txtsz.x *= ratio;
+        txtsz.y *= ratio;
+        return txtsz;
     }
 
     void ImGuiRenderer::DrawText(std::string_view text, ImVec2 pos, uint32_t color)
     {
-        ((ImDrawList*)UserData)->AddText(pos, color, text.data(), text.data() + text.size());
+        auto font = ImGui::GetFont();
+        ((ImDrawList*)UserData)->AddText(font, _currentFontSz, pos, color, text.data(), text.data() + text.size());
     }
 
     void ImGuiRenderer::DrawText(std::string_view text, std::string_view family, ImVec2 pos, float sz, uint32_t color, FontType type)
     {
         auto popFont = false;
-        auto font = GetFont(family, sz, type, nullptr);
+        auto font = GetFont(family, sz, type);
 
-        if (font != nullptr) {
-            ImGui::PushFont((ImFont*)font); popFont = true;
+        if (font != nullptr) 
+        {
+            ImGui::PushFont((ImFont*)font); 
+            popFont = true;
         }
 
-        ((ImDrawList*)UserData)->AddText(pos, color, text.data(), text.data() + text.size());
+        ((ImDrawList*)UserData)->AddText((ImFont*)font, sz, pos, color, text.data(), text.data() + text.size());
         if (popFont) ImGui::PopFont();
     }
 
@@ -709,7 +723,7 @@ namespace ImRichText
         }
     }
 
-    float ImGuiRenderer::EllipsisWidth(void* fontptr)
+    float ImGuiRenderer::EllipsisWidth(void* fontptr, float sz)
     {
         return ((ImFont*)fontptr)->EllipsisWidth;
     }
@@ -896,11 +910,11 @@ namespace ImRichText
 
     bool Blend2DRenderer::SetCurrentFont(std::string_view family, float sz, FontType type) override
     {
-        currentFont = GetFont(family, sz, type, nullptr);
+        currentFont = GetFont(family, sz, type);
         return currentFont != nullptr;
     }
 
-    bool Blend2DRenderer::SetCurrentFont(void* fontptr) override
+    bool Blend2DRenderer::SetCurrentFont(void* fontptr, float sz) override
     {
         currentFont = (BLFont*)fontptr;
         return fontptr != nullptr;
@@ -911,7 +925,7 @@ namespace ImRichText
         currentFont = nullptr;
     }
 
-    ImVec2 Blend2DRenderer::GetTextSize(std::string_view text, void* fontptr)
+    ImVec2 Blend2DRenderer::GetTextSize(std::string_view text, void* fontptr, float sz)
     {
         auto& font = *((BLFont*)fontptr);
         BLGlyphBuffer buf;
@@ -934,7 +948,7 @@ namespace ImRichText
 
     void Blend2DRenderer::DrawText(std::string_view text, std::string_view family, ImVec2 pos, float sz, uint32_t color, FontType type)
     {
-        auto font = GetFont(family, sz, type, nullptr);
+        auto font = GetFont(family, sz, type);
         assert(font != nullptr);
         BLRgba32 rgba{ color };
         context.setFillStyle(rgba);

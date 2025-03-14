@@ -198,7 +198,7 @@ namespace ImRichText
 
     struct DrawableBlock
     {
-        ImVec2 Start{ -1.f, -1.f }, End{ -1.f, -1.f };
+        ImVec2 Start{ -1.f, -1.f }, End{ -1.f, -1.f }, ViewportPos{ 0.f, 0.f };
         uint32_t Color = IM_COL32_BLACK_TRANS;
         FourSidedMeasure padding;
         FourSidedMeasure margin;

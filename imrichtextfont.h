@@ -56,6 +56,7 @@ namespace ImFontManager
     {
         FLT_Proportional = 1,
         FLT_Monospace = 2,
+
         FLT_HasSmall = 4,
         FLT_HasSuperscript = 8,
         FLT_HasSubscript = 16,
@@ -65,6 +66,12 @@ namespace ImFontManager
         FLT_HasH4 = 256,
         FLT_HasH5 = 512,
         FLT_HasH6 = 1024,
+
+        // Use this to auto-scale fonts, loading the largest size for a family
+        // NOTE: For ImGui backend, this will save on memory from texture
+        FLT_AutoScale = 2048, 
+
+        // Include all <h*> tags
         FLT_HasHeaders = FLT_HasH1 | FLT_HasH2 | FLT_HasH3 | FLT_HasH4 | FLT_HasH5 | FLT_HasH6,
 
         // TODO: Handle absolute size font-size fonts (Look at imrichtext.cpp: PopulateSegmentStyle function)
@@ -109,7 +116,7 @@ namespace ImFontManager
     // ImFont* cast to void* to better fit overall library.
     // NOTE: size matching happens with lower_bound calls, this is done because all fonts
     //       should be preloaded for ImGui, dynamic font atlas updates are not supported.
-    [[nodiscard]] void* GetFont(std::string_view family, float size, FontType type, void*);
+    [[nodiscard]] void* GetFont(std::string_view family, float size, FontType type);
 
 #ifndef IM_FONTMANAGER_STANDALONE
     // Get font to display overlay i.e. style info in side panel
@@ -131,6 +138,6 @@ namespace ImFontManager
     // BLFont* cast to void* to better fit overall library.
     // NOTE: The FontExtraInfo::mapper can be assigned to a function which loads fonts based
     //       con content codepoints and can perform better fallback.
-    [[nodiscard]] void* GetFont(std::string_view family, float size, FontType type, FontExtraInfo extra, void*);
+    [[nodiscard]] void* GetFont(std::string_view family, float size, FontType type, FontExtraInfo extra);
 #endif
 }
